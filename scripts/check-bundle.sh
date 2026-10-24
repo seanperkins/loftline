@@ -76,5 +76,7 @@ cmp -s "$helper" packaging/updater/macos.sh || fail "$helper differs from packag
 codesign --verify --deep --strict "$APP" || fail "the bundle does not verify"
 entitlements="$(codesign -d --entitlements - "$APP/Contents/PlugIns/LoftLineThumbnail.appex" 2>&1)"
 [[ "$entitlements" == *com.apple.security.app-sandbox* ]] || fail "the Quick Look extension lost its sandbox entitlement"
+# The real bundled executable, not a stand-in: it must post the sample sign to the committed golden program.
+scripts/release-smoke.sh "$APP" || fail "the bundled executable does not post the sample sign to the golden program"
 
 print "bundle checks passed"

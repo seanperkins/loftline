@@ -90,4 +90,106 @@ struct ReleaseScriptsTests {
         #expect(try ScriptRunner.script("scripts/check-test-run.sh", [file.path, "many"]).status == 1)
         #expect(try ScriptRunner.script("scripts/check-test-run.sh", [file.path]).status == 1)
     }
+
+    // MARK: scripts/release-smoke.sh
+
+    static let expectedDir = ScriptRunner.root.appendingPathComponent("samples/expected/generic-grbl-mm", isDirectory: true)
+
+    /// A stand-in for the bundled executable (a test must not run `swift build` inside `swift test`; the real binary is
+    /// exercised by scripts/check-bundle.sh). It records its arguments and "posts" by copying `source` to the --out folder.
+    func fakeApp(in box: Scratch, copying source: URL, exitStatus: Int32 = 0) throws -> (app: URL, args: URL) {
+        let app = box.dir.appendingPathComponent("LoftLine.app", isDirectory: true)
+        let args = box.dir.appendingPathComponent("args.txt")
+        _ = try box.write("LoftLine.app/Contents/MacOS/LoftLine", """
+        #!/bin/sh
+        printf '%s\\n' "$@" > '\(args.path)'
+        [ "$1" = export ] || exit 64
+        out=""
+        while [ $# -gt 0 ]; do
+          case "$1" in --out) out="$2"; shift ;; esac
+          shift
+        done
+        mkdir -p "$out" && cp '\(source.path)' "$out/sign.nc"
+        exit \(exitStatus)
+
+        """)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755],
+                                              ofItemAtPath: app.appendingPathComponent("Contents/MacOS/LoftLine").path)
+        return (app, args)
+    }
+
+    @Test func smokePassesWhenTheAppWritesTheGoldenBytes() throws {
+        let box = try Scratch()
+        let fake = try fakeApp(in: box, copying: Self.expectedDir.appendingPathComponent("sign.nc"))
+        let result = try ScriptRunner.script("scripts/release-smoke.sh", [fake.app.path])
+        #expect(result.status == 0, "\(result.err)")
+    }
+
+    @Test func smokeRunsTheBundledExportWithBuiltInPostsOnly() throws {
+        let box = try Scratch()
+        let fake = try fakeApp(in: box, copying: Self.expectedDir.appendingPathComponent("sign.nc"))
+        try ScriptRunner.script("scripts/release-smoke.sh", [fake.app.path])
+        let args = try String(contentsOf: fake.args, encoding: .utf8).split(separator: "\n").map(String.init)
+        #expect(args.first == "export")
+        #expect(args.contains("samples/sign.loftline"))
+        #expect(args.contains("--builtin-only"), "the smoke must not depend on whoever runs it: \(args)")
+        #expect(args.contains("--quiet"))
+        let post = try #require(args.firstIndex(of: "--post"))
+        #expect(args[post + 1] == "generic-grbl-mm")
+    }
+
+    @Test func smokeFailsWhenAGoldenByteDiffers() throws {
+        let box = try Scratch()
+        let fake = try fakeApp(in: box, copying: Self.expectedDir.appendingPathComponent("sign.nc"))
+        var bytes = try Data(contentsOf: Self.expectedDir.appendingPathComponent("sign.nc"))
+        bytes[bytes.count / 2] ^= 0x01
+        let changed = try box.write("expected/sign.nc", "")
+        try bytes.write(to: changed)
+        let result = try ScriptRunner.script("scripts/release-smoke.sh", [fake.app.path],
+                                             env: ["LOFTLINE_SMOKE_EXPECTED_DIR": changed.deletingLastPathComponent().path])
+        #expect(result.status != 0)
+        #expect(result.err.contains("differ"), "\(result.err)")
+    }
+
+    @Test func smokeFailsWhenTheAppFailsOrIsMissing() throws {
+        let box = try Scratch()
+        let failing = try fakeApp(in: box, copying: Self.expectedDir.appendingPathComponent("sign.nc"), exitStatus: 3)
+        #expect(try ScriptRunner.script("scripts/release-smoke.sh", [failing.app.path]).status != 0)
+        let missing = box.dir.appendingPathComponent("Nowhere.app").path
+        #expect(try ScriptRunner.script("scripts/release-smoke.sh", [missing]).status != 0)
+        #expect(try ScriptRunner.script("scripts/release-smoke.sh").status != 0)
+    }
+
+    // MARK: scripts/configure-release-ci.sh
+
+    static let configure = "scripts/configure-release-ci.sh"
+
+    @Test func configureScriptRefusesTheRootkitVault() throws {
+        let result = try ScriptRunner.script(Self.configure, ["/nonexistent.p12"],
+                                             env: ["VAULT": "seanperkins/rootkit-macos-certs"])
+        #expect(result.status != 0)
+        #expect(result.err.contains("refusing"), "the guard must run before any other check: \(result.err)")
+    }
+
+    @Test func configureScriptRefusesTheRootkitRepoToo() throws {
+        let result = try ScriptRunner.script(Self.configure, ["/nonexistent.p12"], env: ["REPO": "seanperkins/rootkit-game"])
+        #expect(result.status != 0)
+        #expect(result.err.contains("refusing"), "\(result.err)")
+    }
+
+    @Test func configureScriptHasNoSyntaxErrors() throws {
+        let result = try ScriptRunner.exec("/bin/zsh", ["-n", ScriptRunner.root.appendingPathComponent(Self.configure).path])
+        #expect(result.status == 0, "\(result.err)")
+    }
+
+    @Test func configureScriptWritesSecretsOnlyToItsOwnRepoAndNeverOnTheCommandLine() throws {
+        let source = try String(contentsOf: ScriptRunner.root.appendingPathComponent(Self.configure), encoding: .utf8)
+        let secretLines = source.split(separator: "\n").filter { $0.contains("gh secret set") }
+        #expect(secretLines.count == 4, "MACOS_CERTS_DEPLOY_KEY, MACOS_CERT_PASSWORD, ASC_KEY_CONTENT, MACOS_IDENTITY")
+        for line in secretLines {
+            #expect(line.contains(#"--repo "$REPO""#), "\(line)")
+            #expect(!line.contains("--body"), "a secret on the command line shows in the process list: \(line)")
+        }
+        #expect(!source.contains("leaving them"), "an existing deploy key must be replaced, not reused")
+    }
 }
