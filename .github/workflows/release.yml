@@ -76,21 +76,13 @@ jobs:
           echo "ZIP_NAME=LoftLine-v$version-macos-arm64.zip" >> "$GITHUB_ENV"
 
       # --clobber deletes an asset before replacing it, which would leave a public zip and its feed briefly inconsistent.
+      # Checked now so a doomed run fails in seconds, and again just before the upload (a draft can be published while
+      # the build runs).
       - name: Refuse to touch a published release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if found="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>&1)"; then
-            if [ "$found" != true ]; then
-              echo "::error::The release for $GITHUB_REF_NAME is already published. Ship a fix as a new tag."
-              exit 1
-            fi
-          elif ! grep -qi 'not found' <<<"$found"; then
-            echo "::error::Could not look up the release for $GITHUB_REF_NAME: $found"
-            exit 1
-          fi
+        run: scripts/check-release-state.sh "$GITHUB_REF_NAME"
 
       - name: Require the signing secrets for a tag
         if: github.event_name == 'push' && env.HAS_SIGNING != 'true'
@@ -99,7 +91,8 @@ jobs:
           exit 1
 
       # A release is never built from a red tree. scripts/test.sh runs with set +e and its output goes to a file: the
-      # exit code is logged, not used (AGENTS.md), and check-test-run.sh reads the result lines and the test count.
+      # exit code is logged, not used (AGENTS.md), and check-test-run.sh reads the result lines, the test count and the
+      # number of targets that reported (one result line per test target in Package.swift).
       - name: Gate (build, test, samples)
         run: |
           set -euo pipefail
@@ -112,7 +105,8 @@ jobs:
           cat "$RUNNER_TEMP/test.log"
           echo "::endgroup::"
           echo "scripts/test.sh exit code: $code (logged, not used)"
-          scripts/check-test-run.sh "$RUNNER_TEMP/test.log" "$LOFTLINE_MIN_TESTS"
+          targets="$(grep -c '^ *\.testTarget(' Package.swift)"
+          scripts/check-test-run.sh "$RUNNER_TEMP/test.log" "$LOFTLINE_MIN_TESTS" "$targets"
           scripts/check-samples.sh
 
       - name: Authorize the signing vault
@@ -235,7 +229,9 @@ jobs:
         run: |
           set -euo pipefail
           tag="$GITHUB_REF_NAME"
-          if ! gh release view "$tag" >/dev/null 2>&1; then
+          # Checked again here: the draft can have been published since the run started.
+          state="$(scripts/check-release-state.sh "$tag")"
+          if [ "$state" = absent ]; then
             gh release create "$tag" --draft --verify-tag --title "LoftLine $tag" --generate-notes
           fi
           gh release upload "$tag" "dist/$ZIP_NAME" --clobber

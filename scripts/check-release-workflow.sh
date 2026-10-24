@@ -52,10 +52,22 @@ if resolve
   ensure_that.(!script.include?('GITHUB_REF_NAME#') || script.include?('GITHUB_EVENT_NAME'), 'a dispatch run on a tag ref must not count as a release')
 end
 
-# A published release is never touched.
-refusal = steps.find { |s| run_of.(s).include?('isDraft') }
-ensure_that.(refusal && run_of.(refusal).include?('exit 1') && condition_of.(refusal).include?(TAG_GUARD),
-             'a tag run must fail when the tag\'s release exists and is not a draft')
+# A published release is never touched: checked when the run starts (so a doomed run fails in seconds) and again at
+# the upload, because the draft can be published while the build runs.
+state_steps = steps.each_index.select { |i| run_of.(steps[i]).include?('scripts/check-release-state.sh') }
+ensure_that.(state_steps.size >= 2, 'scripts/check-release-state.sh must run twice: when the run starts and just before the upload')
+state_steps.each do |i|
+  ensure_that.(condition_of.(steps[i]).include?(TAG_GUARD), "step '#{named.(steps[i])}' must be guarded by #{TAG_GUARD}")
+end
+upload_index = steps.index { |s| run_of.(s).include?('gh release upload') }
+gate_index = steps.index { |s| run_of.(s).include?('scripts/check-test-run.sh') }
+ensure_that.(upload_index && state_steps.include?(upload_index), 'the step that uploads must itself check the release state first')
+ensure_that.(state_steps.any? { |i| gate_index && i < gate_index }, 'the release state must also be checked before the gate runs')
+if upload_index
+  upload = run_of.(steps[upload_index])
+  ensure_that.(upload.index('check-release-state.sh') && upload.index('gh release upload') && upload.index('check-release-state.sh') < upload.index('gh release upload'),
+               'the state check must come before gh release upload in the upload step')
+end
 
 # The gate judges the result lines, not the exit code.
 gate = steps.find { |s| run_of.(s).include?('scripts/check-test-run.sh') }
@@ -63,6 +75,8 @@ ensure_that.(gate, 'the gate must run scripts/check-test-run.sh')
 if gate
   script = run_of.(gate)
   ensure_that.(script.include?('LOFTLINE_MIN_TESTS'), 'the gate must pass LOFTLINE_MIN_TESTS')
+  ensure_that.(script.include?('Package.swift') && script.include?('testTarget'), 'the gate must count the test targets in Package.swift')
+  ensure_that.(script.match?(/check-test-run\.sh [^\n]*"\$LOFTLINE_MIN_TESTS" "\$targets"/), 'the gate must pass that count to check-test-run.sh, so a target that printed nothing fails it')
   ensure_that.(script.include?('scripts/build.sh') && script.include?('scripts/test.sh') && script.include?('set +e'), 'the gate builds, then captures the test run with set +e')
   ensure_that.(script.include?('scripts/check-samples.sh') && !script.include?('--update'), 'the gate checks the samples without --update')
 end

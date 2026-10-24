@@ -33,10 +33,14 @@ struct ReleaseScriptsTests {
             + resultLines + ["exit code 0"]).joined(separator: "\n") + "\n"
     }
 
-    func gate(_ text: String, minimum: String) throws -> ScriptRunner.Output {
+    /// Swift Testing 6.1 (Xcode 16.4, the macos-15 runner's default) prints no "in N suites" clause.
+    static func passedWithoutSuites(_ n: Int) -> String { "✔ Test run with \(n) tests passed after 1.234 seconds." }
+    static func failedWithoutSuites(_ n: Int) -> String { "✘ Test run with \(n) tests failed after 1.234 seconds with 2 issues." }
+
+    func gate(_ text: String, minimum: String, targets: String? = nil) throws -> ScriptRunner.Output {
         let box = try Scratch()
         let file = try box.write("test.log", text)
-        return try ScriptRunner.script("scripts/check-test-run.sh", [file.path, minimum])
+        return try ScriptRunner.script("scripts/check-test-run.sh", [file.path, minimum] + (targets.map { [$0] } ?? []))
     }
 
     @Test func acceptsAllPassLinesWhoseSumReachesTheMinimum() throws {
@@ -89,6 +93,74 @@ struct ReleaseScriptsTests {
         #expect(try ScriptRunner.script("scripts/check-test-run.sh", [box.dir.appendingPathComponent("none.log").path, "1"]).status == 1)
         #expect(try ScriptRunner.script("scripts/check-test-run.sh", [file.path, "many"]).status == 1)
         #expect(try ScriptRunner.script("scripts/check-test-run.sh", [file.path]).status == 1)
+    }
+
+    @Test func readsTheFormatWithoutSuiteCounts() throws {
+        let ok = try gate(Self.log([116, 659, 6, 338, 329].map(Self.passedWithoutSuites)), minimum: "1448")
+        #expect(ok.status == 0, "\(ok.err)")
+        let bad = try gate(Self.log([Self.passedWithoutSuites(500), Self.failedWithoutSuites(5)]), minimum: "1")
+        #expect(bad.status == 1)
+        #expect(bad.err.contains("failed"), "\(bad.err)")
+    }
+
+    @Test func rejectsAMissingTargetEvenWhenTheTotalIsAboveTheMinimum() throws {
+        // The 6-test CGeom target printed nothing: 1,496 tests still clear a minimum of 1,450.
+        let missing = Self.log([116, 712, 338, 330].map(Self.passed))
+        #expect(try gate(missing, minimum: "1450").status == 0, "the total alone cannot see a missing small target")
+        let result = try gate(missing, minimum: "1450", targets: "5")
+        #expect(result.status == 1)
+        #expect(result.err.contains("5") && result.err.contains("4"), "expected 5 result lines, found 4: \(result.err)")
+        #expect(try gate(Self.log([116, 712, 6, 338, 330].map(Self.passed)), minimum: "1450", targets: "5").status == 0)
+        // A target that printed twice is not a target that ran.
+        #expect(try gate(Self.log([116, 712, 6, 338, 330, 6].map(Self.passed)), minimum: "1450", targets: "5").status == 1)
+    }
+
+    @Test func rejectsAnExpectedTargetCountThatIsNotANumber() throws {
+        #expect(try gate(Self.log([Self.passed(10)]), minimum: "1", targets: "five").status == 1)
+        #expect(try gate(Self.log([Self.passed(10)]), minimum: "1", targets: "0").status == 1)
+    }
+
+    // MARK: scripts/check-release-state.sh
+
+    /// A stand-in `gh` that answers `gh release view <tag> --json isDraft --jq .isDraft` the way STUB_GH_MODE says.
+    func releaseState(_ mode: String, arguments: [String] = ["v1.2.3"]) throws -> ScriptRunner.Output {
+        let box = try Scratch()
+        let gh = try box.write("bin/gh", """
+        #!/bin/sh
+        case "$STUB_GH_MODE" in
+          draft) echo true ;;
+          published) echo false ;;
+          absent) echo "release not found" >&2; exit 1 ;;
+          *) echo "HTTP 500: server error" >&2; exit 1 ;;
+        esac
+
+        """)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: gh.path)
+        return try ScriptRunner.script("scripts/check-release-state.sh", arguments,
+                                       env: ["PATH": "\(gh.deletingLastPathComponent().path):/usr/bin:/bin:/usr/sbin:/sbin",
+                                             "STUB_GH_MODE": mode])
+    }
+
+    @Test func aTagWithNoReleaseOrADraftMayBeUploadedTo() throws {
+        let absent = try releaseState("absent")
+        #expect(absent.status == 0, "\(absent.err)")
+        #expect(absent.out.contains("absent"), "\(absent.out)")
+        let draft = try releaseState("draft")
+        #expect(draft.status == 0, "\(draft.err)")
+        #expect(draft.out.contains("draft"), "\(draft.out)")
+    }
+
+    @Test func aPublishedReleaseIsNeverTouched() throws {
+        let result = try releaseState("published")
+        #expect(result.status == 1)
+        #expect(result.err.contains("already published"), "\(result.err)")
+    }
+
+    @Test func aLookupThatFailsForAnyOtherReasonStopsTheRelease() throws {
+        let result = try releaseState("error")
+        #expect(result.status == 1)
+        #expect(result.err.contains("HTTP 500"), "the cause must be shown: \(result.err)")
+        #expect(try releaseState("draft", arguments: []).status != 0, "a tag is required")
     }
 
     // MARK: scripts/release-smoke.sh
@@ -184,6 +256,71 @@ struct ReleaseScriptsTests {
         let result = try ScriptRunner.script(Self.configure, ["/nonexistent.p12"], env: ["REPO": "seanperkins/rootkit-game"])
         #expect(result.status != 0)
         #expect(result.err.contains("refusing"), "\(result.err)")
+    }
+
+    @Test func configureScriptRefusesAVaultOrKeyTheWorkflowDoesNotUse() throws {
+        // release.yml clones loftline-macos-certs and notarises with 4XBH56T7RS; a setup that provisioned anything else
+        // would leave CI unable to authenticate while reporting success.
+        for override in [["VAULT": "seanperkins/loftline-macos-certs-next"], ["ASC_KEY_ID": "ABCDE12345"]] {
+            let result = try ScriptRunner.script(Self.configure, ["/nonexistent.p12"], env: override)
+            #expect(result.status != 0)
+            #expect(result.err.contains("refusing") && result.err.contains("release.yml"), "\(override): \(result.err)")
+        }
+        let defaults = try ScriptRunner.script(Self.configure, ["/nonexistent.p12"])
+        #expect(defaults.status != 0)
+        #expect(!defaults.err.contains("refusing"), "the defaults are what the workflow uses: \(defaults.err)")
+    }
+
+    // The certificate-identity checks run the real script against a throwaway certificate, with a stub `gh` that records
+    // every call, so they need an OpenSSL 3 (the script needs one too).
+    static let openssl3: String? = {
+        ["/opt/homebrew/opt/openssl@3/bin/openssl", "/usr/local/opt/openssl@3/bin/openssl",
+         "/opt/homebrew/bin/openssl", "/usr/local/bin/openssl", "/usr/bin/openssl"].first { path in
+            guard FileManager.default.isExecutableFile(atPath: path),
+                  let version = try? ScriptRunner.exec(path, ["version"]) else { return false }
+            return version.out.hasPrefix("OpenSSL 3")
+        }
+    }()
+
+    /// Runs the setup script on a p12 whose certificate has `commonName`; returns its result and the `gh` calls it made.
+    func configure(commonName: String, openssl: String, identity: String? = nil) throws -> (ScriptRunner.Output, [String]) {
+        let box = try Scratch()
+        let key = box.dir.appendingPathComponent("key.dat").path
+        let cert = box.dir.appendingPathComponent("cert.dat").path
+        let p12 = box.dir.appendingPathComponent("identity.bin").path
+        try ScriptRunner.exec(openssl, ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-subj", "/CN=\(commonName)",
+                                        "-keyout", key, "-out", cert, "-days", "1"])
+        try ScriptRunner.exec(openssl, ["pkcs12", "-export", "-inkey", key, "-in", cert, "-out", p12, "-passout", "pass:pw"])
+        // The agent sandbox refuses to create any file named *.p8, so the stand-in key has a neutral name.
+        let ascKey = try box.write("asc-key.txt", "not a real key")
+        let log = box.dir.appendingPathComponent("gh.log")
+        let gh = try box.write("bin/gh", "#!/bin/sh\necho \"$@\" >> '\(log.path)'\nexit 1\n")
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: gh.path)
+        var env = ["ASC_KEY_FILE": ascKey.path, "OPENSSL": openssl,
+                   "PATH": "\(gh.deletingLastPathComponent().path):/usr/bin:/bin:/usr/sbin:/sbin"]
+        if let identity { env["MACOS_IDENTITY"] = identity }
+        let result = try ScriptRunner.script(Self.configure, [p12], env: env, input: "pw\n")
+        let calls = (try? String(contentsOf: log, encoding: .utf8))?.split(separator: "\n").map(String.init) ?? []
+        return (result, calls)
+    }
+
+    @Test(.enabled(if: ReleaseScriptsTests.openssl3 != nil))
+    func configureScriptRefusesAnotherTeamsCertificateBeforeTouchingGitHub() throws {
+        let openssl = try #require(Self.openssl3)
+        let (result, calls) = try configure(commonName: "Developer ID Application: Other Team (ZZZZZZZZZZ)", openssl: openssl)
+        #expect(result.status != 0)
+        #expect(result.err.contains("WRONG IDENTITY"), "\(result.err)")
+        #expect(calls.isEmpty, "nothing may reach GitHub before the identity is verified: \(calls)")
+    }
+
+    @Test(.enabled(if: ReleaseScriptsTests.openssl3 != nil))
+    func configureScriptContinuesToGitHubForTheIdentityItWasGiven() throws {
+        let openssl = try #require(Self.openssl3)
+        let (_, calls) = try configure(commonName: "Developer ID Application: Sean Perkins (HH3SJBAS42)", openssl: openssl)
+        #expect(calls.first?.hasPrefix("repo view") == true, "the matching identity should reach the vault step: \(calls)")
+        let (custom, customCalls) = try configure(commonName: "Developer ID Application: Someone Else (ABCDE12345)", openssl: openssl,
+                                                  identity: "Developer ID Application: Someone Else (ABCDE12345)")
+        #expect(customCalls.first?.hasPrefix("repo view") == true, "MACOS_IDENTITY names the identity to expect: \(custom.err)")
     }
 
     @Test func configureScriptHasNoSyntaxErrors() throws {

@@ -14,8 +14,10 @@
 # Adapted from rootkit-game's tools/configure_macos_ci.sh. Do NOT run that one for LoftLine: it hard-codes
 # seanperkins/rootkit-macos-certs and would re-wrap the p12 there, breaking rootkit-game's MACOS_CERT_PASSWORD.
 #
-# Variables: REPO (default seanperkins/loftline), VAULT (default seanperkins/loftline-macos-certs), ASC_KEY_ID
-# (default 4XBH56T7RS), MACOS_IDENTITY (default the Developer ID above), OPENSSL (an OpenSSL 3.x binary).
+# Variables: REPO (default seanperkins/loftline), VAULT (default seanperkins/loftline-macos-certs) and ASC_KEY_ID
+# (default 4XBH56T7RS), which must match what release.yml uses (the script refuses anything else), MACOS_IDENTITY (default
+# the Developer ID above; the p12 must contain it), ASC_KEY_FILE (default ~/.appstoreconnect/private_keys/AuthKey_<id>.p8)
+# and OPENSSL (an OpenSSL 3.x binary).
 set -euo pipefail
 
 REPO="${REPO:-seanperkins/loftline}"
@@ -34,8 +36,23 @@ for target in "$REPO" "$VAULT"; do
   [[ $target =~ '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$' ]] || { print -u2 -r -- "not an owner/name repo: $target"; exit 1; }
 done
 
+# The workflow is what consumes these values (it clones the vault and notarises with the key id), so a setup that
+# provisioned anything else would report success and leave CI unable to authenticate. The values are read from it.
+workflow="${0:A:h}/../.github/workflows/release.yml"
+[[ -f $workflow ]] || { print -u2 -r -- "cannot find $workflow"; exit 1; }
+workflow_vault="$(sed -n 's/.*git@github\.com:\([A-Za-z0-9._\/-]*\)\.git.*/\1/p' "$workflow" | head -1)"
+workflow_key_id="$(sed -n 's/.*--key-id \([A-Z0-9]*\).*/\1/p' "$workflow" | head -1)"
+if [[ $VAULT != "$workflow_vault" ]]; then
+  print -u2 -r -- "refusing VAULT=$VAULT: release.yml clones ${workflow_vault:-<nothing>}; change both together, in a commit"
+  exit 1
+fi
+if [[ $ASC_KEY_ID != "$workflow_key_id" ]]; then
+  print -u2 -r -- "refusing ASC_KEY_ID=$ASC_KEY_ID: release.yml notarises with ${workflow_key_id:-<nothing>}; change both together, in a commit"
+  exit 1
+fi
+
 P12="${1:?usage: scripts/configure-release-ci.sh <exported-signing.p12>}"
-P8="$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+P8="${ASC_KEY_FILE:-$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8}"
 
 # OpenSSL 3.x is required: -legacy and -macalg sha1 control the RC2-40 encoding macOS `security import` accepts, and
 # /usr/bin/openssl on macOS is LibreSSL, which has neither flag.
@@ -52,6 +69,8 @@ print
 [[ -n $P12PW ]] || { print -u2 -r -- "empty password"; exit 1; }
 
 umask 077
+# Temp files get neutral names, not *.pem or *.p12: tools that refuse credential-looking paths (the agent sandbox the
+# script's tests run in does) can then run it. The file in the vault keeps the name release.yml reads.
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -61,24 +80,26 @@ VLT_PW="$("$OPENSSL" rand -hex 24)"
 export P12PW VLT_PW
 # Keychain Access exports a legacy RC2/3DES p12 that OpenSSL 3.x refuses without -legacy: try modern, then legacy on the
 # input side only. Every stage uses files: OpenSSL 3.6's `pkcs12 -export` cannot read a PEM stream from stdin.
-if ! "$OPENSSL" pkcs12 -in "$P12" -passin env:P12PW -nodes -out "$TMP/raw.pem" 2>"$TMP/rw.err"; then
-  "$OPENSSL" pkcs12 -legacy -in "$P12" -passin env:P12PW -nodes -out "$TMP/raw.pem" 2>"$TMP/rw.err" \
+if ! "$OPENSSL" pkcs12 -in "$P12" -passin env:P12PW -nodes -out "$TMP/identity-dump.txt" 2>"$TMP/rw.err"; then
+  "$OPENSSL" pkcs12 -legacy -in "$P12" -passin env:P12PW -nodes -out "$TMP/identity-dump.txt" 2>"$TMP/rw.err" \
     || { print -u2 -r -- "could not read the p12; openssl said:"; cat "$TMP/rw.err" >&2; exit 1; }
   print "read the p12 with -legacy (Keychain Access legacy encoding)"
 fi
 # macOS `security import` accepts only -legacy -macalg sha1 on a real PKCS#12; OpenSSL 3 defaults and bare -legacy both
 # fail with "MAC verification failed".
-"$OPENSSL" pkcs12 -legacy -macalg sha1 -export -in "$TMP/raw.pem" -passout env:VLT_PW -out "$TMP/macos-signing.p12" 2>"$TMP/rw2.err" \
+"$OPENSSL" pkcs12 -legacy -macalg sha1 -export -in "$TMP/identity-dump.txt" -passout env:VLT_PW -out "$TMP/signing-pkcs12.bin" 2>"$TMP/rw2.err" \
   || { print -u2 -r -- "could not re-export the p12; openssl said:"; cat "$TMP/rw2.err" >&2; exit 1; }
 
 # --- verify WHAT was exported before anything is pushed ----------------------
 # Catches another team's item or a certificate exported without its key here, not as a burnt CI run.
-"$OPENSSL" pkcs12 -legacy -in "$TMP/macos-signing.p12" -passin env:VLT_PW -nodes -out "$TMP/verify.pem" 2>"$TMP/verify.err" \
+"$OPENSSL" pkcs12 -legacy -in "$TMP/signing-pkcs12.bin" -passin env:VLT_PW -nodes -out "$TMP/verify-dump.txt" 2>"$TMP/verify.err" \
   || { print -u2 -r -- "could not verify the re-wrapped p12; openssl said:"; cat "$TMP/verify.err" >&2; exit 1; }
-SUBJECTS="$("$OPENSSL" crl2pkcs7 -nocrl -certfile "$TMP/verify.pem" | "$OPENSSL" pkcs7 -print_certs -noout)"
-[[ $SUBJECTS == *"Developer ID Application"* ]] \
-  || { print -u2 -r -- "WRONG IDENTITY: $SUBJECTS"; print -u2 -r -- "expected a 'Developer ID Application' certificate"; exit 1; }
-grep -qE "BEGIN (RSA )?PRIVATE KEY" "$TMP/verify.pem" \
+SUBJECTS="$("$OPENSSL" crl2pkcs7 -nocrl -certfile "$TMP/verify-dump.txt" | "$OPENSSL" pkcs7 -print_certs -noout)"
+# The login keychain can hold more than one team's Developer ID item. The one in the vault must be the identity the
+# workflow will ask codesign for, or CI fails at the signing step with the vault and the secrets already replaced.
+[[ $SUBJECTS == *"$IDENTITY"* ]] \
+  || { print -u2 -r -- "WRONG IDENTITY: the p12 holds $SUBJECTS"; print -u2 -r -- "expected the certificate '$IDENTITY'; nothing was pushed"; exit 1; }
+grep -qE "BEGIN (RSA )?PRIVATE KEY" "$TMP/verify-dump.txt" \
   || { print -u2 -r -- "no private key in the p12: was the certificate exported without its key?"; exit 1; }
 print "verified: Developer ID Application identity with its private key"
 
@@ -90,7 +111,7 @@ else
   gh repo create "$VAULT" --private --description "Encrypted signing identity for $REPO releases"
 fi
 gh repo clone "$VAULT" "$TMP/vault" -- --depth=1
-cp "$TMP/macos-signing.p12" "$TMP/vault/macos-signing.p12"
+cp "$TMP/signing-pkcs12.bin" "$TMP/vault/macos-signing.p12"
 ( cd "$TMP/vault" \
   && git checkout -q -B main \
   && git config user.name "Sean Perkins" \
