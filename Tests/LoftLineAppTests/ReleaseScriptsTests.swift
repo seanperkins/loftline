@@ -160,6 +160,15 @@ struct ReleaseScriptsTests {
         #expect(try ScriptRunner.script("scripts/release-smoke.sh").status != 0)
     }
 
+    // MARK: .github/workflows/release.yml
+
+    /// The workflow cannot run before it is merged, so its safety properties are checked from the file on every test run.
+    @Test func theReleaseWorkflowPassesItsStructuralCheck() throws {
+        let result = try ScriptRunner.script("scripts/check-release-workflow.sh")
+        #expect(result.status == 0, "\(result.err)")
+        #expect(result.out.contains("workflow checks passed"), "\(result.out)")
+    }
+
     // MARK: scripts/configure-release-ci.sh
 
     static let configure = "scripts/configure-release-ci.sh"

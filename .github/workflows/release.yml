@@ -1,0 +1,250 @@
+name: release
+
+# Builds, tests, signs and notarises LoftLine.app and attaches LoftLine-vX.Y.Z-macos-arm64.zip to a DRAFT GitHub Release.
+#
+#   tag push v1.2.3     channel "release": everything below, then a draft release holding the zip. Nothing is published
+#                       here: a draft is never "latest", so no installed app can be offered a release whose update feed
+#                       does not exist yet. A tag whose release is already published fails instead of overwriting it; a
+#                       fix ships as a new tag.
+#   workflow_dispatch   channel "rehearsal": everything except the release steps. The zip is kept as a workflow artifact
+#                       for 7 days so the release-candidate checklist in TESTING.md has a build to run. The version is
+#                       the "version" input (default 0.0.0), never the branch name. With no signing secrets set it
+#                       builds, tests and smoke-tests an ad-hoc bundle and skips signing and notarisation.
+#
+# Signing material lives in the private repo seanperkins/loftline-macos-certs (scripts/configure-release-ci.sh sets it up
+# with a read-only deploy key). Key id and issuer for notarytool are checked-in constants; only the .p8 is a secret.
+# `secrets` cannot be used in step `if:`, so HAS_SIGNING (a job env, which can) carries whether they exist.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version stamped into the rehearsal build (X.Y.Z, no leading v). Nothing is published."
+        required: false
+        default: "0.0.0"
+
+permissions:
+  contents: write
+
+# Two runs for one ref queue instead of racing for the same release.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # The total across all test targets (scripts/test.sh prints one result line per target). A run that executes far fewer
+  # tests than this (a target that did not build or start) fails the gate even if every line it did print says passed.
+  LOFTLINE_MIN_TESTS: "1450"
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    env:
+      HAS_SIGNING: ${{ secrets.MACOS_CERTS_DEPLOY_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve the version and channel
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = push ] && [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            tag="$GITHUB_REF_NAME"
+            if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::The tag '$tag' must look like v1.2.3"
+              exit 1
+            fi
+            version="${tag#v}"
+            channel=release
+          else
+            version="$DISPATCH_VERSION"
+            if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::The version input '$version' must look like 1.2.3"
+              exit 1
+            fi
+            channel=rehearsal
+          fi
+          echo "version=$version channel=$channel"
+          echo "LOFTLINE_VERSION=$version" >> "$GITHUB_ENV"
+          echo "LOFTLINE_CHANNEL=$channel" >> "$GITHUB_ENV"
+          echo "ZIP_NAME=LoftLine-v$version-macos-arm64.zip" >> "$GITHUB_ENV"
+
+      # --clobber deletes an asset before replacing it, which would leave a public zip and its feed briefly inconsistent.
+      - name: Refuse to touch a published release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if found="$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft 2>&1)"; then
+            if [ "$found" != true ]; then
+              echo "::error::The release for $GITHUB_REF_NAME is already published. Ship a fix as a new tag."
+              exit 1
+            fi
+          elif ! grep -qi 'not found' <<<"$found"; then
+            echo "::error::Could not look up the release for $GITHUB_REF_NAME: $found"
+            exit 1
+          fi
+
+      - name: Require the signing secrets for a tag
+        if: github.event_name == 'push' && env.HAS_SIGNING != 'true'
+        run: |
+          echo "::error::A tag run needs the signing secrets (MACOS_CERTS_DEPLOY_KEY, MACOS_CERT_PASSWORD, ASC_KEY_CONTENT, MACOS_IDENTITY). Run scripts/configure-release-ci.sh."
+          exit 1
+
+      # A release is never built from a red tree. scripts/test.sh runs with set +e and its output goes to a file: the
+      # exit code is logged, not used (AGENTS.md), and check-test-run.sh reads the result lines and the test count.
+      - name: Gate (build, test, samples)
+        run: |
+          set -euo pipefail
+          scripts/build.sh
+          set +e
+          scripts/test.sh > "$RUNNER_TEMP/test.log" 2>&1
+          code=$?
+          set -e
+          echo "::group::scripts/test.sh output"
+          cat "$RUNNER_TEMP/test.log"
+          echo "::endgroup::"
+          echo "scripts/test.sh exit code: $code (logged, not used)"
+          scripts/check-test-run.sh "$RUNNER_TEMP/test.log" "$LOFTLINE_MIN_TESTS"
+          scripts/check-samples.sh
+
+      - name: Authorize the signing vault
+        if: env.HAS_SIGNING == 'true'
+        env:
+          CERTS_DEPLOY_KEY: ${{ secrets.MACOS_CERTS_DEPLOY_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          key="$RUNNER_TEMP/macos_certs_ed25519"
+          printf '%s\n' "$CERTS_DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          # GitHub's host keys from its authenticated API, not scanned off the network.
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' > "$RUNNER_TEMP/known_hosts"
+          GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o UserKnownHostsFile=$RUNNER_TEMP/known_hosts -o StrictHostKeyChecking=yes" \
+            git clone --depth 1 git@github.com:seanperkins/loftline-macos-certs.git "$RUNNER_TEMP/certs"
+          ls -la "$RUNNER_TEMP/certs"
+
+      - name: Import the signing identity
+        if: env.HAS_SIGNING == 'true'
+        env:
+          CERT_PASS: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          p12="$RUNNER_TEMP/certs/macos-signing.p12"
+          [ -f "$p12" ] || { echo "::error::macos-signing.p12 is missing from the signing vault"; exit 1; }
+          keychain="$RUNNER_TEMP/build.keychain"
+          keychain_pw="$(openssl rand -hex 16)"
+          security create-keychain -p "$keychain_pw" "$keychain"
+          # codesign searches the user search list, not just the default keychain; without this the identity is invisible.
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -s "$keychain"
+          security unlock-keychain -p "$keychain_pw" "$keychain"
+          security import "$p12" -k "$keychain" -P "$CERT_PASS" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_pw" "$keychain"
+
+      # scripts/bundle.sh is the one assembler: it copies the update helper in BEFORE signing and signs inside-out,
+      # the Quick Look extension first and the app second, never with --deep. LOFTLINE_VERSION and LOFTLINE_CHANNEL come
+      # from the step above.
+      - name: Assemble LoftLine.app
+        env:
+          CERT_IDENTITY: ${{ secrets.MACOS_IDENTITY }}
+        run: |
+          set -euo pipefail
+          if [ "$HAS_SIGNING" = true ]; then
+            export LOFTLINE_SIGN_IDENTITY="${CERT_IDENTITY:-Developer ID Application: Sean Perkins (HH3SJBAS42)}"
+          fi
+          scripts/bundle.sh
+
+      - name: Verify the signature
+        if: env.HAS_SIGNING == 'true'
+        run: |
+          set -euo pipefail
+          codesign --verify --deep --strict --verbose=2 dist/LoftLine.app
+          entitlements="$(codesign -d --entitlements - dist/LoftLine.app/Contents/PlugIns/LoftLineThumbnail.appex 2>&1)"
+          grep -q com.apple.security.app-sandbox <<<"$entitlements" \
+            || { echo "::error::The Quick Look extension lost its sandbox entitlement"; exit 1; }
+          details="$(codesign -dv --verbose=4 dist/LoftLine.app 2>&1)"
+          grep -E 'Authority|flags|TeamIdentifier' <<<"$details"
+          grep -Eq 'flags=0x[0-9a-f]+\(.*runtime' <<<"$details" \
+            || { echo "::error::The app is not signed with the hardened runtime"; exit 1; }
+
+      - name: Notarise and staple
+        if: env.HAS_SIGNING == 'true'
+        env:
+          ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ASC_KEY_CONTENT:-}" ]; then
+            echo "::error::Secret ASC_KEY_CONTENT is unset. See scripts/configure-release-ci.sh."
+            exit 1
+          fi
+          # BSD base64 on macOS has no --decode; python3 is on every runner.
+          printf '%s' "$ASC_KEY_CONTENT" | python3 -c \
+            "import base64,sys;sys.stdout.buffer.write(base64.b64decode(sys.stdin.read()))" > "$RUNNER_TEMP/AuthKey.p8"
+          ditto -c -k --sequesterRsrc --keepParent dist/LoftLine.app "$RUNNER_TEMP/notary.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notary.zip" \
+            --key "$RUNNER_TEMP/AuthKey.p8" --key-id 4XBH56T7RS \
+            --issuer 22e2fb14-d32b-4837-92b0-6280da32716d \
+            --wait --output-format json > "$RUNNER_TEMP/notary.json" || true
+          cat "$RUNNER_TEMP/notary.json"
+          # The JSON starts at the first brace even if notarytool printed progress text before it.
+          field() { python3 -c "import json,sys;t=open(sys.argv[1]).read();print(json.JSONDecoder().raw_decode(t[t.index('{'):])[0].get(sys.argv[2],''))" "$RUNNER_TEMP/notary.json" "$1" 2>/dev/null || true; }
+          status="$(field status)"
+          if [ "$status" != Accepted ]; then
+            echo "::error::Notarisation status was '$status', not Accepted"
+            id="$(field id)"
+            [ -z "$id" ] || xcrun notarytool log "$id" --key "$RUNNER_TEMP/AuthKey.p8" --key-id 4XBH56T7RS \
+              --issuer 22e2fb14-d32b-4837-92b0-6280da32716d || true
+            exit 1
+          fi
+          xcrun stapler staple dist/LoftLine.app
+          xcrun stapler validate dist/LoftLine.app
+          spctl --assess --type execute -v dist/LoftLine.app
+
+      # The bundled executable, after notarisation, must still post the sample sign to the golden program: hardened
+      # runtime must not change the output.
+      - name: Smoke test the bundled executable
+        run: scripts/release-smoke.sh dist/LoftLine.app
+
+      - name: Zip the app
+        run: |
+          set -euo pipefail
+          ditto -c -k --sequesterRsrc --keepParent dist/LoftLine.app "dist/$ZIP_NAME"
+          ls -la "dist/$ZIP_NAME"
+
+      - name: Keep the rehearsal build
+        if: ${{ env.LOFTLINE_CHANNEL == 'rehearsal' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: LoftLine-${{ env.LOFTLINE_VERSION }}-macos-arm64
+          path: dist/${{ env.ZIP_NAME }}
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Create the draft release and upload the zip
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --draft --verify-tag --title "LoftLine $tag" --generate-notes
+          fi
+          gh release upload "$tag" "dist/$ZIP_NAME" --clobber
+
+      # always(): a failed step still leaves the deploy key and the decrypted identity on the runner. A hosted runner is
+      # discarded anyway; this is for the day it is pointed at a self-hosted Mac.
+      - name: Remove the signing material
+        if: ${{ always() }}
+        run: |
+          rm -f "$RUNNER_TEMP/macos_certs_ed25519" "$RUNNER_TEMP/known_hosts"
+          rm -rf "$RUNNER_TEMP/certs" "$RUNNER_TEMP/AuthKey.p8"
+          security delete-keychain "$RUNNER_TEMP/build.keychain" 2>/dev/null || true

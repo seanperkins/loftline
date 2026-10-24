@@ -250,3 +250,14 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
 
 1. Import an SVG with thousands of paths (a traced drawing; `File → Import…`): the window stays responsive, every new shape is selected and drawn in the selection color, and zooming and panning keep up (a drawing over 5,000 segments is drawn as one-point lines: they look slightly thinner than the shapes of a small drawing).
 2. Edit → Select All, then move the selection with the inspector's Move field and group it (⌘G): each takes a moment, not minutes.
+
+## Release candidate checklist
+
+Run once on the notarised build from a `workflow_dispatch` rehearsal of `release.yml` (and again on the final candidate before a tag). The rehearsal proves the build, the signature, notarisation and the posted G-code; these cannot be seen headless.
+
+1. Download the run's artifact `LoftLine-<version>-macos-arm64` with a browser (so it carries the quarantine flag), unzip it twice and open `LoftLine.app`. macOS may say it was downloaded from the Internet and ask you to confirm; it must not say the developer is unidentified or that it cannot be checked for malware. `spctl --assess --type execute -v LoftLine.app` prints `accepted` and `source=Notarized Developer ID`.
+2. `plutil -p LoftLine.app/Contents/Info.plist` shows `LoftLineChannel` `rehearsal` and the version you gave; `LoftLine.app/Contents/Resources/updater.sh` exists and is executable.
+3. Welcome ▸ Open the Sample Sign, calculate, and switch to the 3D preview: it renders and simulates (the hardened runtime must not stop the runtime Metal shader compile).
+4. Run a built-in gadget from the Gadgets menu: it draws its shapes (the hardened runtime must not stop JavaScriptCore). If 3 or 4 fails, add `Resources/LoftLine.entitlements` with only the entitlement the failure proves necessary (likely `com.apple.security.cs.allow-jit`), rebuild through `bundle.sh` and rehearse again.
+5. Move the app to `/Applications` and open it once, then `qlmanage -r` and `qlmanage -t -s 256 -o .tmp/ql samples/sign.loftline`: `.tmp/ql/sign.loftline.png` shows the sign (the Quick Look extension kept its sandbox).
+6. `LoftLine.app/Contents/MacOS/LoftLine export samples/sign.loftline --post generic-grbl-mm --builtin-only --out .tmp/rc` and `diff .tmp/rc/sign.nc samples/expected/generic-grbl-mm/sign.nc` print nothing; export the same sample from the app (File ▸ Export G-code, Generic GRBL (mm)) and compare it too.

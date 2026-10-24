@@ -12,6 +12,8 @@ scripts/bundle.sh                    # release build → dist/LoftLine.app (ad-h
 scripts/run.sh                       # debug bundle + launch
 swift run loftline-cli export samples/sign.loftline --out .tmp/out   # post a project headless (see README "Command line")
 scripts/check-samples.sh             # post every sample with every built-in post, diff against samples/expected/ (--update after an intended change)
+scripts/check-bundle.sh              # release-mode bundles: version, channel, signing, update helper, smoke test (a few minutes)
+scripts/check-release-workflow.sh    # structural check of .github/workflows/release.yml (also run by the test suite)
 scripts/ui.sh main --light           # UI harness: screenshots + accessibility tree, no permissions (docs/UI-HARNESS.md)
 LOFTLINE_UPDATE_GOLDEN=1 scripts/test.sh # regenerate golden G-code after an intended output change
 LOFTLINE_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles   # regenerate samples/
