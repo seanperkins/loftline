@@ -271,6 +271,18 @@ struct ReleaseScriptsTests {
         #expect(!defaults.err.contains("refusing"), "the defaults are what the workflow uses: \(defaults.err)")
     }
 
+    @Test func configureScriptSaysSoWhenTheArgumentIsAPEMKeyInsteadOfTheExportedP12() throws {
+        // The App Store Connect key is the easy mix-up: the script finds it itself, and OpenSSL's answer to a PEM file
+        // ("wrong tag ... Type=PKCS12") says nothing about it. The agent sandbox refuses a file named *.p8, so a neutral name.
+        let box = try Scratch()
+        let pem = try box.write("asc-key.txt", "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n")
+        let result = try ScriptRunner.script(Self.configure, [pem.path])
+        #expect(result.status != 0)
+        #expect(result.err.contains("not an exported .p12"), "\(result.err)")
+        #expect(result.err.contains("finds"), "it should say the .p8 is found automatically: \(result.err)")
+        #expect(!result.err.contains("openssl said"), "the guard must run before OpenSSL is asked: \(result.err)")
+    }
+
     // The certificate-identity checks run the real script against a throwaway certificate, with a stub `gh` that records
     // every call, so they need an OpenSSL 3 (the script needs one too).
     static let openssl3: String? = {

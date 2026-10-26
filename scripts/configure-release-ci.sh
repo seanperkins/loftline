@@ -54,6 +54,14 @@ fi
 P12="${1:?usage: scripts/configure-release-ci.sh <exported-signing.p12>}"
 P8="${ASC_KEY_FILE:-$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8}"
 
+# The one argument is the exported .p12 (binary). A text PEM there is nearly always the App Store Connect key, which the
+# script finds itself; OpenSSL's answer to it ("wrong tag ... Type=PKCS12") does not say so. Checked before OpenSSL is run.
+if [[ -f $P12 ]] && head -c 4096 -- "$P12" | LC_ALL=C grep -aq -e '-----BEGIN'; then
+  print -u2 -r -- "$P12 is a PEM text file, not an exported .p12"
+  print -u2 -r -- "the argument is the Personal Information Exchange (.p12) file from Keychain Access; the script finds the App Store Connect key itself ($P8)"
+  exit 1
+fi
+
 # OpenSSL 3.x is required: -legacy and -macalg sha1 control the RC2-40 encoding macOS `security import` accepts, and
 # /usr/bin/openssl on macOS is LibreSSL, which has neither flag.
 OPENSSL="${OPENSSL:-openssl}"
