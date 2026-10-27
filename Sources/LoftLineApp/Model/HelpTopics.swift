@@ -398,6 +398,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
         case .preferences:
             return """
             LoftLine ▸ Settings… (⌘,) sets the defaults for **new** documents (units, grid spacing, machine, post, snapping), the canvas colors, how often recovery copies are saved, and whether the Welcome window opens at launch. Open documents keep their own settings.
+
+            **Updates and privacy.** Release builds of LoftLine look for a newer version when they start and then once a day. The only request goes to github.com, with the user agent `LoftLine/<version>`: no identifiers, no usage data, nothing else. A download is checked against its SHA-256 and a signature made with LoftLine's own key before anything is installed, and an update installs only when LoftLine quits. Turn the daily check off with **Check for updates automatically** in Settings ▸ General. LoftLine ▸ Check for Updates… looks once, on request.
             """
         case .recovery:
             return """

@@ -5,6 +5,7 @@ import SwiftUI
 struct WelcomeView: View {
     static let windowID = "loftline-welcome"
     @ObservedObject var preferences = PreferencesModel.shared
+    @ObservedObject var updates = UpdateController.shared
     @State private var message: String?
 
     static func show() {
@@ -40,6 +41,7 @@ struct WelcomeView: View {
             .background(.quaternary.opacity(0.4))
 
             VStack(alignment: .leading, spacing: 12) {
+                UpdateBanner(controller: updates)
                 Text("Quick start").font(.title2.bold()).accessibilityAddTraits(.isHeader)
                 ForEach(Array(SampleProjects.quickStart.enumerated()), id: \.offset) { i, step in
                     HStack(alignment: .top, spacing: 10) {

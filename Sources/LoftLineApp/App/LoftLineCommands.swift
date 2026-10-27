@@ -10,8 +10,13 @@ struct LoftLineCommands: Commands {
     @FocusedObject private var document: LoftLineDocument?
     @Environment(\.openWindow) private var openWindow
     @Environment(\.newDocument) private var newDocument
+    @ObservedObject private var updates = UpdateController.shared
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") { UpdateWindow.checkByHand() }
+                .disabled(updates.isBusy)
+        }
         CommandGroup(replacing: .printItem) {
             Button("Print…") { document?.printDesign(actualSize: false) }
                 .keyboardShortcut("p", modifiers: .command)

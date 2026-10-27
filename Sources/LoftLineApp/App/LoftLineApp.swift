@@ -21,10 +21,13 @@ final class LoftLineAppDelegate: NSObject, NSApplicationDelegate {
             if PreferencesModel.shared.prefs.showWelcomeAtLaunch { WelcomeView.show() }
             RecoveryPrompt.offer(interactive: false)
         }
+        UpdateLaunch.start()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         RecoveryCoordinator.shared.cleanUpOnQuit()
+        // The one place the update helper starts: the quit can no longer be cancelled.
+        MainActor.assumeIsolated { UpdateController.shared.applicationWillTerminate() }
     }
 }
 

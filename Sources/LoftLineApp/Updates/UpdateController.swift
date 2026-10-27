@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 import UpdateCore
@@ -53,6 +54,8 @@ final class UpdateController: ObservableObject {
     private static let log = Logger(subsystem: "com.seanperkins.loftline", category: "updates")
 
     @Published private(set) var state: State = .idle
+    /// When the last successful check finished, for the Preferences line.
+    @Published private(set) var lastCheck: Date?
 
     private struct Pending {
         var entry: UpdateEntry
@@ -90,7 +93,17 @@ final class UpdateController: ObservableObject {
         self.terminate = terminate
         self.environment = environment
         self.now = now
+        lastCheck = store.lastCheck
     }
+
+    var currentVersion: String { bundle.version }
+
+    /// True while a check or a download is running: the menu item is disabled then.
+    var isBusy: Bool { state == .checking || state == .downloading }
+
+    /// Each version is announced with a window once; later checks that find it again stay quiet (the banner still shows).
+    func shouldPrompt(for entry: UpdateEntry) -> Bool { store.lastPromptedVersion != entry.version }
+    func markPrompted(_ entry: UpdateEntry) { store.lastPromptedVersion = entry.version }
 
     /// Release builds, with the preference on and the environment not silenced.
     var canAutoCheck: Bool {
@@ -135,6 +148,7 @@ final class UpdateController: ObservableObject {
             let data = try await fetch(feedURL, limit: Self.maxFeedBytes)
             guard let entry = UpdateManifest.parse(data) else { throw Failure(message: "The update feed could not be read.") }
             store.lastCheck = now()
+            lastCheck = store.lastCheck
             if !UpdateVersion.isNewer(entry.version, than: bundle.version) {
                 state = .upToDate
             } else if !userInitiated, store.skippedVersion == entry.version {
@@ -332,4 +346,28 @@ final class UpdateController: ObservableObject {
         if error is URLError { return "LoftLine could not reach the update server." }
         return "The update failed: \(error.localizedDescription)"
     }
+}
+
+extension UpdateController.State {
+    /// An update is waiting for the user, or about to install: the Welcome window shows a banner.
+    var offersAttention: Bool {
+        switch self {
+        case .available, .readyToInstall, .installPending: return true
+        default: return false
+        }
+    }
+}
+
+extension UpdateController {
+    /// The app's own controller. Its session keeps no cookies and no cache; the only request it ever makes is to github.com.
+    static let shared = UpdateController(
+        session: URLSession(configuration: .ephemeral),
+        store: UpdateStateStore(defaults: .standard),
+        bundle: BundleInfo(),
+        publicKeyPEM: UpdateSignature.publicKeyPEM,
+        cacheDirectory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("LoftLine/Updates", isDirectory: true),
+        autoCheckEnabled: { PreferencesModel.shared.prefs.autoCheckForUpdates },
+        spawnHelper: UpdateController.startHelper(),
+        terminate: { NSApp.terminate(nil) })
 }

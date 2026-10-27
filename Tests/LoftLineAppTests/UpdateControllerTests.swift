@@ -462,6 +462,29 @@ struct UpdateControllerTests {
         #expect(rig.recorder.spawns.isEmpty && rig.recorder.terminations == 0)
     }
 
+    // MARK: what the windows read
+
+    @Test func eachVersionIsAnnouncedOnce() async throws {
+        let rig = try Rig()
+        defer { rig.cleanup() }
+        let entry = try rig.serve(version: "0.2.1")
+        #expect(rig.controller.shouldPrompt(for: entry))
+        rig.controller.markPrompted(entry)
+        #expect(!rig.controller.shouldPrompt(for: entry))
+        #expect(rig.store.lastPromptedVersion == "0.2.1")
+        #expect(rig.controller.shouldPrompt(for: try rig.serve(version: "0.2.2")), "a newer version is a new announcement")
+    }
+
+    @Test func lastCheckIsPublishedAfterASuccessfulCheck() async throws {
+        let rig = try Rig()
+        defer { rig.cleanup() }
+        #expect(rig.controller.lastCheck == nil)
+        try rig.serve()
+        await rig.controller.checkNow(userInitiated: true)
+        #expect(rig.controller.lastCheck == rig.clock)
+        #expect(rig.controller.currentVersion == "0.2.0")
+    }
+
     // MARK: how the helper is started
 
     @Test func theHelperIsStartedWithTheDigestAndAMinimalEnvironment() {

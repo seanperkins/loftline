@@ -22,6 +22,11 @@ struct PreferencesView: View {
 
 struct GeneralPreferences: View {
     @ObservedObject var model: PreferencesModel
+    @ObservedObject private var updates = UpdateController.shared
+
+    private var lastChecked: String {
+        updates.lastCheck.map { $0.formatted(date: .abbreviated, time: .shortened) } ?? "Never"
+    }
 
     var body: some View {
         Form {
@@ -48,6 +53,11 @@ struct GeneralPreferences: View {
                 }
                 .help("Unsaved changes are copied to a recovery folder so they can be restored after a crash.")
                 Toggle("Show the Welcome window at launch", isOn: $model.prefs.showWelcomeAtLaunch)
+            }
+            Section("Updates") {
+                Toggle("Check for updates automatically", isOn: $model.prefs.autoCheckForUpdates)
+                    .help("Looks at github.com when LoftLine starts and then once a day. Nothing else is sent. LoftLine ▸ Check for Updates… looks once, on request.")
+                LabeledContent("Last checked") { Text(lastChecked).foregroundStyle(.secondary) }
             }
             HStack {
                 HelpButton(topic: .preferences)
