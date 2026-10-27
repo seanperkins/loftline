@@ -22,22 +22,54 @@ trap 'rm -rf "$WORK"' EXIT
 
 # The manifest's digest and signature, checked for shape, and the archive's own digest.
 python3 - "$FEED" "$ARCHIVE" "$WORK" <<'PY'
-import base64, hashlib, json, re, sys
+import base64, hashlib, json, os, re, sys
 
 feed, archive, work = sys.argv[1:]
+
+# The client's contract (UpdateCore/UpdateManifest.swift). A feed a client refuses must never be published: no installed app
+# could update from it. The prefix is the same string as UpdateManifest.urlPrefix, and a test keeps the two equal.
+PREFIX = "https://github.com/seanperkins/loftline/releases/download/"
+VERSION = re.compile(r"[0-9][0-9A-Za-z.+-]{0,31}")
 
 def fail(message):
     print(f"verify-feed: {message}", file=sys.stderr)
     sys.exit(1)
+
+def newer(a, b):
+    """True when version a is newer than b: dot-separated numbers, a suffix after - or + ignored."""
+    def parts(v):
+        return [int(re.match(r"[0-9]*", p).group() or 0) for p in re.split(r"[-+]", v)[0].split(".")]
+    x, y = parts(a), parts(b)
+    n = max(len(x), len(y))
+    return x + [0] * (n - len(x)) > y + [0] * (n - len(y))
+
+if os.path.getsize(feed) > 256 * 1024:
+    fail("the feed is too large (the client refuses a document over 256 KiB)")
 
 try:
     with open(feed, encoding="utf-8") as f:
         entry = json.load(f)["entries"]["macos-arm64"]
     expected = entry["sha256"]
     signature = base64.b64decode(entry["sig"], validate=True)
-    version = entry["version"]
 except Exception as error:
     fail(f"the feed has no readable macos-arm64 entry ({type(error).__name__})")
+
+version = entry.get("version")
+if not isinstance(version, str) or not VERSION.fullmatch(version):
+    fail("the feed's version is not a version number")
+name = os.path.basename(archive)
+if name != f"LoftLine-v{version}-macos-arm64.zip":
+    fail(f"the feed's version {version} does not match the archive name {name}")
+if entry.get("url") != f"{PREFIX}v{version}/{name}":
+    fail(f"the feed's url is not the download URL of {name}: {entry.get('url')!r}")
+if not isinstance(entry.get("notes", ""), str) or len(entry.get("notes", "")) > 4000:
+    fail("the feed's notes are not a string of at most 4000 characters")
+if "gcodeChanged" in entry and not isinstance(entry["gcodeChanged"], bool):
+    fail("the feed's gcodeChanged is not true or false")
+if "gcodeChangedIn" in entry:
+    changed_in = entry["gcodeChangedIn"]
+    if not isinstance(changed_in, str) or not VERSION.fullmatch(changed_in) or newer(changed_in, version):
+        fail("the feed's gcodeChangedIn is not a version up to this release")
 
 if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
     fail("the feed's sha256 is not 64 lowercase hex characters")

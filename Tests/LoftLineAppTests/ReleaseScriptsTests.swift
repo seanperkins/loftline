@@ -286,8 +286,8 @@ struct ReleaseScriptsTests {
         try ScriptRunner.script("scripts/verify-feed.sh", [(feed ?? s.feed).path, (archive ?? s.archive).path, (publicKey ?? s.publicKey).path])
     }
 
-    /// The feed with one field of the macos-arm64 entry replaced.
-    static func edited(_ s: SignedFeed, field: String, to value: String) throws -> URL {
+    /// The feed with one field of the macos-arm64 entry replaced (nil removes it).
+    static func edited(_ s: SignedFeed, field: String, to value: Any?) throws -> URL {
         var document = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: s.feed)) as? [String: Any])
         var entries = try #require(document["entries"] as? [String: [String: Any]])
         entries["macos-arm64"]?[field] = value
@@ -323,7 +323,7 @@ struct ReleaseScriptsTests {
         let s = try Self.signedFeed()
         var bytes = try Data(contentsOf: s.archive)
         bytes[1_000] ^= 0x01
-        let tampered = try s.box.write("tampered.zip", "")
+        let tampered = try s.box.write("tampered/LoftLine-v1.2.3-macos-arm64.zip", "")
         try bytes.write(to: tampered)
         let result = try Self.verifyFeed(s, archive: tampered)
         #expect(result.status == 1)
@@ -333,7 +333,7 @@ struct ReleaseScriptsTests {
     @Test func verifyFeedRejectsADigestThatIsRightForAnArchiveTheSignatureWasNotMadeFor() throws {
         // The manifest names another archive's real digest, so the digest check passes; only the signature can catch it.
         let s = try Self.signedFeed()
-        let other = try s.box.write("other.zip", String(repeating: "a different archive ", count: 300))
+        let other = try s.box.write("other/LoftLine-v1.2.3-macos-arm64.zip", String(repeating: "a different archive ", count: 300))
         let feed = try Self.edited(s, field: "sha256", to: UpdateSignature.sha256Hex(of: other))
         let result = try Self.verifyFeed(s, feed: feed, archive: other)
         #expect(result.status == 1)
@@ -346,6 +346,56 @@ struct ReleaseScriptsTests {
         let result = try Self.verifyFeed(s, publicKey: otherKey)
         #expect(result.status == 1)
         #expect(result.err.contains("signature"), "\(result.err)")
+    }
+
+    @Test func verifyFeedEnforcesTheClientsManifestContract() throws {
+        // The digest and the signature are right in every case below; only the metadata is wrong. A client refuses each of
+        // these feeds, so publishing one would leave every installed app unable to update.
+        let s = try Self.signedFeed()
+        let download = UpdateManifest.urlPrefix
+        let asset = "LoftLine-v1.2.3-macos-arm64.zip"
+        let cases: [(field: String, value: Any?, mentions: String)] = [
+            ("url", nil, "url"),
+            ("url", download + "v1.2.3/Other-v1.2.3-macos-arm64.zip", "url"),
+            ("url", download + "v9.9.9/" + asset, "url"),
+            ("url", "http://github.com/seanperkins/loftline/releases/download/v1.2.3/" + asset, "url"),
+            ("url", "https://evil.example/" + asset, "url"),
+            ("url", 5, "url"),
+            ("version", "9.9.9", "version"),
+            ("version", 7, "version"),
+            ("version", nil, "version"),
+            ("notes", String(repeating: "n", count: 4001), "notes"),
+            ("notes", 5, "notes"),
+            ("gcodeChanged", "yes", "gcodeChanged"),
+            ("gcodeChanged", 1, "gcodeChanged"),
+            ("gcodeChangedIn", "9.9.9", "gcodeChangedIn"),
+            ("gcodeChangedIn", "../1", "gcodeChangedIn"),
+            ("gcodeChangedIn", 3, "gcodeChangedIn"),
+        ]
+        for c in cases {
+            let result = try Self.verifyFeed(s, feed: Self.edited(s, field: c.field, to: c.value))
+            #expect(result.status == 1, "\(c.field) = \(String(describing: c.value))")
+            #expect(result.err.contains(c.mentions), "\(c.field) = \(String(describing: c.value)): \(result.err)")
+        }
+        // What a client accepts passes: an older gcodeChangedIn, the flag, short notes.
+        let fine = try Self.edited(s, field: "gcodeChangedIn", to: "1.0.0")
+        #expect(try Self.verifyFeed(s, feed: fine).status == 0)
+        #expect(try Self.verifyFeed(s, feed: Self.edited(s, field: "gcodeChanged", to: true)).status == 0)
+        #expect(try Self.verifyFeed(s, feed: Self.edited(s, field: "notes", to: nil)).status == 0, "notes are optional")
+    }
+
+    @Test func verifyFeedRefusesAnOversizedDocumentAndTheScriptAndAppAgreeOnTheHost() throws {
+        let s = try Self.signedFeed()
+        var data = try Data(contentsOf: s.feed)
+        data.append(Data(repeating: 0x20, count: 300 * 1024))
+        let big = try s.box.write("big.json", "")
+        try data.write(to: big)
+        let result = try Self.verifyFeed(s, feed: big)
+        #expect(result.status == 1)
+        #expect(result.err.contains("too large"), "\(result.err)")
+        // The script spells the download prefix out; the app has it as a constant. They must be the same string.
+        let source = try String(contentsOf: ScriptRunner.root.appendingPathComponent("scripts/verify-feed.sh"), encoding: .utf8)
+        #expect(source.contains(UpdateManifest.urlPrefix), "scripts/verify-feed.sh and UpdateManifest.urlPrefix must agree")
     }
 
     @Test func verifyFeedRejectsAMalformedFeedMissingFilesAndBadArguments() throws {

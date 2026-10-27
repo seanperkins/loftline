@@ -105,6 +105,10 @@ if verify
   script = run_of.(verify)
   ensure_that.(script.include?('com.apple.security.app-sandbox'), 'verification must check the Quick Look extension kept its sandbox entitlement')
   ensure_that.(script.include?('runtime'), 'verification must check the hardened runtime flag')
+  # The code requirement every update must satisfy is run against the real Developer ID build, so a typo in it fails the release
+  # here and not every install in the field. It is printed by the helper itself, so there is one copy of the string.
+  ensure_that.(script.include?('packaging/updater/macos.sh --print-requirement') && script.match?(/codesign --verify [^\n]*"-R=\$requirement" dist\/LoftLine\.app/),
+               "verification must run the updater's code requirement (macos.sh --print-requirement) against dist/LoftLine.app with codesign --verify -R=")
 end
 
 # Notarisation.

@@ -177,6 +177,11 @@ jobs:
           grep -E 'Authority|flags|TeamIdentifier' <<<"$details"
           grep -Eq 'flags=0x[0-9a-f]+\(.*runtime' <<<"$details" \
             || { echo "::error::The app is not signed with the hardened runtime"; exit 1; }
+          # The code requirement the update helper demands of every download, run against this real Developer ID build. A typo
+          # in it would otherwise refuse every update in the field, and nothing else here would notice.
+          requirement="$(packaging/updater/macos.sh --print-requirement)"
+          codesign --verify --deep --strict "-R=$requirement" dist/LoftLine.app
+          echo "the updater's code requirement is satisfied by this build"
 
       - name: Notarise and staple
         if: env.HAS_SIGNING == 'true'
