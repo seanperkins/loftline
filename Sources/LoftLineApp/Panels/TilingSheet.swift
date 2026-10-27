@@ -115,17 +115,20 @@ struct TilingSheet: View {
     }
 
     private func run() {
+        failure = nil
         calcTask?.cancel()
         calcTask = nil
-        let stale = document.outputProject.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
+        let targets = document.outputProject.operations.filter { $0.setup.isEnabled }.map(\.id)
+        let stale = targets.filter { document.isStale($0) }
         guard !stale.isEmpty else { post(); return }
         files = []
         calculatingCount = stale.count
         calcTask = Task { @MainActor in
-            let done = await document.calculateAndWait(stale)
-            guard done, !Task.isCancelled else { return }
+            // Posts only when nothing is stale: a result computed before a later change is calculated again.
+            let fresh = await document.calculateUntilFresh(targets: targets)
+            guard !Task.isCancelled else { return }
             calcTask = nil
-            post()
+            if fresh { post() } else { failure = "The project changed while it was being calculated. Export again." }
         }
     }
 

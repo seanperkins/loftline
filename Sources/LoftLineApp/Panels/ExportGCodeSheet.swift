@@ -135,15 +135,17 @@ struct ExportGCodeSheet: View {
         failure = nil
         calcTask?.cancel()
         calcTask = nil
-        let stale = targetOperations().filter { document.isStale($0) }
+        let targets = targetOperations()
+        let stale = targets.filter { document.isStale($0) }
         guard !stale.isEmpty else { post(); return }
         result = nil
         calculatingCount = stale.count
         calcTask = Task { @MainActor in
-            let done = await document.calculateAndWait(stale)
-            guard done, !Task.isCancelled else { return }
+            // Posts only when nothing is stale: a result computed before a later change is calculated again.
+            let fresh = await document.calculateUntilFresh(targets: targets)
+            guard !Task.isCancelled else { return }
             calcTask = nil
-            post()
+            if fresh { post() } else { failure = "The project changed while it was being calculated. Export again." }
         }
     }
 

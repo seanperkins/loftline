@@ -17,6 +17,7 @@ struct ValidationSheet: View {
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @State private var calcTask: Task<Void, Never>?
     @State private var calculatingCount = 0
+    @State private var failure: String?
 
     /// What a program posted now is made from: the document's inputs, the post processor and the group-by-tool preference.
     private var currentInputs: LoftLineDocument.PostedInputs { document.postedInputs.stamped(profile: document.postProfile, groupedByTool: groupByTool) }
@@ -32,6 +33,7 @@ struct ValidationSheet: View {
             if calcTask != nil {
                 CalculationProgressView(count: calculatingCount) { calcTask?.cancel(); calcTask = nil }
             }
+            SheetErrorRow(message: failure)
             if let r = report {
                 summary(r)
                 List {
@@ -90,17 +92,20 @@ struct ValidationSheet: View {
     }
 
     private func run() {
+        failure = nil
         calcTask?.cancel()
         calcTask = nil
-        let stale = document.outputProject.operations.filter { $0.setup.isEnabled && document.isStale($0.id) }.map(\.id)
+        let targets = document.outputProject.operations.filter { $0.setup.isEnabled }.map(\.id)
+        let stale = targets.filter { document.isStale($0) }
         guard !stale.isEmpty else { check(); return }
         report = nil   // the last report is of toolpaths that are being replaced
         calculatingCount = stale.count
         calcTask = Task { @MainActor in
-            let done = await document.calculateAndWait(stale)
-            guard done, !Task.isCancelled else { return }
+            // Checks only when nothing is stale: a result computed before a later change is calculated again.
+            let fresh = await document.calculateUntilFresh(targets: targets)
+            guard !Task.isCancelled else { return }
             calcTask = nil
-            check()
+            if fresh { check() } else { failure = "The project changed while it was being calculated. Export again." }
         }
     }
 

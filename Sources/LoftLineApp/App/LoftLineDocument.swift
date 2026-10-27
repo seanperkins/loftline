@@ -866,6 +866,24 @@ final class LoftLineDocument: ReferenceFileDocument {
         return !Task.isCancelled && finished.count == jobs.count
     }
 
+    /// Calculates what is stale among `targets` until none of them is, so a program is never posted from a toolpath
+    /// computed before a later change: a result that lands after an edit (a Tool Database edit, a setting) carries the
+    /// old `designRevision`, is stale on arrival, and is calculated again. Which targets are stale is re-evaluated before
+    /// every pass, since a change can make toolpaths stale that were fresh when the export began; at most five passes.
+    /// True only when nothing in `targets` is stale; false when the calling task was cancelled or the project kept
+    /// changing. A target deleted meanwhile is left out. `afterPass` runs after each pass (tests change the project there).
+    @MainActor
+    func calculateUntilFresh(targets: [UUID], afterPass: () -> Void = {}) async -> Bool {
+        func stale() -> [UUID] { targets.filter { operation($0) != nil && isStale($0) } }
+        for _ in 0..<5 {
+            let pending = stale()
+            if pending.isEmpty { return true }
+            guard await calculateAndWait(pending) else { return false }
+            afterPass()
+        }
+        return stale().isEmpty
+    }
+
     private func nextGeneration() -> Int {
         generationCounter += 1
         return generationCounter
