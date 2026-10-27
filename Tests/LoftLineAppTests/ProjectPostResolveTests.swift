@@ -131,21 +131,23 @@ import Testing
     @Test func openingRefusesANewerPostOrMachineCopy() throws {
         var p = try withCopies(project(post: inch.id, machine: avid.id), post: inch, machine: avid)
         p.postSnapshot = p.postSnapshot.map(newer)
-        #expect(throws: LoftLineIOError.unsupportedFormat(newerMessage)) { try LoftLineProject.opening(from: data(p)) }
+        #expect(throws: ProjectOpenError(message: newerMessage)) { try LoftLineProject.opening(from: data(p)) }
         var q = try withCopies(project(post: inch.id, machine: avid.id), post: inch, machine: avid)
         q.machineSnapshot = q.machineSnapshot.map(newer)
-        #expect(throws: LoftLineIOError.unsupportedFormat(newerMessage)) { try LoftLineProject.opening(from: data(q)) }
+        #expect(throws: ProjectOpenError(message: newerMessage)) { try LoftLineProject.opening(from: data(q)) }
     }
 
     @Test func openingRefusesAMalformedCopy() throws {
         var p = project(post: inch.id)
         p.postSnapshot = .string("junk")
-        do { _ = try LoftLineProject.opening(from: data(p)); Issue.record("opened") } catch LoftLineIOError.malformed(let m) {
+        do { _ = try LoftLineProject.opening(from: data(p)); Issue.record("opened") } catch let e as ProjectOpenError {
+            let m = e.message
             #expect(m.contains("post"))
         } catch { Issue.record("wrong error \(error)") }
         var q = project(post: inch.id)
         q.machineSnapshot = .object(["id": .string("only")])
-        do { _ = try LoftLineProject.opening(from: data(q)); Issue.record("opened") } catch LoftLineIOError.malformed(let m) {
+        do { _ = try LoftLineProject.opening(from: data(q)); Issue.record("opened") } catch let e as ProjectOpenError {
+            let m = e.message
             #expect(m.contains("machine"))
         } catch { Issue.record("wrong error \(error)") }
     }
@@ -153,7 +155,8 @@ import Testing
     @Test func openingRefusesACopyThatIsPresentButNull() throws {
         for (key, word) in [("postSnapshot", "post"), ("machineSnapshot", "machine")] {
             let d = try data(project(post: inch.id)) { $0[key] = NSNull() }
-            do { _ = try LoftLineProject.opening(from: d); Issue.record("opened with a null \(key)") } catch LoftLineIOError.malformed(let m) {
+            do { _ = try LoftLineProject.opening(from: d); Issue.record("opened with a null \(key)") } catch let e as ProjectOpenError {
+                let m = e.message
                 #expect(m.contains(word), "\(key): \(m)")
             } catch { Issue.record("wrong error \(error)") }
         }

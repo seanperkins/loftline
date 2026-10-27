@@ -175,6 +175,23 @@ enum LoftLineCLI {
         return 0
     }
 
+    // MARK: post resolution
+
+    /// The post to write with, the project's own post (which sets the rapid rate), and the notices. The machine is the
+    /// one the project as opened resolves to (its copy, or the machine inferred from its own post). `--post <id>`
+    /// replaces only the post, with the installed one, never the project's copy of it, even when the ids are equal; it
+    /// answers the project's own post being missing or differing, so those notices are left out. nil = no such post.
+    static func resolvePost(project: LoftLineProject, override: String?, profiles: [PostProfile],
+                            machines: [MachineDefinition]) -> (profile: PostProfile, own: PostProfile, issues: [GCodeIssue])? {
+        let own = ProjectPost.resolve(project, profiles: profiles, machines: machines)
+        guard let id = override else {
+            return (own.post, own.post, ProjectPost.issues(for: project, profiles: profiles, machines: machines))
+        }
+        guard let installed = profiles.first(where: { $0.id == id }) else { return nil }
+        return (MachineResolver.effectiveProfile(installed, machine: own.machine), own.post,
+                ProjectPost.issues(for: project, profiles: profiles, machines: machines, includingPost: false))
+    }
+
     // MARK: export
 
     private static func export(_ arguments: [String], output: Output) -> Int32 {
@@ -195,37 +212,24 @@ enum LoftLineCLI {
             return 2
         }
         let project: LoftLineProject
-        do { project = try LoftLineProject.decode(from: data) } catch {
-            output.standardError("error: \(path) is not a LoftLine project: \(error)\n")
+        do { project = try LoftLineProject.opening(from: data) } catch {
+            output.standardError("error: \(path) is not a LoftLine project: \(ProjectOpenError(error).message)\n")
             return 2
         }
 
-        // The post and the machine, as the document resolves them (`LoftLineDocument.postProfile`, `effectiveProfile`).
+        // The post and the machine, as the document resolves them: the project's own copies first (`ProjectPost`).
         let stores = stores(builtinOnly: options.builtinOnly)
         let profiles = stores.posts.allProfiles()
         let machines = stores.machines.allMachines()
         let units = project.document.units
-        var issues: [GCodeIssue] = []
-        // As `LoftLineDocument.postProfile`: a project that names no post uses the default for its units.
-        let postID = options.post ?? project.postProfileID ?? PostProfileStore.defaultID(for: units)
-        if let id = options.post, !profiles.contains(where: { $0.id == id }) {
-            output.standardError("error: unknown post \"\(id)\"; installed: \(profiles.map(\.id).joined(separator: ", "))\n")
+        guard let resolved = resolvePost(project: project, override: options.post, profiles: profiles, machines: machines) else {
+            output.standardError("error: unknown post \"\(options.post ?? "")\"; installed: \(profiles.map(\.id).joined(separator: ", "))\n")
             return 2
         }
-        if options.post == nil, let id = project.postProfileID, !profiles.contains(where: { $0.id == id }) {
-            let fallback = stores.posts.profile(id: nil)
-            issues.append(GCodeIssue(severity: .error,
-                                     message: "The project's post \"\(id)\" is not installed; \"\(fallback.name)\" is used instead. Pick a post before saving."))
-        }
-        func effective(_ id: String?) -> PostProfile {
-            // A post that is not installed falls back as the app's catalog does (`PostProfileCatalog.profile(id:)`).
-            let profile = profiles.first { $0.id == id } ?? profiles.first { $0.id == PostProfileStore.defaultProfileID }
-                ?? BuiltInPosts.avidMach4Inch
-            return MachineResolver.effectiveProfile(profile, machine: MachineResolver.machine(for: project, machines: machines))
-        }
-        let profile = effective(postID)
+        let profile = resolved.profile
+        let issues = resolved.issues
         // The rapid rate only times the toolpaths; the project's own post sets it, as in the app.
-        let own = effective(project.postProfileID ?? PostProfileStore.defaultID(for: units))
+        let own = resolved.own
         let rapid = own.rapidRate * own.units.factor(to: units)
 
         // The scope: one toolpath by name, or the whole program.

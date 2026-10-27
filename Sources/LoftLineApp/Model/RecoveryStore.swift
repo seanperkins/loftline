@@ -49,7 +49,7 @@ struct RecoveryStore {
     }
 
     func project(for id: UUID) throws -> LoftLineProject {
-        try LoftLineProject.decode(from: Data(contentsOf: projectURL(id)))
+        try LoftLineProject.opening(from: Data(contentsOf: projectURL(id)))
     }
 
     func remove(_ id: UUID) {

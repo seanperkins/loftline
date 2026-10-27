@@ -237,8 +237,13 @@ final class LoftLineDocument: ReferenceFileDocument {
         guard let data = configuration.file.regularFileContents else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        self.init(project: try LoftLineProject.decode(from: data))
+        try self.init(opening: data)
         applyWindowPreferences(PreferencesModel.shared.prefs)
+    }
+
+    /// Opens a project file's bytes, refusing a post or machine copy this LoftLine cannot read (`ProjectOpenError`).
+    convenience init(opening data: Data, toolLibrary: ToolLibraryModel = .shared) throws {
+        self.init(project: try LoftLineProject.opening(from: data), toolLibrary: toolLibrary)
     }
 
     /// Per-window editing defaults from Preferences (snapping).

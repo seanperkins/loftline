@@ -39,7 +39,7 @@ struct JobTemplateStore {
 
     /// The project a new document starts from: the template's content under a fresh name.
     func instantiate(_ entry: Entry) throws -> LoftLineProject {
-        var p = try LoftLineProject.decode(from: Data(contentsOf: entry.url))
+        var p = try LoftLineProject.opening(from: Data(contentsOf: entry.url))
         p.document.name = "Untitled"
         return p
     }

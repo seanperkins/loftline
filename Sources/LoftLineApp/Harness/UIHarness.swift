@@ -257,7 +257,7 @@ final class UIHarness {
         switch step.op {
         case "sample":
             guard let url = SampleProjects.url(for: SampleProjects.sign) else { throw HarnessError(message: "the sample sign was not found") }
-            let project = try LoftLineProject.decode(from: Data(contentsOf: url))
+            let project = try LoftLineProject.opening(from: Data(contentsOf: url))
             doc.perform("Load sample") { $0 = project }
             doc.setSelection([])
             doc.requestCanvas(.fit)
@@ -267,7 +267,7 @@ final class UIHarness {
             let url = path.hasPrefix("/") ? URL(fileURLWithPath: path)
                 : URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(path)
             guard FileManager.default.fileExists(atPath: url.path) else { throw HarnessError(message: "project: no file at \(url.path)") }
-            let project = try LoftLineProject.decode(from: Data(contentsOf: url))
+            let project = try LoftLineProject.opening(from: Data(contentsOf: url))
             doc.perform("Load project") { $0 = project }
             doc.setSelection([])
             doc.requestCanvas(.fit)

@@ -129,14 +129,15 @@ enum ProjectPost {
 
     /// An error when the selected post is neither carried nor installed (today's text); a warning for each copy that
     /// differs from the installed definition of the same id. They reach the export sheets through the document.
-    static func issues(for p: LoftLineProject, profiles: [PostProfile], machines: [MachineDefinition]) -> [GCodeIssue] {
+    static func issues(for p: LoftLineProject, profiles: [PostProfile], machines: [MachineDefinition],
+                       includingPost: Bool = true) -> [GCodeIssue] {
         let r = resolve(p, profiles: profiles, machines: machines)
         var out: [GCodeIssue] = []
-        if case .fallback = r.postSource, let id = p.postProfileID {
+        if includingPost, case .fallback = r.postSource, let id = p.postProfileID {
             out.append(GCodeIssue(severity: .error, message:
                 "The project's post \"\(id)\" is not installed; \"\(r.post.name)\" is shown instead. Pick a post before saving."))
         }
-        if let d = r.postCopyDiffers {
+        if includingPost, let d = r.postCopyDiffers {
             let versions = d.copy.version == d.installed.version ? "" : " v\(d.copy.version)"
             let installed = d.copy.version == d.installed.version ? "the installed one" : "the installed v\(d.installed.version)"
             out.append(GCodeIssue(severity: .warning, message:
@@ -195,11 +196,33 @@ enum ProjectPost {
 
 extension LoftLineProject {
     /// Reads a `.loftline` file that is going to be opened, edited or posted: `decode`, then refuses a post or machine
-    /// copy that is newer, damaged or `null`. Use this everywhere a file becomes a project that can be posted.
+    /// copy that is newer, damaged or `null`. Use this everywhere a file becomes a project that can be posted. Every
+    /// failure is a `ProjectOpenError`, whose message is what the user should read.
     static func opening(from data: Data) throws -> LoftLineProject {
-        try ProjectPost.rejectNullCopies(in: data)
-        let project = try LoftLineProject.decode(from: data)
-        try ProjectPost.validate(project)
-        return project
+        do {
+            try ProjectPost.rejectNullCopies(in: data)
+            let project = try LoftLineProject.decode(from: data)
+            try ProjectPost.validate(project)
+            return project
+        } catch {
+            throw ProjectOpenError(error)
+        }
+    }
+}
+
+/// A project file that cannot be opened, with the sentence the user should read: the open dialog shows
+/// `localizedDescription`, and the command line prints the message.
+struct ProjectOpenError: Error, LocalizedError, Equatable {
+    var message: String
+    var errorDescription: String? { message }
+
+    init(message: String) { self.message = message }
+
+    init(_ error: Error) {
+        switch error {
+        case let e as ProjectOpenError: message = e.message
+        case LoftLineIOError.unsupportedFormat(let m), LoftLineIOError.malformed(let m): message = m
+        default: message = error.localizedDescription
+        }
     }
 }
