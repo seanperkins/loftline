@@ -48,7 +48,7 @@ let package = Package(
         .testTarget(name: "CAMCoreTests", dependencies: ["CAMCore", "CADCore"], swiftSettings: swift5),
         .testTarget(name: "PostCoreTests", dependencies: ["PostCore", "CAMCore", "CADCore"], swiftSettings: swift5),
         .testTarget(name: "UpdateCoreTests", dependencies: ["UpdateCore"], swiftSettings: swift5),
-        .testTarget(name: "LoftLineAppTests", dependencies: ["LoftLineApp", "PostCore", "CAMCore", "CADCore"],
+        .testTarget(name: "LoftLineAppTests", dependencies: ["LoftLineApp", "PostCore", "CAMCore", "CADCore", "UpdateCore"],
                     swiftSettings: swift5),
     ],
     cxxLanguageStandard: .cxx17

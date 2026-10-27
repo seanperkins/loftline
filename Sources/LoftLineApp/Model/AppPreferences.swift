@@ -23,6 +23,8 @@ struct AppPreferences: Equatable {
     var recoveryIntervalSeconds: Int = 60
     /// Show the Welcome window when LoftLine starts.
     var showWelcomeAtLaunch = true
+    /// Look for a newer release at launch and then daily (release builds only).
+    var autoCheckForUpdates = true
 
     static let defaultMaterialColor = "#FCF7ED"
     static let defaultSelectionColor = "#007AFF"
@@ -42,6 +44,7 @@ struct AppPreferences: Equatable {
         static let rapidColor = "loftline.pref.rapidColor"
         static let recoveryInterval = "loftline.pref.recoveryInterval"
         static let showWelcome = "loftline.pref.showWelcome"
+        static let autoCheckForUpdates = "loftline.pref.autoCheckForUpdates"
     }
 
     init() {}
@@ -59,6 +62,7 @@ struct AppPreferences: Equatable {
         if let c = d.string(forKey: Key.rapidColor), Self.isHex(c) { rapidColorHex = c }
         if let i = d.object(forKey: Key.recoveryInterval) as? Int, i >= 0 { recoveryIntervalSeconds = i }
         if let b = d.object(forKey: Key.showWelcome) as? Bool { showWelcomeAtLaunch = b }
+        if let b = d.object(forKey: Key.autoCheckForUpdates) as? Bool { autoCheckForUpdates = b }
     }
 
     func save(to d: UserDefaults) {
@@ -74,6 +78,7 @@ struct AppPreferences: Equatable {
         d.set(rapidColorHex, forKey: Key.rapidColor)
         d.set(recoveryIntervalSeconds, forKey: Key.recoveryInterval)
         d.set(showWelcomeAtLaunch, forKey: Key.showWelcome)
+        d.set(autoCheckForUpdates, forKey: Key.autoCheckForUpdates)
     }
 
     static func isHex(_ s: String) -> Bool {
