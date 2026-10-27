@@ -261,6 +261,82 @@ struct ReleaseScriptsTests {
         #expect(result.out.contains("workflow checks passed"), "\(result.out)")
     }
 
+    // MARK: scripts/retry.sh
+
+    /// A command that fails its first `failures` runs and then succeeds; it counts its runs in a file and echoes its arguments.
+    func flaky(in box: Scratch, failures: Int, status: Int = 1) throws -> (command: URL, runs: () -> Int) {
+        let counter = box.dir.appendingPathComponent("runs")
+        let command = try box.write("flaky.sh", """
+        #!/bin/sh
+        n=$(cat '\(counter.path)' 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > '\(counter.path)'
+        echo "args: $*"
+        [ "$n" -gt \(failures) ] && exit 0
+        exit \(status)
+        """)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: command.path)
+        return (command, { Int((try? String(contentsOf: counter, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "0") ?? 0 })
+    }
+
+    /// Stands in for `sleep`: records how long it was asked to wait and does not wait.
+    func recordingSleep(in box: Scratch) throws -> (command: URL, waits: () -> [String]) {
+        let log = box.dir.appendingPathComponent("waits")
+        let command = try box.write("sleep.sh", "#!/bin/sh\necho \"$1\" >> '\(log.path)'\n")
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: command.path)
+        return (command, { ((try? String(contentsOf: log, encoding: .utf8)) ?? "").split(separator: "\n").map(String.init) })
+    }
+
+    @Test func retryDoesNotWaitWhenTheCommandWorks() throws {
+        let box = try Scratch()
+        let command = try flaky(in: box, failures: 0)
+        let sleeper = try recordingSleep(in: box)
+        let result = try ScriptRunner.script("scripts/retry.sh", ["4", "5", command.command.path],
+                                             env: ["LOFTLINE_RETRY_SLEEP": sleeper.command.path])
+        #expect(result.status == 0, "\(result.err)")
+        #expect(command.runs() == 1)
+        #expect(sleeper.waits().isEmpty)
+    }
+
+    @Test func retryTriesAgainAndWaitsLongerEachTime() throws {
+        // The failure that stopped v0.2.0: a connection to Apple dropped once. The second or third try goes through.
+        let box = try Scratch()
+        let command = try flaky(in: box, failures: 2)
+        let sleeper = try recordingSleep(in: box)
+        let result = try ScriptRunner.script("scripts/retry.sh", ["4", "5", command.command.path],
+                                             env: ["LOFTLINE_RETRY_SLEEP": sleeper.command.path])
+        #expect(result.status == 0, "\(result.err)")
+        #expect(command.runs() == 3)
+        #expect(sleeper.waits() == ["5", "10"], "waits grow: 5 s, then 10 s")
+        #expect(result.err.contains("attempt 1 of 4") && result.err.contains("attempt 2 of 4"), "each retry is said out loud: \(result.err)")
+    }
+
+    @Test func retryGivesUpAfterTheLastAttemptWithTheCommandsOwnStatus() throws {
+        let box = try Scratch()
+        let command = try flaky(in: box, failures: 99, status: 68)
+        let sleeper = try recordingSleep(in: box)
+        let result = try ScriptRunner.script("scripts/retry.sh", ["3", "2", command.command.path],
+                                             env: ["LOFTLINE_RETRY_SLEEP": sleeper.command.path])
+        #expect(result.status == 68, "the caller sees why it failed, not a generic code: \(result.status)")
+        #expect(command.runs() == 3)
+        #expect(sleeper.waits() == ["2", "4"], "no wait after the last attempt")
+        #expect(result.err.contains("3 attempts"), "\(result.err)")
+    }
+
+    @Test func retryPassesArgumentsThroughUntouched() throws {
+        let box = try Scratch()
+        let command = try flaky(in: box, failures: 0)
+        let result = try ScriptRunner.script("scripts/retry.sh", ["2", "1", command.command.path, "a b", "c'd", "$HOME", "*"])
+        #expect(result.status == 0, "\(result.err)")
+        #expect(result.out.contains("args: a b c'd $HOME *"), "\(result.out)")
+    }
+
+    @Test func retryRefusesBadArguments() throws {
+        for arguments in [[], ["3"], ["3", "1"], ["0", "1", "true"], ["x", "1", "true"], ["3", "y", "true"], ["3", "-1", "true"]] {
+            let result = try ScriptRunner.script("scripts/retry.sh", arguments)
+            #expect(result.status == 2, "\(arguments): exit \(result.status)")
+            #expect(result.err.contains("usage"), "\(arguments): \(result.err)")
+        }
+    }
+
     // MARK: scripts/verify-feed.sh
 
     /// A feed made by the real scripts/update-feed.sh with the test key, its archive, and the matching public key file.

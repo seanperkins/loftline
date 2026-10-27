@@ -121,6 +121,14 @@ if notarise
   ensure_that.(script.include?('xcrun stapler staple') && script.include?('xcrun stapler validate') && script.include?('spctl --assess --type execute -v'), 'staple, validate and spctl are required')
   ensure_that.(script.include?('ditto -c -k --sequesterRsrc --keepParent'), 'the notarisation upload must be made with ditto -c -k --sequesterRsrc --keepParent')
   ensure_that.(condition_of.(notarise).include?("HAS_SIGNING == 'true'"), 'notarisation needs the HAS_SIGNING guard')
+  # Apple's servers sometimes drop the connection (the v0.2.0 run died when `stapler validate` lost its link to CloudKit, after
+  # the build had been Accepted). Stapling and its validation are retried; a notarisation that returned NO status is submitted
+  # again, while a status that says Invalid is final and is never retried.
+  ensure_that.(script.match?(/scripts\/retry\.sh \d+ \d+ xcrun stapler staple dist\/LoftLine\.app/) &&
+               script.match?(/scripts\/retry\.sh \d+ \d+ xcrun stapler validate dist\/LoftLine\.app/),
+               'stapling and its validation must go through scripts/retry.sh (Apple\'s servers drop connections)')
+  ensure_that.(script.match?(/for attempt in 1 2 3.*?notarytool submit.*?\[ -n "\$status" \] && break/m),
+               'notarytool submit must be retried only when it returned no status (a transport failure), never after Invalid')
 end
 ensure_that.(!workflow.to_s.match?(/ASC_KEY_ID.*secrets|secrets.*ASC_KEY_ID/), 'the key id and issuer are constants, not secrets')
 

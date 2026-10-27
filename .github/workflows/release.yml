@@ -197,14 +197,22 @@ jobs:
           printf '%s' "$ASC_KEY_CONTENT" | python3 -c \
             "import base64,sys;sys.stdout.buffer.write(base64.b64decode(sys.stdin.read()))" > "$RUNNER_TEMP/AuthKey.p8"
           ditto -c -k --sequesterRsrc --keepParent dist/LoftLine.app "$RUNNER_TEMP/notary.zip"
-          xcrun notarytool submit "$RUNNER_TEMP/notary.zip" \
-            --key "$RUNNER_TEMP/AuthKey.p8" --key-id 4XBH56T7RS \
-            --issuer 22e2fb14-d32b-4837-92b0-6280da32716d \
-            --wait --output-format json > "$RUNNER_TEMP/notary.json" || true
-          cat "$RUNNER_TEMP/notary.json"
           # The JSON starts at the first brace even if notarytool printed progress text before it.
           field() { python3 -c "import json,sys;t=open(sys.argv[1]).read();print(json.JSONDecoder().raw_decode(t[t.index('{'):])[0].get(sys.argv[2],''))" "$RUNNER_TEMP/notary.json" "$1" 2>/dev/null || true; }
-          status="$(field status)"
+          # Apple's servers sometimes drop the connection. A submission that comes back with NO status is a transport failure and
+          # is sent again; one that says Invalid is Apple's answer and is final.
+          status=""
+          for attempt in 1 2 3; do
+            xcrun notarytool submit "$RUNNER_TEMP/notary.zip" \
+              --key "$RUNNER_TEMP/AuthKey.p8" --key-id 4XBH56T7RS \
+              --issuer 22e2fb14-d32b-4837-92b0-6280da32716d \
+              --wait --output-format json > "$RUNNER_TEMP/notary.json" || true
+            cat "$RUNNER_TEMP/notary.json"
+            status="$(field status)"
+            [ -n "$status" ] && break
+            echo "notarytool returned no status (attempt $attempt of 3)"
+            [ "$attempt" -lt 3 ] && sleep $((attempt * 30))
+          done
           if [ "$status" != Accepted ]; then
             echo "::error::Notarisation status was '$status', not Accepted"
             id="$(field id)"
@@ -212,8 +220,10 @@ jobs:
               --issuer 22e2fb14-d32b-4837-92b0-6280da32716d || true
             exit 1
           fi
-          xcrun stapler staple dist/LoftLine.app
-          xcrun stapler validate dist/LoftLine.app
+          # Stapling fetches the ticket from Apple and validation checks it with Apple, and either can lose the connection (the
+          # v0.2.0 run did, in `validate`, after notarisation was Accepted). A ticket can also be a moment late after Accepted.
+          scripts/retry.sh 4 15 xcrun stapler staple dist/LoftLine.app
+          scripts/retry.sh 4 15 xcrun stapler validate dist/LoftLine.app
           spctl --assess --type execute -v dist/LoftLine.app
 
       # The bundled executable, after notarisation, must still post the sample sign to the golden program: hardened
