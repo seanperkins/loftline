@@ -36,15 +36,18 @@ let package = Package(
         .target(name: "CADCore", dependencies: ["CGeom"], swiftSettings: swift5),
         .target(name: "CAMCore", dependencies: ["CADCore", "CGeom"], swiftSettings: swift5),
         .target(name: "PostCore", dependencies: ["CADCore", "CAMCore"], swiftSettings: swift5),
+        // Update checking without AppKit: version comparison, the signed feed, signature verification, remembered state.
+        .target(name: "UpdateCore", swiftSettings: swift5),
         .executableTarget(
             name: "LoftLineApp",
-            dependencies: ["CADCore", "CAMCore", "PostCore"],
+            dependencies: ["CADCore", "CAMCore", "PostCore", "UpdateCore"],
             swiftSettings: swift5
         ),
         .testTarget(name: "CGeomTests", dependencies: ["CGeom"], swiftSettings: swift5),
         .testTarget(name: "CADCoreTests", dependencies: ["CADCore"], swiftSettings: swift5),
         .testTarget(name: "CAMCoreTests", dependencies: ["CAMCore", "CADCore"], swiftSettings: swift5),
         .testTarget(name: "PostCoreTests", dependencies: ["PostCore", "CAMCore", "CADCore"], swiftSettings: swift5),
+        .testTarget(name: "UpdateCoreTests", dependencies: ["UpdateCore"], swiftSettings: swift5),
         .testTarget(name: "LoftLineAppTests", dependencies: ["LoftLineApp", "PostCore", "CAMCore", "CADCore"],
                     swiftSettings: swift5),
     ],
