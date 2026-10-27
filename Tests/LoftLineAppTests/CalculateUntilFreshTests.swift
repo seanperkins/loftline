@@ -20,14 +20,20 @@ import Testing
         return (doc, library, doc.project.operations.map(\.id), ToolLibrary.seeded.tool(id: p.operations[0].setup.toolID)!)
     }
 
-    @Test func changingACarriedToolDuringCalculationPostsTheNewTool() async throws {
+    @Test func changingACarriedToolWhileACalculationIsInFlightPostsTheNewTool() async throws {
         let (doc, library, ids, tool) = makeDoc()
-        let fresh = Task { @MainActor in await doc.calculateUntilFresh(targets: ids) }
-        await Task.yield()                    // the calculation has started on its background queue
         var edited = tool
         edited.diameter = 0.375
-        library.update(edited)                // the Tool Database edit lands while it runs
-        #expect(await fresh.value)
+        var landed = false
+        // The Tool Database edit lands after the first pass has computed (and stored) results with the old tool: those
+        // results carry the old revision, so they are stale on arrival and must be calculated again before posting.
+        let ok = await doc.calculateUntilFresh(targets: ids, afterPass: {
+            guard !landed else { return }
+            landed = true
+            #expect(ids.allSatisfy { doc.results[$0]?.toolpaths.first?.tool.diameter == tool.diameter })
+            library.update(edited)
+        })
+        #expect(ok && landed)
         for id in ids {
             #expect(!doc.isStale(id))
             #expect(doc.results[id]?.toolpaths.first?.tool.diameter == 0.375, "the program is made with the new tool")
