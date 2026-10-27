@@ -42,7 +42,16 @@ enum AppTestSupport {
     }
 
     /// True when a rendered view is not a blank panel: at least `minimum` distinct sampled colours.
-    static func looksDrawn(_ png: Data, minimum: Int = 4) -> Bool { distinctColours(in: png) >= minimum }
+    static func looksDrawn(_ png: Data, minimum: Int = 4, step: Int = 23) -> Bool {
+        distinctColours(in: png, step: step) >= minimum
+    }
+
+    /// The sampling step for a view that draws sparsely offscreen on a hosted runner (see `onHostedRunner`).
+    static let finerStep = 7
+
+    /// True on a GitHub Actions runner. Its macOS 15 draws an offscreen window without realising lazy content (the Help
+    /// sidebar list and topic text), so a render that is rich on a development Mac is sparse there.
+    static var onHostedRunner: Bool { ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true" }
 
     /// Renders an AppKit view to PNG (nil when it has no backing store).
     static func png(of view: NSView) -> Data? {
