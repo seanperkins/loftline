@@ -216,6 +216,7 @@ Final packaging (2026-10-20): totals re-counted from the table (172 done, 7 part
 | `ux-zoom-pan` | app-ux | Zoom/pan (fit material, fit selection, trackpad pinch) | done | P1 | CanvasViewport.swift, CanvasEvents scroll/magnify |
 | `ux-split-view` | app-ux | Side-by-side 2D and 3D views | done | P3 | CenterMode.split in ContentView (⌥⌘2); AppUXRenderTests |
 | `ux-gadgets` | app-ux | Gadgets / scripting API for add-on tools | done | P3 | JavaScriptCore host: Sources/LoftLineApp/Model/Gadgets/, Gadgets menu (GadgetPanels.swift); Tests/LoftLineAppTests/GadgetTests.swift. No custom gadget UI or Lua/Vectric compatibility |
+| `ux-updates` | app-ux | In-app updates from signed GitHub releases | partial | P2 | Sources/UpdateCore, Sources/LoftLineApp/Updates, packaging/updater/macos.sh, scripts/update-feed.sh, scripts/verify-feed.sh, the feed job in release.yml; UpdateCoreTests, UpdateControllerTests, UpdateUITests, UpdaterHelperTests. Built and tested headless; proven when an installed 0.2.0 updates itself to 0.2.1 (docs/DECISIONS.md `updater-proof`) |
 | `ux-machine-wizard` | app-ux | First-run machine setup wizard and online machine/post lookup | partial | P3 | *r3* Machine definitions and post pickers exist and default to the Avid (ux-machine-config); the welcome window has no machine setup step and nothing is fetched online (by design) |
 
 ## Sources

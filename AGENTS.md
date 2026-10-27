@@ -6,7 +6,7 @@ Guidance for coding agents working on LoftLine. Read [README.md](README.md) for 
 
 ```sh
 scripts/build.sh                     # debug build (swift build; works in a sandboxed agent shell)
-scripts/test.sh                      # full swift-testing suite (~1,200 tests, ~70 s)
+scripts/test.sh                      # full swift-testing suite (~1,600 tests, ~2 min)
 scripts/test.sh --filter Ops2D       # subset
 scripts/bundle.sh                    # release build → dist/LoftLine.app (ad-hoc signed)
 scripts/run.sh                       # debug bundle + launch
@@ -14,6 +14,8 @@ swift run loftline-cli export samples/sign.loftline --out .tmp/out   # post a pr
 scripts/check-samples.sh             # post every sample with every built-in post, diff against samples/expected/ (--update after an intended change)
 scripts/check-bundle.sh              # release-mode bundles: version, channel, signing, update helper, smoke test (a few minutes)
 scripts/check-release-workflow.sh    # structural check of .github/workflows/release.yml (also run by the test suite)
+scripts/update-feed.sh v0.2.1        # build build/latest.json, the signed update feed for a release (`genkey` makes the signing key)
+scripts/verify-feed.sh <feed> <zip> <public key>   # check a feed the way a client will (the release workflow runs it before it publishes)
 scripts/ui.sh main --light           # UI harness: screenshots + accessibility tree, no permissions (docs/UI-HARNESS.md)
 LOFTLINE_UPDATE_GOLDEN=1 scripts/test.sh # regenerate golden G-code after an intended output change
 LOFTLINE_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles   # regenerate samples/
@@ -45,7 +47,8 @@ a byte of any sample's G-code needs `scripts/check-samples.sh --update` and a lo
 | `Sources/CADCore` | Geometry, `Document` model, importers/exporters (SVG, DXF, EPS, PDF, STL/OBJ/DAE), text outlines. |
 | `Sources/CAMCore` | Toolpath operations (pure functions of shapes + tool + parameters), simulation, time estimates. |
 | `Sources/PostCore` | Template-driven post processor (JSON `PostProfile`s) and `GCodeValidator`. |
-| `Sources/LoftLineApp` | SwiftUI/AppKit app: document, canvas, inspector, dialogs, 3D preview. |
+| `Sources/UpdateCore` | Update checking without AppKit: version comparison, the signed feed, signature verification, remembered state. |
+| `Sources/LoftLineApp` | SwiftUI/AppKit app: document, canvas, inspector, dialogs, 3D preview, update window (`Updates/`). |
 
 Each module has a matching test target in `Tests/`. Fixtures and golden `.tap` files live in
 `Tests/Fixtures/`.

@@ -261,3 +261,16 @@ Run once on the notarised build from a `workflow_dispatch` rehearsal of `release
 4. Run a built-in gadget from the Gadgets menu: it draws its shapes (the hardened runtime must not stop JavaScriptCore). If 3 or 4 fails, add `Resources/LoftLine.entitlements` with only the entitlement the failure proves necessary (likely `com.apple.security.cs.allow-jit`), rebuild through `bundle.sh` and rehearse again.
 5. Move the app to `/Applications` and open it once, then `qlmanage -r` and `qlmanage -t -s 256 -o .tmp/ql samples/sign.loftline`: `.tmp/ql/sign.loftline.png` shows the sign (the Quick Look extension kept its sandbox).
 6. `LoftLine.app/Contents/MacOS/LoftLine export samples/sign.loftline --post generic-grbl-mm --builtin-only --out .tmp/rc` and `diff .tmp/rc/sign.nc samples/expected/generic-grbl-mm/sign.nc` print nothing; export the same sample from the app (File ▸ Export G-code, Generic GRBL (mm)) and compare it too.
+
+## Updates
+
+The update checker is tested headless (`UpdateCoreTests`, `UpdateControllerTests`, `UpdateUITests`, `UpdaterHelperTests`, `ReleaseScriptsTests`). What those cannot see is the app running: the menu item, the window, the quit hook and a real GitHub release. Run these on a build you made yourself, and again on the final candidate.
+
+1. **Local feed (a dev build).** A dev build never updates and says so; with a feed override it can find a version. `scripts/bundle.sh`, then make a throwaway key and a fixture feed:
+   `mkdir -p .tmp/updates && echo fixture > .tmp/updates/fixture.zip`
+   `UPDATE_SIGN_KEY_FILE=.tmp/updates/throwaway.dat scripts/update-feed.sh genkey >/dev/null 2>&1`
+   `UPDATE_SIGN_KEY_FILE=.tmp/updates/throwaway.dat scripts/update-feed.sh v9.9.9 --zip .tmp/updates/fixture.zip --out .tmp/updates/latest.json`
+   `python3 -m http.server 8123 --directory .tmp/updates` (leave it running), then `LOFTLINE_UPDATE_FEED_URL=http://localhost:8123/latest.json dist/LoftLine.app/Contents/MacOS/LoftLine`. LoftLine ▸ Check for Updates… opens the window and says "LoftLine 9.9.9 is available" with the four choices. Do not install: a dev build refuses ("Development builds do not install updates."). Quit, start it without the variable and check again: "Development builds do not update."
+2. **Tamper drill** (needs a published release). Take that release's `latest.json`, change its `sha256` to 64 zeros, serve it as in step 1 and run a dev build against it. Choose Install when I quit: the window must say the download did not match its checksum and was deleted, `~/Library/Caches/LoftLine/Updates/` must be empty, and nothing is installed.
+3. **Cancelled quit** (needs a release installed in `/Applications` and a newer one published). Check for Updates…, choose Install when I quit, open a document with unsaved changes and quit. **Cancel** at the save prompt: the app keeps running and `~/Library/Caches/LoftLine/Updates/` still holds the zip. Then quit for real: the app is replaced, the new version opens (LoftLine ▸ About), and `/Applications` holds no `LoftLine.old-*`.
+4. **Recovery.** Only if an update was interrupted and `/Applications/LoftLine.app` is missing: `packaging/updater/macos.sh --recover /Applications` puts the old app back.

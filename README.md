@@ -135,6 +135,12 @@ LoftLine drives a real 60 × 96 in router, so G-code is treated as safety-critic
 - Programs retract to safe Z before XY rapids. Keep-out zones and the move home are checked on export.
 - Before cutting real material, follow the air-cut procedure in [TESTING.md](TESTING.md).
 
+## Install and update
+
+Download `LoftLine-vX.Y.Z-macos-arm64.zip` from the [Releases](https://github.com/seanperkins/loftline/releases) page (Apple Silicon, macOS 14 or later), unzip it and drag `LoftLine.app` to Applications. Releases are signed and notarised, so macOS can check them before they open.
+
+LoftLine looks for a newer release when it starts and then once a day. A found update opens a window with the release notes; you can install it when you quit (the default) or now, skip that version, or decide later. Settings ▸ General ▸ **Check for updates automatically** turns the daily check off, and LoftLine ▸ Check for Updates… looks once, on request. The only request goes to github.com, with the user agent `LoftLine/<version>` and nothing else. A download is checked against its SHA-256 and a signature made with LoftLine's own key before anything is installed, and an update installs only when LoftLine quits.
+
 ## Build and run
 
 Requires an Apple Silicon Mac on macOS 14+ with Swift 6 (Command Line Tools are enough;
