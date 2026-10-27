@@ -85,6 +85,80 @@ enum ProjectPost {
                         postCopyDiffers: postDiff, machineCopyDiffers: machineDiff)
     }
 
+    // MARK: Keeping the copies in step
+
+    /// Brings both copies in step with what the project selects, in memory. A copy that is missing, unreadable or no
+    /// longer what the selection names is replaced by the installed definition the selection resolves to, or dropped when
+    /// there is none; a copy that still matches is left alone, which is what "the file's copy wins" means. `postProfileID`
+    /// and `machineID` are never touched: a nil id keeps meaning "the default for the units".
+    static func syncing(_ p: LoftLineProject, profiles: [PostProfile], machines: [MachineDefinition]) -> LoftLineProject {
+        var q = p
+        let postID = effectivePostID(q)
+        if postCopy(of: q) == nil {
+            q.postSnapshot = profiles.first { $0.id == postID }.flatMap { try? $0.snapshot() }
+        }
+        if q.machineID != nil { q.machineInferredFor = nil }   // a chosen machine needs no marker
+        if machineCopy(of: q) == nil {
+            // What the selection names: the chosen machine if it is installed, else (no chosen machine) what
+            // `MachineResolver` infers for the post. A chosen machine that is not installed gets no copy: the fallback
+            // machine would not be what the project selected.
+            let installed = q.machineID.map { id in machines.first { $0.id == id } } ?? MachineResolver.machine(for: q, machines: machines)
+            q.machineSnapshot = installed.flatMap { try? $0.snapshot() }
+            q.machineInferredFor = installed != nil && q.machineID == nil ? postID : nil
+        }
+        return q
+    }
+
+    /// The same step, for a project that has just been opened or created.
+    static func attaching(_ p: LoftLineProject, profiles: [PostProfile], machines: [MachineDefinition]) -> LoftLineProject {
+        syncing(p, profiles: profiles, machines: machines)
+    }
+
+    /// "Update This Project": each copy is replaced with the installed definition that has the copy's own id; a copy with
+    /// no installed counterpart is kept.
+    static func updated(_ p: LoftLineProject, profiles: [PostProfile], machines: [MachineDefinition]) -> LoftLineProject {
+        var q = p
+        if let copy = postCopy(of: p), let installed = profiles.first(where: { $0.id == copy.id }),
+           let snapshot = try? installed.snapshot() { q.postSnapshot = snapshot }
+        if let copy = machineCopy(of: p), let installed = machines.first(where: { $0.id == copy.id }),
+           let snapshot = try? installed.snapshot() { q.machineSnapshot = snapshot }
+        return syncing(q, profiles: profiles, machines: machines)
+    }
+
+    // MARK: Notices
+
+    /// An error when the selected post is neither carried nor installed (today's text); a warning for each copy that
+    /// differs from the installed definition of the same id. They reach the export sheets through the document.
+    static func issues(for p: LoftLineProject, profiles: [PostProfile], machines: [MachineDefinition]) -> [GCodeIssue] {
+        let r = resolve(p, profiles: profiles, machines: machines)
+        var out: [GCodeIssue] = []
+        if case .fallback = r.postSource, let id = p.postProfileID {
+            out.append(GCodeIssue(severity: .error, message:
+                "The project's post \"\(id)\" is not installed; \"\(r.post.name)\" is shown instead. Pick a post before saving."))
+        }
+        if let d = r.postCopyDiffers {
+            let versions = d.copy.version == d.installed.version ? "" : " v\(d.copy.version)"
+            let installed = d.copy.version == d.installed.version ? "the installed one" : "the installed v\(d.installed.version)"
+            out.append(GCodeIssue(severity: .warning, message:
+                "This project posts with its own copy of \"\(d.copy.name)\"\(versions), which differs from \(installed). "
+                + "Job Setup > Update This Project uses the installed one."))
+        }
+        if let d = r.machineCopyDiffers {
+            let copyBed = bed(d.copy), installedBed = bed(d.installed)
+            let sizes = copyBed == installedBed ? "" : " (copy \(copyBed), installed \(installedBed))"
+            out.append(GCodeIssue(severity: .warning, message:
+                "This project uses its own copy of the machine \"\(d.copy.name)\"\(sizes), which differs from the installed one. "
+                + "Job Setup > Update This Project uses the installed one."))
+        }
+        return out
+    }
+
+    private static func bed(_ m: MachineDefinition) -> String {
+        "\(RulerTicks.label(m.limits.xTravel)) × \(RulerTicks.label(m.limits.yTravel)) \(m.units.abbreviation)"
+    }
+
+    // MARK: Opening
+
     /// Throws when a copy the file carries cannot be read: written by a newer LoftLine, or damaged. The project is then
     /// refused, never opened with the installed post instead. Messages are the ones the open dialog shows.
     static func validate(_ p: LoftLineProject) throws {

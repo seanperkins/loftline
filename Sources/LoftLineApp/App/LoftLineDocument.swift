@@ -167,6 +167,9 @@ final class LoftLineDocument: ReferenceFileDocument {
     /// The operation whose live edits are being merged into the current undo step.
     private var liveOperationEdit: (id: UUID, serial: Int)?
     let toolLibrary: ToolLibraryModel
+    /// The installed posts and machines the project's copies are compared with (`.shared` in the app).
+    let postCatalog: PostProfileCatalog
+    let machineCatalog: MachineCatalog
     private var cancellables: Set<AnyCancellable> = []
 
     /// Identifies this window's crash-recovery copy.
@@ -209,9 +212,15 @@ final class LoftLineDocument: ReferenceFileDocument {
     /// document then stays "needs recovery" until the file is seen to hold a known save again.
     private var savedStateUnknown = false
 
-    init(project: LoftLineProject, toolLibrary: ToolLibraryModel = .shared) {
-        self.project = project
-        self.lastSavedProject = project
+    init(project: LoftLineProject, toolLibrary: ToolLibraryModel = .shared,
+         postCatalog: PostProfileCatalog = .shared, machineCatalog: MachineCatalog = .shared) {
+        // The project's post and machine copies are attached here, in memory: the file is not rewritten until a save,
+        // and the document starts unedited (the baseline is the attached project).
+        let attached = ProjectPost.attaching(project, profiles: postCatalog.profiles, machines: machineCatalog.machines)
+        self.project = attached
+        self.lastSavedProject = attached
+        self.postCatalog = postCatalog
+        self.machineCatalog = machineCatalog
         self.toolLibrary = toolLibrary
         toolLibrary.$revision.dropFirst().sink { [weak self] _ in self?.designRevision += 1 }.store(in: &cancellables)
         toolLibrary.$library.dropFirst().sink { [weak self] lib in self?.showToolNames(of: lib) }.store(in: &cancellables)
@@ -361,8 +370,19 @@ final class LoftLineDocument: ReferenceFileDocument {
         var p = project
         change(&p)
         VariableLinks.reconcile(&p, old: project, pending: expressionRecorder.take())
+        // Keep the post and machine copies what the (possibly changed) selection means: a picked post, a machine that
+        // switches the post, a unit conversion and a template all end up with the right copy without knowing about it.
+        p = ProjectPost.syncing(p, profiles: postCatalog.profiles, machines: machineCatalog.machines)
         guard p != project else { return }
         replaceProject(p, actionName: actionName)
+    }
+
+    /// Job Setup > Update This Project: each post and machine copy is replaced with the installed one of the same id
+    /// (a copy with no installed counterpart is kept). One undo step.
+    func updateProjectFromInstalled() {
+        perform("Update Post") {
+            $0 = ProjectPost.updated($0, profiles: postCatalog.profiles, machines: machineCatalog.machines)
+        }
     }
 
     private func replaceProject(_ new: LoftLineProject, actionName: String) {
@@ -393,26 +413,35 @@ final class LoftLineDocument: ReferenceFileDocument {
     var units: LengthUnit { project.document.units }
     var mergedLibrary: ToolLibrary { project.mergedTools(with: toolLibrary.library) }
 
-    /// The post profile with the job's machine limits applied (what validation and export use).
-    var postProfile: PostProfile {
-        effectiveProfile(id: project.postProfileID ?? PostProfileStore.defaultID(for: units))
+    /// The post and machine this job posts with: the copies the project carries while they are still what it selects,
+    /// else the installed ones (`ProjectPost`).
+    var resolvedPost: ProjectPost.Resolved {
+        ProjectPost.resolve(project, profiles: postCatalog.profiles, machines: machineCatalog.machines)
     }
+
+    /// The post profile with the job's machine limits applied (what validation and export use).
+    var postProfile: PostProfile { resolvedPost.post }
 
     /// The machine this job is set up for (nil = a custom post with its own limits).
-    var machine: MachineDefinition? { MachineCatalog.shared.machine(for: project) }
+    var machine: MachineDefinition? { resolvedPost.machine }
 
-    /// An error when the project's post profile is not installed on this Mac: `postProfile`
-    /// then falls back to the default, which may be a different dialect and machine.
+    /// An error when the project's post is neither carried nor installed (`postProfile` then falls back to the
+    /// default, which may be a different dialect and machine), and a warning for each copy that differs from the
+    /// installed post or machine of the same id.
     var postProfileIssues: [GCodeIssue] {
-        guard let id = project.postProfileID, !PostProfileCatalog.shared.profiles.contains(where: { $0.id == id })
-        else { return [] }
-        return [GCodeIssue(severity: .error,
-                           message: "The project's post \"\(id)\" is not installed; \"\(postProfile.name)\" is shown instead. Pick a post before saving.")]
+        ProjectPost.issues(for: project, profiles: postCatalog.profiles, machines: machineCatalog.machines)
     }
 
-    /// Post `id` with this job's machine limits applied.
+    /// True when a copy the project carries differs from the installed one (Job Setup then offers Update This Project).
+    var hasCopyDifferences: Bool {
+        let r = resolvedPost
+        return r.postCopyDiffers != nil || r.machineCopyDiffers != nil
+    }
+
+    /// Post `id` with this job's machine limits applied; the project's own post when `id` is the one it selects.
     func effectiveProfile(id: String?) -> PostProfile {
-        MachineResolver.effectiveProfile(PostProfileCatalog.shared.profile(id: id), machine: machine)
+        if let id, id == ProjectPost.effectivePostID(project) { return postProfile }
+        return MachineResolver.effectiveProfile(postCatalog.profile(id: id), machine: machine)
     }
 
     /// Profile rapid rate converted to document units per minute.
@@ -823,8 +852,8 @@ final class LoftLineDocument: ReferenceFileDocument {
 
     /// Picks the machine (and its default post if the current post does not drive it).
     func setMachine(_ id: String) {
-        guard let m = MachineCatalog.shared.machine(id: id) else { return }
-        let profiles = PostProfileCatalog.shared.profiles
+        guard let m = machineCatalog.machine(id: id) else { return }
+        let profiles = postCatalog.profiles
         perform("Change Machine") { MachineResolver.select(machine: m, in: &$0, profiles: profiles) }
     }
 
