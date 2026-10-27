@@ -47,6 +47,11 @@ struct SampleFilesTests {
         return try SVGExporter().export(shapes: [outline, panel, text] + holes, layers: layers, units: .inch)
     }
 
+    /// The project as a saved file holds it (format 2): the tools its operations use, and its post and machine as copies.
+    static func withCopies(_ project: LoftLineProject, library: ToolLibrary) -> LoftLineProject {
+        ToolSync.carrying(ProjectPost.attaching(project, profiles: BuiltInPosts.all, machines: BuiltInMachines.all), library: library)
+    }
+
     static func signProject() throws -> (LoftLineProject, ToolLibrary) {
         var doc = Document()
         doc.job = JobSetup(width: 24, height: 12, thickness: 0.75)
@@ -71,7 +76,7 @@ struct SampleFilesTests {
             if case .profile(var p) = op { p.params.tabs.isEnabled = true; op = .profile(p) }
             project.operations.append(op)
         }
-        project.refreshToolSnapshot(from: library)
+        project = Self.withCopies(project, library: library)
         return (project, library)
     }
 
@@ -142,7 +147,7 @@ struct SampleFilesTests {
         p.params.depth.startDepth = 0.03125
         p.params.tabs.isEnabled = true
         project.operations.append(.profile(p))
-        project.refreshToolSnapshot(from: library)
+        project = Self.withCopies(project, library: library)
         return (project, library)
     }
 
@@ -306,6 +311,24 @@ struct SampleFilesTests {
         }
         out += "endsolid loftline_relief\n"
         return out
+    }
+
+    /// Every sample is a format 2 file that carries its own post, machine and tools (so it posts the same on any Mac),
+    /// and carries the tools exactly as the seeded library has them, so adding the copies moved no G-code.
+    @Test("Checked-in samples carry their post, machine and tools")
+    func samplesCarryTheirCopies() throws {
+        for name in ["sign.loftline", "faced-board.loftline"] {
+            let data = try Data(contentsOf: Self.samplesDir.appendingPathComponent(name))
+            #expect(try LoftLineFile.formatVersion(of: data) == 2, "\(name)")
+            let project = try LoftLineProject.opening(from: data)
+            let post = try #require(project.postSnapshot.flatMap { try? PostProfile(snapshot: $0) }, "\(name): post copy")
+            #expect(post == BuiltInPosts.avidMach4Inch && project.postProfileID == post.id)
+            let machine = try #require(project.machineSnapshot.flatMap { try? MachineDefinition(snapshot: $0) }, "\(name): machine copy")
+            #expect(machine == BuiltInMachines.avidPRO6096)
+            #expect(project.machineID == nil && project.machineInferredFor == post.id, "nil ids stay nil")
+            #expect(!project.tools.isEmpty)
+            for tool in project.tools { #expect(ToolLibrary.seeded.tool(id: tool.id) == tool, "\(name): \(tool.name)") }
+        }
     }
 
     /// Writes samples/relief.stl with LOFTLINE_WRITE_SAMPLES=1; the committed file is checked by

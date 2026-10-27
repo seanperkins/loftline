@@ -17,35 +17,35 @@
     "layers" : [
       {
         "colorHex" : "#000000",
-        "id" : "D7965FC7-816C-483E-BD12-F96F98D825F9",
+        "id" : "0670CCB8-D8A3-4D84-A3F1-B1F63AB1381A",
         "isLocked" : false,
         "isVisible" : true,
         "name" : "Layer 1"
       },
       {
         "colorHex" : "#E5484D",
-        "id" : "20D77A57-593F-4ACE-BEAA-B74FDE7D945B",
+        "id" : "431B7286-C667-4E0F-9086-D1796CF27498",
         "isLocked" : false,
         "isVisible" : true,
         "name" : "Outline"
       },
       {
         "colorHex" : "#30A46C",
-        "id" : "6ACBBADF-D70F-4187-A8F0-2F4AB63B10F0",
+        "id" : "123D6EA7-7932-4F95-ADEC-2BC90B23DE66",
         "isLocked" : false,
         "isVisible" : true,
         "name" : "Pocket"
       },
       {
         "colorHex" : "#F76B15",
-        "id" : "551FA5E0-5E78-47C7-86E3-3F04D2075D9C",
+        "id" : "BD20098B-78A2-4873-A3AC-F0AF3802ECEC",
         "isLocked" : false,
         "isVisible" : true,
         "name" : "Text"
       },
       {
         "colorHex" : "#8E4EC6",
-        "id" : "CD4EB250-7656-41D4-8568-27BE4BFB21DF",
+        "id" : "08E29C8E-5B32-4676-AAEA-C6C6A0633A8D",
         "isLocked" : false,
         "isVisible" : true,
         "name" : "Drill"
@@ -57,9 +57,9 @@
     "name" : "Untitled",
     "shapes" : [
       {
-        "id" : "188FC34F-C165-44A9-A866-75181DAE0B29",
+        "id" : "799E6D48-6421-4361-8402-47972B50C93D",
         "isLocked" : false,
-        "layerID" : "20D77A57-593F-4ACE-BEAA-B74FDE7D945B",
+        "layerID" : "431B7286-C667-4E0F-9086-D1796CF27498",
         "name" : "Outline",
         "origin" : {
           "imported" : {
@@ -163,9 +163,9 @@
         ]
       },
       {
-        "id" : "4D76A34A-0FB2-44AA-B900-CF3D1EC112EB",
+        "id" : "0E6498B9-858A-4B9A-9DD1-D3CD668468F1",
         "isLocked" : false,
-        "layerID" : "6ACBBADF-D70F-4187-A8F0-2F4AB63B10F0",
+        "layerID" : "123D6EA7-7932-4F95-ADEC-2BC90B23DE66",
         "name" : "Panel",
         "origin" : {
           "imported" : {
@@ -269,9 +269,9 @@
         ]
       },
       {
-        "id" : "3215025B-AE97-47E4-9882-BEB5E42D52A7",
+        "id" : "B3EBD3FB-041C-45BA-9A9C-CE0BAACB15DC",
         "isLocked" : false,
-        "layerID" : "551FA5E0-5E78-47C7-86E3-3F04D2075D9C",
+        "layerID" : "BD20098B-78A2-4873-A3AC-F0AF3802ECEC",
         "name" : "LOFTLINE",
         "origin" : {
           "imported" : {
@@ -1011,9 +1011,9 @@
         ]
       },
       {
-        "id" : "FBBDCB2B-808A-49E3-9518-75A5C858D5BA",
+        "id" : "5236239D-9D67-4F28-A266-7DC480A1A95D",
         "isLocked" : false,
-        "layerID" : "CD4EB250-7656-41D4-8568-27BE4BFB21DF",
+        "layerID" : "08E29C8E-5B32-4676-AAEA-C6C6A0633A8D",
         "name" : "Hole",
         "origin" : {
           "imported" : {
@@ -1059,9 +1059,9 @@
         ]
       },
       {
-        "id" : "C1A8A228-0702-48EA-B982-DB0FBDF90845",
+        "id" : "DC964698-C94D-4EA5-8776-C7EA6E9F6438",
         "isLocked" : false,
-        "layerID" : "CD4EB250-7656-41D4-8568-27BE4BFB21DF",
+        "layerID" : "08E29C8E-5B32-4676-AAEA-C6C6A0633A8D",
         "name" : "Hole",
         "origin" : {
           "imported" : {
@@ -1107,9 +1107,9 @@
         ]
       },
       {
-        "id" : "04BF4FAC-C199-4E5C-994C-8BBBE3DE39D3",
+        "id" : "499EC1FC-EC6B-4F16-B2C5-01EB23E4AD45",
         "isLocked" : false,
-        "layerID" : "CD4EB250-7656-41D4-8568-27BE4BFB21DF",
+        "layerID" : "08E29C8E-5B32-4676-AAEA-C6C6A0633A8D",
         "name" : "Hole",
         "origin" : {
           "imported" : {
@@ -1155,9 +1155,9 @@
         ]
       },
       {
-        "id" : "3DF3EF10-C071-4488-9FE3-95711062728A",
+        "id" : "4DC71860-CBB0-4AAB-A482-104A786FA696",
         "isLocked" : false,
-        "layerID" : "CD4EB250-7656-41D4-8568-27BE4BFB21DF",
+        "layerID" : "08E29C8E-5B32-4676-AAEA-C6C6A0633A8D",
         "name" : "Hole",
         "origin" : {
           "imported" : {
@@ -1203,9 +1203,9 @@
         ]
       },
       {
-        "id" : "EF8C1224-C998-4BE2-AEF5-67C9CFD85CE2",
+        "id" : "4B38EBC6-44EF-4C40-A6B1-09CF086A6667",
         "isLocked" : false,
-        "layerID" : "CD4EB250-7656-41D4-8568-27BE4BFB21DF",
+        "layerID" : "08E29C8E-5B32-4676-AAEA-C6C6A0633A8D",
         "name" : "Hole",
         "origin" : {
           "imported" : {
@@ -1253,7 +1253,29 @@
     ],
     "units" : "inch"
   },
-  "formatVersion" : 1,
+  "formatVersion" : 2,
+  "machineInferredFor" : "avid-pro6096-mach4-inch",
+  "machineSnapshot" : {
+    "id" : "avid-pro6096",
+    "limits" : {
+      "maxSpoilboardCut" : 0.05,
+      "xTravel" : 60,
+      "yTravel" : 96,
+      "zTravel" : 8
+    },
+    "maxFeed" : 600,
+    "maxRPM" : 24000,
+    "minRPM" : 6000,
+    "name" : "Avid PRO6096 (Mach4)",
+    "notes" : "60 x 96 in bed, single spindle, manual tool changes.",
+    "postIDs" : [
+      "avid-pro6096-mach4-inch",
+      "avid-pro6096-mach4-mm"
+    ],
+    "rapidRate" : 600,
+    "schemaVersion" : 1,
+    "units" : "inch"
+  },
   "operations" : [
     {
       "pocket" : {
@@ -1279,11 +1301,11 @@
             }
           },
           "setup" : {
-            "id" : "6492E890-9F74-4803-9E44-AAD31E8A8AF3",
+            "id" : "92A620B2-0CC2-4146-9DD4-865E9D86E164",
             "isEnabled" : true,
             "name" : "Pocket 1",
             "shapeIDs" : [
-              "4D76A34A-0FB2-44AA-B900-CF3D1EC112EB"
+              "0E6498B9-858A-4B9A-9DD1-D3CD668468F1"
             ],
             "toolID" : "00000000-0000-4000-8000-000000000001"
           }
@@ -1308,11 +1330,11 @@
             "useVectorStartPoints" : false
           },
           "setup" : {
-            "id" : "4CF36F5A-06D4-48E9-B3D4-FC3945C4170F",
+            "id" : "16432B20-DFA9-4DA0-AB57-D7A5C3C75EF1",
             "isEnabled" : true,
             "name" : "V-Carve 1",
             "shapeIDs" : [
-              "3215025B-AE97-47E4-9882-BEB5E42D52A7"
+              "B3EBD3FB-041C-45BA-9A9C-CE0BAACB15DC"
             ],
             "toolID" : "00000000-0000-4000-8000-000000000006"
           }
@@ -1330,15 +1352,15 @@
             "startDepth" : 0
           },
           "setup" : {
-            "id" : "672F1799-565B-4AA0-9D26-BB5A579EE82D",
+            "id" : "3A5C562D-DBC4-4ACB-8CD1-E80519ECD65D",
             "isEnabled" : true,
             "name" : "Drilling 1",
             "shapeIDs" : [
-              "FBBDCB2B-808A-49E3-9518-75A5C858D5BA",
-              "C1A8A228-0702-48EA-B982-DB0FBDF90845",
-              "04BF4FAC-C199-4E5C-994C-8BBBE3DE39D3",
-              "3DF3EF10-C071-4488-9FE3-95711062728A",
-              "EF8C1224-C998-4BE2-AEF5-67C9CFD85CE2"
+              "5236239D-9D67-4F28-A266-7DC480A1A95D",
+              "DC964698-C94D-4EA5-8776-C7EA6E9F6438",
+              "499EC1FC-EC6B-4F16-B2C5-01EB23E4AD45",
+              "4DC71860-CBB0-4AAB-A482-104A786FA696",
+              "4B38EBC6-44EF-4C40-A6B1-09CF086A6667"
             ],
             "toolID" : "00000000-0000-4000-8000-000000000009"
           }
@@ -1379,11 +1401,11 @@
             }
           },
           "setup" : {
-            "id" : "72D12F67-99D8-4904-86C6-D76A4A4E570E",
+            "id" : "D9AF25D8-8208-4A30-9928-DAAAC2513E41",
             "isEnabled" : true,
             "name" : "Profile 1",
             "shapeIDs" : [
-              "188FC34F-C165-44A9-A866-75181DAE0B29"
+              "799E6D48-6421-4361-8402-47972B50C93D"
             ],
             "toolID" : "00000000-0000-4000-8000-000000000001"
           }
@@ -1392,6 +1414,63 @@
     }
   ],
   "postProfileID" : "avid-pro6096-mach4-inch",
+  "postSnapshot" : {
+    "arcCCW" : "G3",
+    "arcCW" : "G2",
+    "arcOutput" : "incrementalIJ",
+    "arcTolerance" : 0.0005,
+    "commentStyle" : "parentheses",
+    "decimals" : 4,
+    "dwell" : "G4 P{SECONDS}",
+    "feedDecimals" : 1,
+    "fileExtension" : "tap",
+    "footer" : [
+      "G0 Z{HOME_Z}",
+      "M5",
+      "G0 X{HOME_X} Y{HOME_Y}",
+      "M30"
+    ],
+    "headerComments" : true,
+    "helicalArcs" : true,
+    "id" : "avid-pro6096-mach4-inch",
+    "limits" : {
+      "maxSpoilboardCut" : 0.05,
+      "xTravel" : 60,
+      "yTravel" : 96,
+      "zTravel" : 8
+    },
+    "lineNumbers" : false,
+    "linear" : "G1",
+    "maxFeed" : 600,
+    "maxRPM" : 24000,
+    "minRPM" : 6000,
+    "modal" : true,
+    "name" : "Avid PRO6096 Mach4 (inch)",
+    "preamble" : [
+      "G90",
+      "G91.1",
+      "G17",
+      "G40",
+      "G49",
+      "G80",
+      "G94"
+    ],
+    "rapid" : "G0",
+    "rapidRate" : 600,
+    "schemaVersion" : 1,
+    "spindleDwellSeconds" : 3,
+    "spindleOff" : "M5",
+    "spindleOn" : "M3 S{S}",
+    "toolChange" : [
+      "M5",
+      "(Change to Tool: {TOOL_NAME})",
+      "T{T} M6"
+    ],
+    "toolLengthOffset" : "G43 H{T}",
+    "units" : "inch",
+    "useToolLengthOffset" : false,
+    "version" : "1.0"
+  },
   "tools" : [
     {
       "diameter" : 0.25,

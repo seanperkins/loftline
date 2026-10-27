@@ -17,7 +17,7 @@
     "layers" : [
       {
         "colorHex" : "#000000",
-        "id" : "AE7982FA-8A0D-4933-9934-2AB01377AC4F",
+        "id" : "DB131388-8E6E-48E1-81F2-5DEAB411CF48",
         "isLocked" : false,
         "isVisible" : true,
         "name" : "Layer 1"
@@ -29,9 +29,9 @@
     "name" : "Untitled",
     "shapes" : [
       {
-        "id" : "961B3DD7-3444-4E3C-AC73-D9F3C20B3DA3",
+        "id" : "CDE536C2-3176-42C7-A508-47975C3F4244",
         "isLocked" : false,
-        "layerID" : "AE7982FA-8A0D-4933-9934-2AB01377AC4F",
+        "layerID" : "DB131388-8E6E-48E1-81F2-5DEAB411CF48",
         "name" : "Plaque",
         "origin" : {
           "drawn" : {
@@ -137,7 +137,29 @@
     ],
     "units" : "inch"
   },
-  "formatVersion" : 1,
+  "formatVersion" : 2,
+  "machineInferredFor" : "avid-pro6096-mach4-inch",
+  "machineSnapshot" : {
+    "id" : "avid-pro6096",
+    "limits" : {
+      "maxSpoilboardCut" : 0.05,
+      "xTravel" : 60,
+      "yTravel" : 96,
+      "zTravel" : 8
+    },
+    "maxFeed" : 600,
+    "maxRPM" : 24000,
+    "minRPM" : 6000,
+    "name" : "Avid PRO6096 (Mach4)",
+    "notes" : "60 x 96 in bed, single spindle, manual tool changes.",
+    "postIDs" : [
+      "avid-pro6096-mach4-inch",
+      "avid-pro6096-mach4-mm"
+    ],
+    "rapidRate" : 600,
+    "schemaVersion" : 1,
+    "units" : "inch"
+  },
   "operations" : [
     {
       "facing" : {
@@ -154,7 +176,7 @@
             "stepover" : 0.7
           },
           "setup" : {
-            "id" : "F4996481-0FB1-40ED-8F77-248950E8EAE2",
+            "id" : "905B364F-A54A-47C3-907B-8A21BCF6F86B",
             "isEnabled" : true,
             "name" : "Facing 1",
             "shapeIDs" : [
@@ -199,11 +221,11 @@
             }
           },
           "setup" : {
-            "id" : "EB100336-9329-4758-AFCB-AE8516EBBF1A",
+            "id" : "2B9F0166-6DFA-46B0-A93E-8CA6917E7D52",
             "isEnabled" : true,
             "name" : "Profile 1",
             "shapeIDs" : [
-              "961B3DD7-3444-4E3C-AC73-D9F3C20B3DA3"
+              "CDE536C2-3176-42C7-A508-47975C3F4244"
             ],
             "toolID" : "00000000-0000-4000-8000-000000000001"
           }
@@ -212,6 +234,63 @@
     }
   ],
   "postProfileID" : "avid-pro6096-mach4-inch",
+  "postSnapshot" : {
+    "arcCCW" : "G3",
+    "arcCW" : "G2",
+    "arcOutput" : "incrementalIJ",
+    "arcTolerance" : 0.0005,
+    "commentStyle" : "parentheses",
+    "decimals" : 4,
+    "dwell" : "G4 P{SECONDS}",
+    "feedDecimals" : 1,
+    "fileExtension" : "tap",
+    "footer" : [
+      "G0 Z{HOME_Z}",
+      "M5",
+      "G0 X{HOME_X} Y{HOME_Y}",
+      "M30"
+    ],
+    "headerComments" : true,
+    "helicalArcs" : true,
+    "id" : "avid-pro6096-mach4-inch",
+    "limits" : {
+      "maxSpoilboardCut" : 0.05,
+      "xTravel" : 60,
+      "yTravel" : 96,
+      "zTravel" : 8
+    },
+    "lineNumbers" : false,
+    "linear" : "G1",
+    "maxFeed" : 600,
+    "maxRPM" : 24000,
+    "minRPM" : 6000,
+    "modal" : true,
+    "name" : "Avid PRO6096 Mach4 (inch)",
+    "preamble" : [
+      "G90",
+      "G91.1",
+      "G17",
+      "G40",
+      "G49",
+      "G80",
+      "G94"
+    ],
+    "rapid" : "G0",
+    "rapidRate" : 600,
+    "schemaVersion" : 1,
+    "spindleDwellSeconds" : 3,
+    "spindleOff" : "M5",
+    "spindleOn" : "M3 S{S}",
+    "toolChange" : [
+      "M5",
+      "(Change to Tool: {TOOL_NAME})",
+      "T{T} M6"
+    ],
+    "toolLengthOffset" : "G43 H{T}",
+    "units" : "inch",
+    "useToolLengthOffset" : false,
+    "version" : "1.0"
+  },
   "tools" : [
     {
       "diameter" : 0.5,
