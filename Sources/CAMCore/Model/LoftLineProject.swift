@@ -4,7 +4,7 @@ import Foundation
 /// A native `.loftline` file: the design plus its toolpath operations (JSON).
 public struct LoftLineProject: Codable, Hashable, Sendable {
     public static let fileExtension = "loftline"
-    public static let currentFormatVersion = 1
+    public static let currentFormatVersion = 2
 
     public var formatVersion: Int
     public var document: Document
@@ -16,13 +16,26 @@ public struct LoftLineProject: Codable, Hashable, Sendable {
     /// Selected machine (`MachineDefinition.id` in PostCore). Optional so older files decode; nil
     /// means "the machine whose posts include `postProfileID`, else the post's own limits".
     public var machineID: String?
+    /// The post this project posts with, as a copy (format 2): a `PostProfile` as plain JSON, because CAMCore cannot
+    /// name PostCore types. The app reads it back with `PostProfile(snapshot:)`. nil = a format 1 file, or a project not
+    /// yet opened in the app.
+    public var postSnapshot: JSONValue?
+    /// The machine, likewise (`MachineDefinition`).
+    public var machineSnapshot: JSONValue?
+    /// Only when `machineID` is nil and `machineSnapshot` is set: the post id the machine copy was inferred for. A
+    /// project with no chosen machine takes the first installed machine that supports its post, so the copy is only
+    /// right for that post.
+    public var machineInferredFor: String?
 
     public init(document: Document = Document(), operations: [AnyOperation] = [], tools: [Tool] = [],
-                postProfileID: String? = nil, machineID: String? = nil) {
+                postProfileID: String? = nil, machineID: String? = nil, postSnapshot: JSONValue? = nil,
+                machineSnapshot: JSONValue? = nil, machineInferredFor: String? = nil) {
         self.formatVersion = Self.currentFormatVersion
         self.document = document; self.operations = operations; self.tools = tools
         self.postProfileID = postProfileID
         self.machineID = machineID
+        self.postSnapshot = postSnapshot; self.machineSnapshot = machineSnapshot
+        self.machineInferredFor = machineInferredFor
     }
 
     public func encoded() throws -> Data {

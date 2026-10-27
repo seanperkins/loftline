@@ -9,14 +9,18 @@ import Foundation
 public enum LoftLineFile {
     public static let fileExtension = "loftline"
     /// Keep in step with `LoftLineProject.currentFormatVersion`.
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     /// A migration rewrites the top-level JSON object from version N to N + 1.
     public typealias Migration = @Sendable (inout [String: Any]) throws -> Void
 
     /// Migrations keyed by the version they upgrade FROM.
     /// Add an entry here whenever `currentVersion` is bumped.
-    public static let migrations: [Int: Migration] = [:]
+    public static let migrations: [Int: Migration] = [
+        // 1 -> 2: version 2 adds the project's copies of its post, machine and tools. Nothing in a version 1 file changes;
+        // the app attaches the copies after decoding, because only it knows the installed posts and machines.
+        1: { _ in },
+    ]
 
     /// The file's `formatVersion` (files without one are treated as version 1).
     public static func formatVersion(of data: Data) throws -> Int {
