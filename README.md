@@ -175,7 +175,7 @@ swift run loftline-cli posts                                      # the installe
 Validator errors and warnings go to standard error. The exit status is 0 when the program is clean (warnings
 included), 1 when the validator reports errors (nothing is written unless `--force`) or there is nothing to
 export, and 2 for a usage or file error. `--builtin-only` ignores the posts and machines in Application Support, so
-the result is the same on every Mac; `--name` sets the job name in the header (the project's by default).
+the result is the same on every Mac; `--name` sets the job name in the header (the project's by default). A project carries its own copy of its post, machine and tools, and the command line posts with those: `--post <id>` replaces only the post, with the installed one; `--builtin-only` still keeps the project's copies. A file whose copy this LoftLine cannot read (written by a newer one, or damaged) exits 2 with a message.
 `scripts/check-samples.sh` runs it over `samples/` with every built-in post and diffs the programs against the
 committed ones in `samples/expected/` (`--update` after an intended change). The same code answers to
 `LoftLine export …`; `loftline-cli` is a second product of the app's target, so it starts the command line whatever it is given.

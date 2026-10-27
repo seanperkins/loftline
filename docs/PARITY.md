@@ -2,7 +2,7 @@
 
 LoftLine against the public VCarve Pro 12.5 feature set, built from Vectric's public product page and online help only (see Sources). Status is judged from LoftLine's code and tests: **done** = works end to end including the UI; **partial** = engine or UI only, or a subset of the options; **missing** = not implemented. Priority: **P1** = matters for typical Avid sign, part, inlay or 3D jobs; P2 = useful; P3 = niche or out of scope (for example rotary).
 
-Totals: 196 features. 172 done, 7 partial, 17 missing. P1: 64 done, 0 partial, 0 missing.
+Totals: 197 features. 173 done, 7 partial, 17 missing. P1: 64 done, 0 partial, 0 missing. (Self-contained projects, 2026-10-27, is the one new row.)
 
 Round 2 (2026-10-20): every partial and missing item was re-checked against the code and is unchanged; the full suite passed (774 tests). Fourteen items were added from the public feature list (marked *r2* in notes).
 
@@ -217,6 +217,7 @@ Final packaging (2026-10-20): totals re-counted from the table (172 done, 7 part
 | `ux-split-view` | app-ux | Side-by-side 2D and 3D views | done | P3 | CenterMode.split in ContentView (⌥⌘2); AppUXRenderTests |
 | `ux-gadgets` | app-ux | Gadgets / scripting API for add-on tools | done | P3 | JavaScriptCore host: Sources/LoftLineApp/Model/Gadgets/, Gadgets menu (GadgetPanels.swift); Tests/LoftLineAppTests/GadgetTests.swift. No custom gadget UI or Lua/Vectric compatibility |
 | `ux-updates` | app-ux | In-app updates from signed GitHub releases | partial | P2 | Sources/UpdateCore, Sources/LoftLineApp/Updates, packaging/updater/macos.sh, scripts/update-feed.sh, scripts/verify-feed.sh, the feed job in release.yml; UpdateCoreTests, UpdateControllerTests, UpdateUITests, UpdaterHelperTests. Built and tested headless; proven when an installed 0.2.0 updates itself to 0.2.1 (docs/DECISIONS.md `updater-proof`) |
+| `ux-self-contained-projects` | app-ux | A project file carries its post, machine and tools, posts the same on any Mac, and says when the installed ones differ (Update This Project) | done | P2 | Sources/LoftLineApp/Model/ProjectPost.swift, ToolSync.swift; CADCore/Persistence/JSONValue.swift; Tests/LoftLineAppTests/ProjectPost*Tests.swift, ToolSync*Tests.swift; DECISIONS project-carries-post |
 | `ux-machine-wizard` | app-ux | First-run machine setup wizard and online machine/post lookup | partial | P3 | *r3* Machine definitions and post pickers exist and default to the Avid (ux-machine-config); the welcome window has no machine setup step and nothing is fetched online (by design) |
 
 ## Sources

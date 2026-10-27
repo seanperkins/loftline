@@ -184,6 +184,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
 
             Pick both in Job Setup (⇧⌘J). The status bar shows them, and clicking it opens Job Setup. Choosing a machine switches to one of its posts if the current one does not drive it. Validation and time estimates use the machine's limits.
 
+            A project **carries its own copy** of its post, machine and tools, so it posts the same G-code on any Mac, even one that does not have them. Job Setup says "Using this project's copy" and, when the one installed here differs, shows a warning and an **Update This Project** button (⌘Z undoes it). Nothing changes until you use it.
+
             Add your own machines in Preferences ▸ Machines: duplicate a built-in machine and edit it. Custom machines are JSON files in Application Support/LoftLine/machines; custom posts go in Application Support/LoftLine/posts (Toolpaths ▸ Open Post Profiles Folder).
             """
         case .drawing:

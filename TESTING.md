@@ -251,6 +251,16 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
 1. Import an SVG with thousands of paths (a traced drawing; `File → Import…`): the window stays responsive, every new shape is selected and drawn in the selection color, and zooming and panning keep up (a drawing over 5,000 segments is drawn as one-point lines: they look slightly thinner than the shapes of a small drawing).
 2. Edit → Select All, then move the selection with the inspector's Move field and group it (⌘G): each takes a moment, not minutes.
 
+## Projects that carry their post, machine and tools
+
+Run with a build you made yourself. Posts and machines are read once per launch, so use **Toolpaths ▸ Reload Post Profiles** after editing a file.
+
+1. Open `samples/sign.loftline`, then Job Setup (⇧⌘J): under the post picker it says `Using this project's copy of "Avid PRO6096 Mach4 (inch)" v1.0` and the same for the machine.
+2. Built-in posts come from code, so create `~/Library/Application Support/LoftLine/posts/<the project's post id>.json` as a copy of that post with one changed footer line (a user file with a built-in's id replaces the built-in), then choose Reload Post Profiles. Job Setup and the Export G-code sheet now show a warning that the project's copy differs from the installed one; the exported G-code still has the old footer. **Update This Project** switches it; ⌘Z switches it back.
+3. For "(not installed here)", use a post with its own id (deleting an override of a built-in's id only reveals the built-in again): copy a post file to a new id, pick it in Job Setup, save the project, delete that file and Reload Post Profiles. The project still posts and says "(not installed here)", with no error.
+4. Tools: with the project open, change its cutter's diameter in the Tool Database; the toolpaths change at once and the project is marked unsaved. Close it without saving, change the same tool again with the project closed, reopen it: the warning names the tool, the exported G-code still uses the file's diameter, and Update This Project switches it to the library's and ⌘Z back.
+5. Edit a copy in the file by hand so `schemaVersion` is `2` (or set `"postSnapshot": null`) and open it: LoftLine refuses with a message, and `loftline-cli export` exits 2 with the same message.
+
 ## Release candidate checklist
 
 Run once on the notarised build from a `workflow_dispatch` rehearsal of `release.yml` (and again on the final candidate before a tag). The rehearsal proves the build, the signature, notarisation and the posted G-code; these cannot be seen headless.
