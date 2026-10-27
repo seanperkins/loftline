@@ -148,6 +148,18 @@ private enum Fixture {
         #expect(UpdateSignature.publicKeyPEM.contains("BEGIN RSA PUBLIC KEY"))
     }
 
+    @Test func theProductionKeyIsARealRSA4096KeyAndNotTheUnsignablePlaceholder() throws {
+        // Until `genkey` was run, the committed key was a placeholder whose private half was never written anywhere. It must
+        // not come back: with it nothing can ever be signed, and the release workflow could never publish.
+        let placeholderFirstLine = "MIICCgKCAgEAocgnS1999EHOmp3gDoASjkAFhfI9J6jOeOY0QUOMZ4jqY74HU2Em"
+        #expect(!UpdateSignature.publicKeyPEM.contains(placeholderFirstLine), "the placeholder public key is still committed")
+        let file = Fixture.dir.appendingPathComponent("production-public.pub")
+        try UpdateSignature.publicKeyPEM.write(to: file, atomically: true, encoding: .utf8)
+        let parsed = try Sh.run("/usr/bin/openssl", ["rsa", "-RSAPublicKey_in", "-in", file.path, "-noout", "-text"])
+        #expect(parsed.status == 0, "\(parsed.text)")
+        #expect(parsed.text.contains("4096 bit"), "\(parsed.text)")
+    }
+
     // MARK: scripts/update-feed.sh
 
     @Test func noPreviousTagMeansGcodeUnchanged() throws {

@@ -1,23 +1,22 @@
 extension UpdateSignature {
-    /// The PKCS#1 `RSA PUBLIC KEY` that every update must verify against. It is also committed as
-    /// `packaging/updater/update-public-key.pub`, which `scripts/verify-feed.sh` reads; a test keeps the two equal.
-    ///
-    /// PLACEHOLDER until `scripts/update-feed.sh genkey` is run for the release: this key was generated through a pipe and
-    /// its private half was never written anywhere, so nothing can be signed for it. An update can never verify until it is
-    /// replaced, which is the safe way for a missing key to fail.
+    /// The PKCS#1 `RSA PUBLIC KEY` that every update must verify against, made by `scripts/update-feed.sh genkey` for LoftLine
+    /// releases. It is also committed as `packaging/updater/update-public-key.pub`, which `scripts/verify-feed.sh` reads; a test
+    /// keeps the two equal. Its private half lives only in `~/.config/loftline/update_sign.key` and in the Actions secret
+    /// `UPDATE_SIGN_KEY`. Every shipped app pins this key, so changing it needs a release signed with the old key that carries
+    /// the new one (docs/DECISIONS.md `feed-signature`).
     public static let publicKeyPEM = """
         -----BEGIN RSA PUBLIC KEY-----
-        MIICCgKCAgEAocgnS1999EHOmp3gDoASjkAFhfI9J6jOeOY0QUOMZ4jqY74HU2Em
-        oHMrjUKHgJzemgeQExPiil9uo3WV5ZAi5rDBXFnkj/k5HAesGQWvLBH5cEqRs/7U
-        DKR2N/ca713XBqZaLgypyW/o0IlC0Q6BvVZYoWWrZDJfZ8D4F40LDankEFnLk326
-        xuqRSYTrH37B/lex1bKMzmpMWlndNIv+fFjTs+8wRaEwhA1gIL58zBD1fQETVz7Z
-        gklPb9AsAkvQctXs6svjHWL7WiJKZeLf7cHSKGpMgBbHxhyiJlS7H/JatC+FI5a2
-        Dn1ENUoSfMU9477YfY2brxDcAXmbvigiwKoas7XHQtg+pWQIsub7fDX3fHZx0XM9
-        QOtN6qI8AzWmk/Ijf2KDfNa2pBw01LtAiz341LlQiT9NgmWXBFK2o15vOFHh4HRg
-        o2yF1ryG/OduUy6cevBHU8VMsUIrpXrzKggb7bKLyZBZmo0X48HsrBI0KS26jw36
-        g4+buisC4dQPGHCzqFbWhCdP7f3g82jZ3zB277M1l6+bmjWalBDjgZKdaKfpj/sD
-        ki9kCkgJcyQaHqKPkhOQ04nTbu0A97XDoJ9aL9qNWnCkNW8egeH2jpafXypdNe3v
-        9Ha1yxkMPdcJL+FmUbIDOSPvNRplp4VxoTN9tg0rYgU1ytAg8W2340ECAwEAAQ==
+        MIICCgKCAgEAtbudglEuZrLLqUjd8ZzTwaIbOWgE4FRkswjNAvUsEAS9ZDQCnTmO
+        pFWkv9t3jvdaYEWeYDUiewTZLQyNeS8OROOcNPv5DFziFzxzcEEwir2zQq35rGrj
+        KCAc6UmRq/VO1KXu4H7TxGlsXK6Fr9dRIxg6KetEubiZGZ2hZcSBU+mMVAy1cnjm
+        CT6PRRv792PdN2Qj6ksZeuHCu8FrJlSK83KzbjZWlVd9NC6HKKCWa2glY5AKiHLt
+        jK5jtzHiZm7IuyAF4BDBAnhrI44xWVrnWiq2rWVyBiV/25c96+C45r2Etgcy29t7
+        Bs46LgWa+p5xyL2rd0uCjWR0uxLUmMEmBGbxr9p3UDlcrutU4zoe+Bq3qgWkV9uI
+        /BNqjopal9AVkaKrQcEEYg5uK2nW+MTInhW38AQ546vJvPluYF/dRWxNL3P2axA/
+        6WTzTLQXqfNTOTnRZTWI+RiX7VqySy2+X+GL2lnr3Ob0WpupvWeR8YhHTBLOK3LB
+        zrPh3OmLPz+IYLLqB+YkuwUW0B6onL5a09r9yV2hUsW8f5FLYHpPSE0Gcz0NFcMv
+        eYavlgrlMMIMFxx5k/E7SrLmSklXkKk8jrd4kGTosBSKTkRhy/UUj/L4ZGLn2Wy3
+        W3xNO9d567LM8uU+/9eeduI3B6M38vUiOiyMLKLK4TRVxUWJChkLJLkCAwEAAQ==
         -----END RSA PUBLIC KEY-----
         """
 }
