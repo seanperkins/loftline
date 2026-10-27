@@ -1,11 +1,20 @@
 #!/bin/bash
 # LoftLine update helper (macOS). The app copies it out of its bundle to a temp folder and starts it once quit is
 # committed, because the bundle it came from is about to be replaced. The app has already verified the archive
-# (SHA-256 and RSA-4096 signature); this only swaps the bundle and optionally relaunches it.
+# (SHA-256 and RSA-4096 signature) and hands over the digest it verified. This binds the install to those bytes, then
+# swaps the bundle and optionally relaunches it.
 #
-#   macos.sh --archive <zip> --target <folder holding LoftLine.app> --pid <app pid>
+#   macos.sh --archive <zip> --sha256 <64 lowercase hex> --target <folder holding LoftLine.app> --pid <app pid>
 #            [--relaunch 1|0] [--state <state file>]
 #   macos.sh --recover <folder holding LoftLine.app>
+#
+# What is installed is exactly what the app approved, and only if our team signed it:
+#   1. The archive is copied into a private folder this script owns, and that copy is hashed. A cache file replaced after the
+#      app's own check no longer matches --sha256, and one replaced after the copy is not the file that is used.
+#   2. That same copy is unpacked, so the bytes hashed are the bytes extracted.
+#   3. The unpacked app must satisfy DEFAULT_REQUIREMENT: our bundle identifier, signed by a Developer ID Application
+#      certificate of our team. `codesign --verify` alone says only that SOME signature is intact; another app signed by
+#      the same team, renamed LoftLine.app, would pass it without the identifier.
 #
 # Archives are built with `ditto -c -k --sequesterRsrc --keepParent`, so `ditto -x -k` is the only safe unpacker: it
 # restores the mode bits and metadata that the signature covers. The whole bundle is swapped, never its contents.
@@ -14,19 +23,25 @@
 # moves into place. A crash between them leaves no app at the target; `--recover` puts the old one back.
 #
 # Environment: LOFTLINE_UPDATER_WAIT_SECONDS (default 120) is how long to wait for the app to exit;
-# LOFTLINE_UPDATER_SKIP_CODESIGN=1 and LOFTLINE_UPDATER_FAULT=between-renames are for tests only.
+# LOFTLINE_UPDATER_SKIP_CODESIGN=1, LOFTLINE_UPDATER_REQUIREMENT (replaces DEFAULT_REQUIREMENT) and
+# LOFTLINE_UPDATER_FAULT=between-renames are for tests only: the app starts this script with a clean environment.
 set -u
 
 ME="$(basename "$0")"
 die() { echo "$ME: $*" >&2; exit 1; }
 
-ARCHIVE="" TARGET="" PID="" RELAUNCH=0 STATE="" RECOVER=""
+# Our Apple Developer Team ID, public in every signature we make.
+TEAM_ID="HH3SJBAS42"
+DEFAULT_REQUIREMENT="identifier \"com.seanperkins.loftline\" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$TEAM_ID\""
+
+ARCHIVE="" SHA256="" TARGET="" PID="" RELAUNCH=0 STATE="" RECOVER=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --archive|--target|--pid|--relaunch|--state|--recover)
+    --archive|--sha256|--target|--pid|--relaunch|--state|--recover)
       [ $# -ge 2 ] || die "$1 needs a value"
       case "$1" in
         --archive) ARCHIVE="$2" ;;
+        --sha256) SHA256="$2" ;;
         --target) TARGET="$2" ;;
         --pid) PID="$2" ;;
         --relaunch) RELAUNCH="$2" ;;
@@ -58,7 +73,9 @@ if [ -n "$RECOVER" ]; then
   exit 0
 fi
 
-[ -n "$ARCHIVE" ] && [ -n "$TARGET" ] && [ -n "$PID" ] || die "--archive, --target and --pid are required"
+[ -n "$ARCHIVE" ] && [ -n "$SHA256" ] && [ -n "$TARGET" ] && [ -n "$PID" ] || die "--archive, --sha256, --target and --pid are required"
+case "$SHA256" in *[!0-9a-f]*) die "--sha256 must be 64 lowercase hex characters" ;; esac
+[ "${#SHA256}" -eq 64 ] || die "--sha256 must be 64 lowercase hex characters"
 case "$PID" in ''|*[!0-9]*) die "--pid must be a number" ;; esac
 [ "$PID" -ge 1 ] || die "--pid must be a process id"
 case "$RELAUNCH" in 0|1) ;; *) die "--relaunch must be 0 or 1" ;; esac
@@ -81,14 +98,23 @@ OLD="$TARGET/LoftLine.old-$PID"
 STAGE="$TARGET/.LoftLine-update-$PID"
 [ ! -e "$OLD" ] || die "$OLD already exists; run '$ME --recover \"$TARGET\"' first"
 
+# A private copy of the archive, hashed and then unpacked, so the bytes that were checked are the bytes that are installed.
+# Nothing is staged beside the app until the digest matches.
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/loftline-update.XXXXXX")" || die "could not create a private working folder"
+trap 'rm -rf "$WORK"' EXIT
+cp -- "$ARCHIVE" "$WORK/archive.zip" || die "could not copy $ARCHIVE"
+ACTUAL="$(shasum -a 256 "$WORK/archive.zip" | cut -d' ' -f1)"
+[ "$ACTUAL" = "$SHA256" ] || die "the archive is not the one the app verified (digest mismatch); not installing"
+
 rm -rf "$STAGE"
 mkdir -p "$STAGE" || die "could not create $STAGE"
-ditto -x -k "$ARCHIVE" "$STAGE" || { rm -rf "$STAGE"; die "could not unpack $ARCHIVE"; }
+ditto -x -k "$WORK/archive.zip" "$STAGE" || { rm -rf "$STAGE"; die "could not unpack $ARCHIVE"; }
 [ -d "$STAGE/LoftLine.app" ] || { rm -rf "$STAGE"; die "no LoftLine.app in the archive"; }
 if [ "${LOFTLINE_UPDATER_SKIP_CODESIGN:-}" != "1" ]; then
-  if ! problem="$(codesign --verify --deep --strict "$STAGE/LoftLine.app" 2>&1)"; then
+  REQUIREMENT="${LOFTLINE_UPDATER_REQUIREMENT:-$DEFAULT_REQUIREMENT}"
+  if ! problem="$(codesign --verify --deep --strict "-R=$REQUIREMENT" "$STAGE/LoftLine.app" 2>&1)"; then
     rm -rf "$STAGE"
-    die "the new LoftLine.app failed its signature check ($problem); keeping the current version"
+    die "the new LoftLine.app failed its signature check or is not signed by our team ($problem); keeping the current version"
   fi
 fi
 
