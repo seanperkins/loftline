@@ -51,10 +51,11 @@ public struct LoftLineProject: Codable, Hashable, Sendable {
         return p
     }
 
-    /// Tool library = project snapshot merged over `library` (library entries win on ID clash).
+    /// The tools this project cuts with: its own tools (the copies the file carries), and the library's for anything the
+    /// project does not carry. On an ID clash the project's tool wins, so a file cuts the same on any Mac.
     public func mergedTools(with library: ToolLibrary) -> ToolLibrary {
         var lib = library
-        for t in tools where lib.tool(id: t.id) == nil { lib.upsert(t) }
+        for t in tools { lib.upsert(t) }
         return lib
     }
 }

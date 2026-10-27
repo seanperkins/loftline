@@ -119,17 +119,9 @@ extension LoftLineProject {
         operations.swapAt(i, j)
     }
 
-    /// Refreshes the embedded tool snapshot so the file opens on machines without these tools.
+    /// Makes sure the embedded tool snapshot holds every tool the operations use, so the file opens on machines without
+    /// them. The file's own tools are kept as they are, never overwritten from the library (`ToolSync.carrying`).
     mutating func refreshToolSnapshot(from library: ToolLibrary) {
-        let merged = mergedTools(with: library)
-        var seen = Set<UUID>()
-        var snapshot: [Tool] = []
-        for op in operations {
-            for id in op.referencedToolIDs where !seen.contains(id) {
-                seen.insert(id)
-                if let t = merged.tool(id: id) { snapshot.append(t) }
-            }
-        }
-        tools = snapshot
+        self = ToolSync.carrying(self, library: library)
     }
 }

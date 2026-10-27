@@ -74,6 +74,15 @@ public struct Tool: Codable, Hashable, Identifiable, Sendable {
         return t == self
     }
 
+    /// True when `other` posts the same program as this tool: everything but `notes` and `group` is equal. Unlike
+    /// `cutsSameToolpaths`, the name counts: built-in posts write it into the tool-change comment, so a rename changes
+    /// the G-code text. A project's copy of a tool is compared with the library's by this.
+    public func samePostingFields(as other: Tool) -> Bool {
+        var t = other
+        t.notes = notes; t.group = group
+        return t == self
+    }
+
     /// Changes the type; a V-bit or engraving bit gets the usual 60° angle if it has none, so the
     /// type and its angle are one edit.
     public mutating func setKind(_ k: ToolKind) {
