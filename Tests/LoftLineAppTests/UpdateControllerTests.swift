@@ -88,9 +88,14 @@ final class Rig {
     let recorder = Recorder()
     var clock = Date(timeIntervalSince1970: 1_800_000_000)
     private(set) var controller: UpdateController!
+    /// `StubURL` is process-wide state, so only the serialized controller suite may own (reset) it. A rig that merely hosts
+    /// views must not: clearing it would pull the canned responses out from under a controller test running at the same time.
+    private let ownsStub: Bool
 
     init(version: String = "0.2.0", channel: String = "release", bundleURL: URL? = nil, autoCheck: Bool = true,
-         environment: [String: String] = [:], publicKey: String = UpdateTestKeys.signer.publicPEM) throws {
+         environment: [String: String] = [:], publicKey: String = UpdateTestKeys.signer.publicPEM,
+         ownsStub: Bool = true) throws {
+        self.ownsStub = ownsStub
         box = FileManager.default.temporaryDirectory.appendingPathComponent("loftline-update-rig-\(UUID().uuidString)")
         apps = box.appendingPathComponent("Applications")
         cache = box.appendingPathComponent("Caches/Updates")
@@ -98,7 +103,7 @@ final class Rig {
         suite = "loftline-tests-update-rig-\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suite)!
         store = UpdateStateStore(defaults: defaults)
-        StubURL.reset()
+        if ownsStub { StubURL.reset() }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [StubURL.self]
         let installed = bundleURL ?? apps.appendingPathComponent("LoftLine.app")
@@ -120,7 +125,7 @@ final class Rig {
         try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: apps.path)
         try? FileManager.default.removeItem(at: box)
         defaults.removePersistentDomain(forName: suite)
-        StubURL.reset()
+        if ownsStub { StubURL.reset() }
     }
 
     /// Signs `archive` with the real scripts/update-feed.sh and serves the feed and the archive; returns the parsed entry.

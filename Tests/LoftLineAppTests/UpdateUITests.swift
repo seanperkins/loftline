@@ -94,7 +94,7 @@ import UpdateCore
     }
 
     @Test @MainActor func theBannerAndTheWindowHostWithoutCrashing() throws {
-        let rig = try Rig()
+        let rig = try Rig(ownsStub: false)
         defer { rig.cleanup() }
         let banner = NSHostingView(rootView: UpdateBanner(controller: rig.controller))
         #expect(banner.fittingSize.width >= 0)
