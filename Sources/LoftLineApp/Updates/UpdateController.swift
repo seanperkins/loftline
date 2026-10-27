@@ -48,6 +48,9 @@ final class UpdateController: ObservableObject {
     /// `1` turns every check off (tests, the UI harness, CI).
     static let disableVariable = "LOFTLINE_NO_UPDATE_CHECK"
     static let minimumAutomaticInterval: TimeInterval = 24 * 3600
+    /// The daily timer starts when the launch check starts and that check ends a few seconds later, so its first tick is a few
+    /// seconds short of a day after the recorded check. Without slack every other tick would be skipped (a check every 48 h).
+    static let automaticIntervalSlack: TimeInterval = 300
     static let maxFeedBytes = 256 * 1024
     static let maxArchiveBytes: Int64 = 512 * 1024 * 1024
 
@@ -70,7 +73,7 @@ final class UpdateController: ObservableObject {
     private let publicKeyPEM: String
     private let cacheDirectory: URL
     private let autoCheckEnabled: () -> Bool
-    private let spawnHelper: (_ archive: URL, _ target: URL, _ pid: Int32, _ relaunch: Bool, _ sha256: String) -> Void
+    private let spawnHelper: (_ archive: URL, _ target: URL, _ pid: Int32, _ relaunch: Bool, _ sha256: String, _ version: String) -> Void
     private let terminate: () -> Void
     private let environment: [String: String]
     private let now: () -> Date
@@ -79,7 +82,7 @@ final class UpdateController: ObservableObject {
 
     init(session: URLSession, store: UpdateStateStore, bundle: BundleInfo, publicKeyPEM: String, cacheDirectory: URL,
          autoCheckEnabled: @escaping () -> Bool,
-         spawnHelper: @escaping (_ archive: URL, _ target: URL, _ pid: Int32, _ relaunch: Bool, _ sha256: String) -> Void,
+         spawnHelper: @escaping (_ archive: URL, _ target: URL, _ pid: Int32, _ relaunch: Bool, _ sha256: String, _ version: String) -> Void,
          terminate: @escaping () -> Void,
          environment: [String: String] = ProcessInfo.processInfo.environment,
          now: @escaping () -> Date = Date.init) {
@@ -139,7 +142,7 @@ final class UpdateController: ObservableObject {
             }
         } else if !userInitiated {
             guard canAutoCheck else { return }
-            if let last = store.lastCheck, now().timeIntervalSince(last) < Self.minimumAutomaticInterval { return }
+            if let last = store.lastCheck, now().timeIntervalSince(last) < Self.minimumAutomaticInterval - Self.automaticIntervalSlack { return }
         }
 
         let previous = state
@@ -232,7 +235,7 @@ final class UpdateController: ObservableObject {
             return
         }
         spawnHelper(pending.archive, bundle.bundleURL.deletingLastPathComponent(), ProcessInfo.processInfo.processIdentifier,
-                    pending.relaunch, pending.entry.sha256)
+                    pending.relaunch, pending.entry.sha256, pending.entry.version)
     }
 
     private func beginInstall(relaunch: Bool) {
@@ -259,6 +262,11 @@ final class UpdateController: ObservableObject {
         guard bundle.bundleURL.pathExtension == "app" else {
             return "LoftLine can only update an installed app. Move LoftLine to your Applications folder first."
         }
+        // The helper installs to LoftLine.app beside the running app. A renamed copy ("LoftLine copy.app") would stay as it is
+        // while a different LoftLine.app next to it was replaced.
+        guard bundle.bundleURL.lastPathComponent == "LoftLine.app" else {
+            return "LoftLine can only update itself when it is named LoftLine.app. Rename it back, or install the latest release from the Releases page."
+        }
         if !FileManager.default.isWritableFile(atPath: bundle.bundleURL.deletingLastPathComponent().path) {
             return "LoftLine cannot be updated here because its folder is not writable. Move LoftLine to your Applications folder."
         }
@@ -267,8 +275,8 @@ final class UpdateController: ObservableObject {
 
     // MARK: Helper launch
 
-    static func helperArguments(archive: URL, target: URL, pid: Int32, relaunch: Bool, sha256: String) -> [String] {
-        ["--archive", archive.path, "--sha256", sha256, "--target", target.path, "--pid", String(pid),
+    static func helperArguments(archive: URL, target: URL, pid: Int32, relaunch: Bool, sha256: String, version: String) -> [String] {
+        ["--archive", archive.path, "--sha256", sha256, "--version", version, "--target", target.path, "--pid", String(pid),
          "--relaunch", relaunch ? "1" : "0"]
     }
 
@@ -279,30 +287,55 @@ final class UpdateController: ObservableObject {
     }
 
     /// The production `spawnHelper`: copies `Contents/Resources/updater.sh` out of the bundle (the bundle is about to be
-    /// replaced) and starts that copy with `/bin/bash`, detached, with no standard streams. Nothing is waited for.
-    static func startHelper(from bundle: Bundle = .main)
-        -> (_ archive: URL, _ target: URL, _ pid: Int32, _ relaunch: Bool, _ sha256: String) -> Void {
-        { archive, target, pid, relaunch, sha256 in
+    /// replaced) into `tempDirectory` as `loftline-updater-<uuid>.sh`, which removes itself when it ends, and starts that copy
+    /// with `/bin/bash`, detached. Its output goes to `log`: it runs after the app has quit, so what it says is the only record
+    /// of why an update did not happen. Nothing is waited for.
+    static func startHelper(from bundle: Bundle = .main, log logFile: URL? = nil,
+                            tempDirectory: URL = FileManager.default.temporaryDirectory)
+        -> (_ archive: URL, _ target: URL, _ pid: Int32, _ relaunch: Bool, _ sha256: String, _ version: String) -> Void {
+        { archive, target, pid, relaunch, sha256, version in
             guard let source = bundle.url(forResource: "updater", withExtension: "sh") else {
                 log.error("the bundle has no updater.sh; not installing")
                 return
             }
-            let copy = FileManager.default.temporaryDirectory.appendingPathComponent("loftline-updater-\(UUID().uuidString).sh")
+            let copy = tempDirectory.appendingPathComponent("loftline-updater-\(UUID().uuidString).sh")
             do {
                 try FileManager.default.copyItem(at: source, to: copy)
                 try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: copy.path)
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: "/bin/bash")
-                process.arguments = [copy.path] + helperArguments(archive: archive, target: target, pid: pid,
-                                                                  relaunch: relaunch, sha256: sha256)
+                process.arguments = [copy.path] + helperArguments(archive: archive, target: target, pid: pid, relaunch: relaunch,
+                                                                  sha256: sha256, version: version)
                 process.environment = helperEnvironment()
                 process.standardInput = FileHandle.nullDevice
-                process.standardOutput = FileHandle.nullDevice
-                process.standardError = FileHandle.nullDevice
+                let output = openLog(logFile, heading: "starting the update helper for \(version)")
+                process.standardOutput = output ?? FileHandle.nullDevice
+                process.standardError = output ?? FileHandle.nullDevice
                 try process.run()
             } catch {
                 log.error("could not start the update helper: \(error.localizedDescription, privacy: .public)")
             }
+        }
+    }
+
+    /// The helper's log, opened for appending with a dated heading; started afresh once it passes 256 KiB. Nil if it cannot
+    /// be opened (the helper then runs without one).
+    private static func openLog(_ url: URL?, heading: String) -> FileHandle? {
+        guard let url else { return nil }
+        let fm = FileManager.default
+        do {
+            try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if let size = (try? fm.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue, size > 256 * 1024 {
+                try fm.removeItem(at: url)
+            }
+            if !fm.fileExists(atPath: url.path) { fm.createFile(atPath: url.path, contents: nil) }
+            let handle = try FileHandle(forWritingTo: url)
+            try handle.seekToEnd()
+            try handle.write(contentsOf: Data("--- \(ISO8601DateFormatter().string(from: Date())) \(heading)\n".utf8))
+            return handle
+        } catch {
+            Self.log.error("could not open the update helper's log: \(error.localizedDescription, privacy: .public)")
+            return nil
         }
     }
 
@@ -359,15 +392,18 @@ extension UpdateController.State {
 }
 
 extension UpdateController {
-    /// The app's own controller. Its session keeps no cookies and no cache; the only request it ever makes is to github.com.
+    /// `~/Library/Caches/LoftLine/Updates`: the verified download waits here, and the helper's log (`updater.log`).
+    private static let shippedCache = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("LoftLine/Updates", isDirectory: true)
+
+    /// The app's own controller. Its session keeps no cookies and no cache; the only request it ever makes is to GitHub.
     static let shared = UpdateController(
         session: URLSession(configuration: .ephemeral),
         store: UpdateStateStore(defaults: .standard),
         bundle: BundleInfo(),
         publicKeyPEM: UpdateSignature.publicKeyPEM,
-        cacheDirectory: FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("LoftLine/Updates", isDirectory: true),
+        cacheDirectory: shippedCache,
         autoCheckEnabled: { PreferencesModel.shared.prefs.autoCheckForUpdates },
-        spawnHelper: UpdateController.startHelper(),
+        spawnHelper: UpdateController.startHelper(log: shippedCache.appendingPathComponent("updater.log")),
         terminate: { NSApp.terminate(nil) })
 }

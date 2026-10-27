@@ -67,7 +67,9 @@ enum UpdateTestKeys {
 
 /// Everything the controller touches, in a temp folder.
 final class Recorder: @unchecked Sendable {
-    struct Spawn: Equatable { var archive: URL; var target: URL; var pid: Int32; var relaunch: Bool; var sha256: String }
+    struct Spawn: Equatable {
+        var archive: URL; var target: URL; var pid: Int32; var relaunch: Bool; var sha256: String; var version: String
+    }
     private let lock = NSLock()
     private var _spawns: [Spawn] = []
     private var _terminations = 0
@@ -113,8 +115,8 @@ final class Rig {
             bundle: BundleInfo(version: version, channel: channel, bundleURL: installed),
             publicKeyPEM: publicKey, cacheDirectory: cache,
             autoCheckEnabled: { autoCheck },
-            spawnHelper: { archive, target, pid, relaunch, sha256 in
-                recorder.spawned(.init(archive: archive, target: target, pid: pid, relaunch: relaunch, sha256: sha256))
+            spawnHelper: { archive, target, pid, relaunch, sha256, version in
+                recorder.spawned(.init(archive: archive, target: target, pid: pid, relaunch: relaunch, sha256: sha256, version: version))
             },
             terminate: { recorder.terminated() },
             environment: environment,
@@ -294,6 +296,20 @@ struct UpdateControllerTests {
         #expect(StubURL.requested().count == 2, "a manual check is never throttled")
     }
 
+    @Test func aDailyTimerThatFiresJustBeforeTheDayIsUpStillChecks() async throws {
+        // The launch check ends a few seconds after it starts, and the daily timer started when it did, so its first tick falls
+        // a few seconds short of 24 h after the last check. Without slack every other tick is skipped: a check every 48 h.
+        let rig = try Rig()
+        defer { rig.cleanup() }
+        try rig.serve()
+        rig.store.lastCheck = rig.clock.addingTimeInterval(-(24 * 3_600 - 10))
+        await rig.controller.checkNow(userInitiated: false)
+        #expect(StubURL.requested().count == 1, "10 seconds short of a day counts as a day")
+        rig.store.lastCheck = rig.clock.addingTimeInterval(-(24 * 3_600 - 600))
+        await rig.controller.checkNow(userInitiated: false)
+        #expect(StubURL.requested().count == 1, "ten minutes short is still too soon")
+    }
+
     @Test func aFailedAutomaticCheckIsSilentAndAFailedManualOneReports() async throws {
         let rig = try Rig()
         defer { rig.cleanup() }
@@ -387,6 +403,24 @@ struct UpdateControllerTests {
         #expect(rig.recorder.spawns.isEmpty)
     }
 
+    @Test func aRenamedBundleRefusesToInstall() async throws {
+        // The helper installs to LoftLine.app beside the running app. Updating "LoftLine copy.app" would leave it untouched
+        // and replace a different copy next to it.
+        for name in ["LoftLine-old.app", "LoftLine copy.app", "LoftLine 2.app", "loftline.app", "LoftLine.app.app"] {
+            let folder = FileManager.default.temporaryDirectory.appendingPathComponent("loftline-renamed-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: folder.appendingPathComponent(name), withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: folder) }
+            let rig = try Rig(bundleURL: folder.appendingPathComponent(name))
+            defer { rig.cleanup() }
+            _ = try await rig.readyToInstall()
+            rig.controller.installOnQuit()
+            guard case .failed(let message) = rig.controller.state else { Issue.record("\(name): \(rig.controller.state)"); continue }
+            #expect(message.contains("LoftLine.app"), "\(name): \(message)")
+            rig.controller.applicationWillTerminate()
+            #expect(rig.recorder.spawns.isEmpty, "\(name)")
+        }
+    }
+
     @Test func unwritableTargetRefusesToInstall() async throws {
         let rig = try Rig()
         defer { rig.cleanup() }
@@ -417,7 +451,8 @@ struct UpdateControllerTests {
         rig.controller.applicationWillTerminate()
         #expect(rig.recorder.spawns == [.init(archive: rig.cachedArchive(),
                                               target: rig.apps.appendingPathComponent("LoftLine.app").deletingLastPathComponent(),
-                                              pid: ProcessInfo.processInfo.processIdentifier, relaunch: true, sha256: entry.sha256)])
+                                              pid: ProcessInfo.processInfo.processIdentifier, relaunch: true, sha256: entry.sha256,
+                                              version: entry.version)])
         rig.controller.applicationWillTerminate()
         #expect(rig.recorder.spawns.count == 1, "a second terminate notification does nothing")
     }
@@ -495,13 +530,47 @@ struct UpdateControllerTests {
     @Test func theHelperIsStartedWithTheDigestAndAMinimalEnvironment() {
         let archive = URL(fileURLWithPath: "/Users/x/Library/Caches/LoftLine/Updates/LoftLine-0.2.1.zip")
         let args = UpdateController.helperArguments(archive: archive, target: URL(fileURLWithPath: "/Applications"), pid: 321,
-                                                    relaunch: true, sha256: String(repeating: "ab", count: 32))
-        #expect(args == ["--archive", archive.path, "--sha256", String(repeating: "ab", count: 32), "--target", "/Applications",
-                         "--pid", "321", "--relaunch", "1"])
+                                                    relaunch: true, sha256: String(repeating: "ab", count: 32), version: "0.2.1")
+        #expect(args == ["--archive", archive.path, "--sha256", String(repeating: "ab", count: 32), "--version", "0.2.1",
+                         "--target", "/Applications", "--pid", "321", "--relaunch", "1"])
         let env = UpdateController.helperEnvironment()
         #expect(env["PATH"] == "/usr/bin:/bin:/usr/sbin:/sbin")
         #expect(env.keys.allSatisfy { !$0.hasPrefix("LOFTLINE_") }, "test overrides in the app's environment must not reach the helper")
         #expect(env["LOFTLINE_UPDATER_SKIP_CODESIGN"] == nil)
+    }
+
+    @Test func startingTheHelperKeepsItsOutputAndItsTempCopyGoesAway() async throws {
+        // The helper runs after the app has quit, so whatever it says is the only record of why an update did not happen.
+        let box = FileManager.default.temporaryDirectory.appendingPathComponent("loftline-starthelper-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: box) }
+        let resources = box.appendingPathComponent("Fake.app/Contents/Resources")
+        try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: ScriptRunner.root.appendingPathComponent("packaging/updater/macos.sh"),
+                                         to: resources.appendingPathComponent("updater.sh"))
+        try Data("<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>CFBundleIdentifier</key><string>x.fake</string></dict></plist>".utf8)
+            .write(to: box.appendingPathComponent("Fake.app/Contents/Info.plist"))
+        let temp = box.appendingPathComponent("tmp")
+        try FileManager.default.createDirectory(at: temp, withIntermediateDirectories: true)
+        let log = box.appendingPathComponent("logs/updater.log")
+
+        let start = UpdateController.startHelper(from: try #require(Bundle(url: box.appendingPathComponent("Fake.app"))),
+                                                 log: log, tempDirectory: temp)
+        // An archive that is not there: the helper refuses at once, and says so.
+        start(box.appendingPathComponent("missing.zip"), box, 1, false, String(repeating: "a", count: 64), "2.0.0")
+
+        var written = ""
+        for _ in 0..<100 where !written.contains("archive not found") {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            written = (try? String(contentsOf: log, encoding: .utf8)) ?? ""
+        }
+        #expect(written.contains("archive not found"), "the helper's refusal reaches the log: \(written)")
+        #expect(written.contains("2.0.0"), "the log says which update it was about: \(written)")
+        var leftovers = ["pending"]
+        for _ in 0..<100 where !leftovers.isEmpty {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            leftovers = try FileManager.default.contentsOfDirectory(atPath: temp.path)
+        }
+        #expect(leftovers.isEmpty, "the temp copy of the helper removes itself: \(leftovers)")
     }
 
     // MARK: bundle info and old-bundle cleanup
