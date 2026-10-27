@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UpdateCore
 
 /// The release workflow only orchestrates; the checks that decide whether a build may ship are scripts, tested here.
 @Suite("Release scripts")
@@ -258,6 +259,106 @@ struct ReleaseScriptsTests {
         let result = try ScriptRunner.script("scripts/check-release-workflow.sh")
         #expect(result.status == 0, "\(result.err)")
         #expect(result.out.contains("workflow checks passed"), "\(result.out)")
+    }
+
+    // MARK: scripts/verify-feed.sh
+
+    /// A feed made by the real scripts/update-feed.sh with the test key, its archive, and the matching public key file.
+    struct SignedFeed {
+        var box: Scratch
+        var feed: URL
+        var archive: URL
+        var publicKey: URL
+    }
+
+    static func signedFeed() throws -> SignedFeed {
+        let box = try Scratch()
+        let archive = try box.write("LoftLine-v1.2.3-macos-arm64.zip", String(repeating: "release archive bytes ", count: 300))
+        let feed = box.dir.appendingPathComponent("latest.json")
+        let made = try ScriptRunner.script("scripts/update-feed.sh", ["v1.2.3", "--zip", archive.path, "--out", feed.path],
+                                           env: ["UPDATE_SIGN_KEY_FILE": UpdateTestKeys.signer.privateKey.path])
+        #expect(made.status == 0, "\(made.err)")
+        let publicKey = try box.write("update-public.pub", UpdateTestKeys.signer.publicPEM + "\n")
+        return SignedFeed(box: box, feed: feed, archive: archive, publicKey: publicKey)
+    }
+
+    static func verifyFeed(_ s: SignedFeed, feed: URL? = nil, archive: URL? = nil, publicKey: URL? = nil) throws -> ScriptRunner.Output {
+        try ScriptRunner.script("scripts/verify-feed.sh", [(feed ?? s.feed).path, (archive ?? s.archive).path, (publicKey ?? s.publicKey).path])
+    }
+
+    /// The feed with one field of the macos-arm64 entry replaced.
+    static func edited(_ s: SignedFeed, field: String, to value: String) throws -> URL {
+        var document = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: s.feed)) as? [String: Any])
+        var entries = try #require(document["entries"] as? [String: [String: Any]])
+        entries["macos-arm64"]?[field] = value
+        document["entries"] = entries
+        let url = s.box.dir.appendingPathComponent("edited-\(field).json")
+        try JSONSerialization.data(withJSONObject: document).write(to: url)
+        return url
+    }
+
+    @Test func verifyFeedAcceptsAScriptMadeFeed() throws {
+        let s = try Self.signedFeed()
+        let result = try Self.verifyFeed(s)
+        #expect(result.status == 0, "\(result.err)")
+        #expect(result.out.contains("feed verified"), "\(result.out)")
+    }
+
+    @Test func verifyFeedAgreesWithTheAppsOwnVerifier() throws {
+        let s = try Self.signedFeed()
+        let entry = try #require(UpdateManifest.parse(Data(contentsOf: s.feed)))
+        #expect(try UpdateSignature.sha256Hex(of: s.archive) == entry.sha256)
+        #expect(UpdateSignature.verify(digestHex: entry.sha256, signature: entry.signature, publicKeyPEM: UpdateTestKeys.signer.publicPEM))
+        #expect(try Self.verifyFeed(s).status == 0, "the shell check and the Swift check accept the same feed")
+    }
+
+    @Test func verifyFeedRejectsAManifestShaThatDoesNotMatch() throws {
+        let s = try Self.signedFeed()
+        let result = try Self.verifyFeed(s, feed: Self.edited(s, field: "sha256", to: String(repeating: "0", count: 64)))
+        #expect(result.status == 1)
+        #expect(result.err.contains("sha256"), "\(result.err)")
+    }
+
+    @Test func verifyFeedRejectsATamperedArchive() throws {
+        let s = try Self.signedFeed()
+        var bytes = try Data(contentsOf: s.archive)
+        bytes[1_000] ^= 0x01
+        let tampered = try s.box.write("tampered.zip", "")
+        try bytes.write(to: tampered)
+        let result = try Self.verifyFeed(s, archive: tampered)
+        #expect(result.status == 1)
+        #expect(result.err.contains("sha256"), "\(result.err)")
+    }
+
+    @Test func verifyFeedRejectsADigestThatIsRightForAnArchiveTheSignatureWasNotMadeFor() throws {
+        // The manifest names another archive's real digest, so the digest check passes; only the signature can catch it.
+        let s = try Self.signedFeed()
+        let other = try s.box.write("other.zip", String(repeating: "a different archive ", count: 300))
+        let feed = try Self.edited(s, field: "sha256", to: UpdateSignature.sha256Hex(of: other))
+        let result = try Self.verifyFeed(s, feed: feed, archive: other)
+        #expect(result.status == 1)
+        #expect(result.err.contains("signature"), "\(result.err)")
+    }
+
+    @Test func verifyFeedRejectsASignatureFromAnotherKey() throws {
+        let s = try Self.signedFeed()
+        let otherKey = try s.box.write("other-public.pub", UpdateTestKeys.other.publicPEM + "\n")
+        let result = try Self.verifyFeed(s, publicKey: otherKey)
+        #expect(result.status == 1)
+        #expect(result.err.contains("signature"), "\(result.err)")
+    }
+
+    @Test func verifyFeedRejectsAMalformedFeedMissingFilesAndBadArguments() throws {
+        let s = try Self.signedFeed()
+        for body in ["not json", "[]", #"{"entries":{}}"#, #"{"entries":{"macos-arm64":{"sha256":"zz","sig":"!!"}}}"#] {
+            let feed = try s.box.write("bad.json", body)
+            #expect(try Self.verifyFeed(s, feed: feed).status == 1, "\(body)")
+        }
+        #expect(try Self.verifyFeed(s, feed: s.box.dir.appendingPathComponent("none.json")).status == 1)
+        #expect(try Self.verifyFeed(s, archive: s.box.dir.appendingPathComponent("none.zip")).status == 1)
+        #expect(try Self.verifyFeed(s, publicKey: s.box.dir.appendingPathComponent("none.pub")).status == 1)
+        #expect(try ScriptRunner.script("scripts/verify-feed.sh", [s.feed.path]).status == 1)
+        #expect(try ScriptRunner.script("scripts/verify-feed.sh", []).status == 1)
     }
 
     // MARK: scripts/configure-release-ci.sh

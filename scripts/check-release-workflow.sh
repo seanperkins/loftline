@@ -152,6 +152,57 @@ ensure_that.(condition_of.(last).include?('always()'), 'the last step must run w
   ensure_that.(run_of.(last).include?(item), "cleanup must remove #{item}")
 end
 
+# A tag run needs the feed signing key too, so a missing secret fails the build at the start, not after a notarised draft exists.
+ensure_that.(job.dig('env', 'HAS_UPDATE_KEY').to_s.include?('secrets.UPDATE_SIGN_KEY'), 'HAS_UPDATE_KEY must be a job-level env derived from the UPDATE_SIGN_KEY secret')
+ensure_that.(steps.any? { |s| condition_of.(s).include?("HAS_UPDATE_KEY != 'true'") && condition_of.(s).include?("github.event_name == 'push'") && run_of.(s).include?('exit 1') },
+             'a tag run without UPDATE_SIGN_KEY must fail at the start')
+
+# The update feed: signed, uploaded to the DRAFT, downloaded again and verified exactly as a client sees it, and only then is the
+# release published. A release is never "latest" before its feed exists and verifies.
+feed = (workflow['jobs'] || {})['feed'] || {}
+ensure_that.(!feed.empty?, 'a feed job is required')
+unless feed.empty?
+  ensure_that.(Array(feed['needs']) == ['build'], 'the feed job needs the build job and nothing else')
+  ensure_that.(feed['runs-on'] == 'macos-15', 'the feed job runs on macos-15, where the scripts it calls (zsh, the system openssl) are the ones that are tested')
+  feed_guard = feed['if'].to_s
+  ensure_that.(feed_guard.include?("github.event_name == 'push'") && feed_guard.include?(TAG_GUARD),
+               "the feed job must run only for a tag push (a dispatch run on a tag ref must never publish): if needs github.event_name == 'push' and #{TAG_GUARD}")
+  feed_steps = feed['steps'] || []
+  feed_steps.each do |step|
+    ensure_that.(!run_of.(step).include?('${{'), "feed step '#{named.(step)}' interpolates ${{ }} into a script; pass it through env")
+  end
+  ensure_that.(feed_steps.first && feed_steps.first['uses'].to_s.start_with?('actions/checkout') && feed_steps.first.dig('with', 'fetch-depth') == 0,
+               'the feed job must start with actions/checkout and fetch-depth: 0 (gcodeChanged compares tags)')
+  text = feed_steps.map { |s| run_of.(s) }.join("\n")
+  ensure_that.(feed_steps.any? { |s| s['env'].to_h['UPDATE_SIGN_KEY'].to_s.include?('secrets.UPDATE_SIGN_KEY') }, 'UPDATE_SIGN_KEY must reach the feed job through env')
+  ensure_that.(text.include?('base64 -d') && text.match?(/RUNNER_TEMP[^\n]*update-signing\.dat|update-signing\.dat[^\n]*RUNNER_TEMP/),
+               'the signing key is decoded into RUNNER_TEMP, never into the workspace')
+  ensure_that.(text.include?('= draft'), 'the feed job must require the release to still be a draft')
+  ensure_that.(!text.match?(/gh release (create|delete)/), 'the feed job must not create or delete a release')
+
+  order = ['scripts/check-release-state.sh', 'gh release download', 'scripts/update-feed.sh', 'gh release upload', 'scripts/verify-feed.sh', 'gh release edit']
+  positions = order.map { |needle| text.index(needle) }
+  ensure_that.(positions.none?(&:nil?) && positions == positions.sort, "the feed job must run in this order: #{order.join(' → ')}")
+  last_download = text.rindex('gh release download')
+  ensure_that.(positions.none?(&:nil?) && last_download && last_download > positions[3] && last_download < positions[4],
+               'the feed must be downloaded again from the draft release after it is uploaded and before it is verified')
+  ensure_that.(text.match?(/gh release edit [^\n]*--draft=false/), 'publishing must be gh release edit --draft=false')
+  ensure_that.(text.match?(/scripts\/update-feed\.sh/) && text.match?(/gh release upload [^\n]*latest\.json/), 'latest.json must be uploaded to the release')
+  verify_args = text[/scripts\/verify-feed\.sh +(\S+)/, 1].to_s
+  ensure_that.(!verify_args.empty? && !verify_args.start_with?('build/'), 'verification must read the re-downloaded files, not the build directory')
+  ensure_that.(text.include?('packaging/updater/update-public-key.pub'), 'verification must use the committed public key')
+  publish = feed_steps.find { |s| run_of.(s).include?('gh release edit') }
+  ensure_that.(publish && run_of.(publish).include?('set -euo pipefail'), 'the publishing step must run under set -euo pipefail')
+  if publish
+    script = run_of.(publish)
+    ensure_that.(script.index('scripts/verify-feed.sh') && script.index('scripts/verify-feed.sh') < script.index('gh release edit'),
+                 'the step that publishes must verify the feed before gh release edit')
+  end
+  feed_last = feed_steps.last || {}
+  ensure_that.(condition_of.(feed_last).include?('always()') && run_of.(feed_last).include?('update-signing.dat') && run_of.(feed_last).include?('RUNNER_TEMP'),
+               'the last feed step must remove the decoded signing key with always()')
+end
+
 if errors.empty?
   puts 'workflow checks passed'
 else

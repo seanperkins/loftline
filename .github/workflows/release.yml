@@ -2,10 +2,11 @@ name: release
 
 # Builds, tests, signs and notarises LoftLine.app and attaches LoftLine-vX.Y.Z-macos-arm64.zip to a DRAFT GitHub Release.
 #
-#   tag push v1.2.3     channel "release": everything below, then a draft release holding the zip. Nothing is published
-#                       here: a draft is never "latest", so no installed app can be offered a release whose update feed
-#                       does not exist yet. A tag whose release is already published fails instead of overwriting it; a
-#                       fix ships as a new tag.
+#   tag push v1.2.3     channel "release": everything below, then a draft release holding the zip. The build job publishes
+#                       nothing: a draft is never "latest", so no installed app can be offered a release whose update feed
+#                       does not exist yet. The feed job then signs latest.json, adds it to the draft, downloads both again,
+#                       verifies them as a client will fetch them and only then publishes the release. A tag whose release
+#                       is already published fails instead of being overwritten; a fix ships as a new tag.
 #   workflow_dispatch   channel "rehearsal": everything except the release steps. The zip is kept as a workflow artifact
 #                       for 7 days so the release-candidate checklist in TESTING.md has a build to run. The version is
 #                       the "version" input (default 0.0.0), never the branch name. With no signing secrets set it
@@ -36,7 +37,7 @@ concurrency:
 env:
   # The total across all test targets (scripts/test.sh prints one result line per target). A run that executes far fewer
   # tests than this (a target that did not build or start) fails the gate even if every line it did print says passed.
-  LOFTLINE_MIN_TESTS: "1450"
+  LOFTLINE_MIN_TESTS: "1550"
 
 jobs:
   build:
@@ -44,6 +45,7 @@ jobs:
     timeout-minutes: 90
     env:
       HAS_SIGNING: ${{ secrets.MACOS_CERTS_DEPLOY_KEY != '' }}
+      HAS_UPDATE_KEY: ${{ secrets.UPDATE_SIGN_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -88,6 +90,13 @@ jobs:
         if: github.event_name == 'push' && env.HAS_SIGNING != 'true'
         run: |
           echo "::error::A tag run needs the signing secrets (MACOS_CERTS_DEPLOY_KEY, MACOS_CERT_PASSWORD, ASC_KEY_CONTENT, MACOS_IDENTITY). Run scripts/configure-release-ci.sh."
+          exit 1
+
+      # The feed job needs it after the build: a missing key must stop the run now, not after a notarised draft exists.
+      - name: Require the update signing key for a tag
+        if: github.event_name == 'push' && env.HAS_UPDATE_KEY != 'true'
+        run: |
+          echo "::error::A tag run needs the update signing key (the UPDATE_SIGN_KEY secret). Make the key with scripts/update-feed.sh genkey and set the secret yourself with gh secret set."
           exit 1
 
       # A release is never built from a red tree. scripts/test.sh runs with set +e and its output goes to a file: the
@@ -244,3 +253,60 @@ jobs:
           rm -f "$RUNNER_TEMP/macos_certs_ed25519" "$RUNNER_TEMP/known_hosts"
           rm -rf "$RUNNER_TEMP/certs" "$RUNNER_TEMP/AuthKey.p8"
           security delete-keychain "$RUNNER_TEMP/build.keychain" 2>/dev/null || true
+
+  # The signed update feed, and the only place a release is published. It runs for a tag push only (never for a dispatch on a
+  # tag ref), after the build job has put the signed zip on the DRAFT release. The feed is made, uploaded to the draft,
+  # downloaded again and verified exactly as a client will fetch it, and only then is the release published: a release is never
+  # "latest" before its feed exists and verifies. A failure anywhere leaves a draft, which no installed app can see.
+  feed:
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require a draft release
+        run: |
+          set -euo pipefail
+          state="$(scripts/check-release-state.sh "$GITHUB_REF_NAME")"
+          if [ "$state" != draft ]; then
+            echo "::error::Expected a draft release for $GITHUB_REF_NAME, found: $state"
+            exit 1
+          fi
+
+      - name: Sign the feed and add it to the draft
+        env:
+          UPDATE_SIGN_KEY: ${{ secrets.UPDATE_SIGN_KEY }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          mkdir -p build
+          gh release download "$tag" --pattern '*.zip' --dir build
+          gh release view "$tag" --json body --jq .body > build/notes.md
+          umask 077
+          printf '%s' "$UPDATE_SIGN_KEY" | base64 -d > "$RUNNER_TEMP/update-signing.dat"
+          UPDATE_SIGN_KEY_FILE="$RUNNER_TEMP/update-signing.dat" scripts/update-feed.sh "$tag" --notes build/notes.md
+          gh release upload "$tag" build/latest.json --clobber
+
+      - name: Verify the feed as a client will fetch it, then publish
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          mkdir -p verify
+          gh release download "$tag" --pattern '*.zip' --pattern latest.json --dir verify
+          scripts/verify-feed.sh verify/latest.json "verify/LoftLine-$tag-macos-arm64.zip" packaging/updater/update-public-key.pub
+          state="$(scripts/check-release-state.sh "$tag")"
+          if [ "$state" != draft ]; then
+            echo "::error::The release for $tag is no longer a draft ($state); not publishing"
+            exit 1
+          fi
+          gh release edit "$tag" --draft=false
+
+      - name: Remove the signing key
+        if: ${{ always() }}
+        run: rm -f "$RUNNER_TEMP/update-signing.dat"
