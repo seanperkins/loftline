@@ -437,6 +437,11 @@ final class LoftLineDocument: ReferenceFileDocument {
         ProjectPost.issues(for: project, profiles: postCatalog.profiles, machines: machineCatalog.machines)
     }
 
+    /// What Job Setup says about the project's copies.
+    var copyNotice: ProjectPost.Notice {
+        ProjectPost.notice(for: project, profiles: postCatalog.profiles, machines: machineCatalog.machines)
+    }
+
     /// True when a copy the project carries differs from the installed one (Job Setup then offers Update This Project).
     var hasCopyDifferences: Bool {
         let r = resolvedPost

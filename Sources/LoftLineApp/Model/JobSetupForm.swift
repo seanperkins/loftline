@@ -17,6 +17,9 @@ struct JobSetupForm: Equatable {
     /// (a form made from a document alone, or a project whose post matches no known machine).
     var machineID: String?
     var postID: String?
+    /// The machine the form is on: the project's own copy while it is valid (even when that machine is not installed
+    /// here), else the installed one, else nil. The bed-fit check and the post grouping read this, not the catalog.
+    var machine: MachineDefinition?
     /// The job and grid as the document had them, in its units. A field the user has not touched
     /// is always converted from here in one step, so switching units back and forth leaves it
     /// exactly what a single conversion gives, which is what the saved project's own conversion
@@ -31,15 +34,30 @@ struct JobSetupForm: Equatable {
         base = Base(units: document.units, job: document.job, gridSpacing: document.gridSpacing)
     }
 
-    init(project: LoftLineProject, machines: [MachineDefinition]) {
+    init(project: LoftLineProject, machines: [MachineDefinition], profiles: [PostProfile] = PostProfileCatalog.shared.profiles) {
         self.init(document: project.document)
-        machineID = MachineResolver.machine(for: project, machines: machines)?.id
+        // The project's own machine first, so a machine that is in the file but not installed here is not swapped for
+        // a different installed one (Apply would write that swap).
+        machine = ProjectPost.resolve(project, profiles: profiles, machines: machines).machine
+        machineID = machine?.id
         postID = project.postProfileID ?? PostProfileStore.defaultID(for: project.document.units)
+    }
+
+    /// Why the material does not fit the machine's bed (empty = fits).
+    var fitProblems: [String] { MachineResolver.fitProblems(job: job, units: units, machine: machine) }
+
+    /// The machine picker's entries: the installed machines, and the project's own copy of one that is not installed
+    /// here, so the selection still shows.
+    func machineChoices(installed: [MachineDefinition]) -> [(id: String, title: String)] {
+        var out = installed.map { (id: $0.id, title: $0.name) }
+        if let m = machine, !installed.contains(where: { $0.id == m.id }) { out.append((m.id, "\(m.name) (not installed here)")) }
+        return out
     }
 
     /// Chooses `machine`, switching to one of its posts if the current post does not drive it.
     mutating func selectMachine(_ machine: MachineDefinition, profiles: [PostProfile]) {
         machineID = machine.id
+        self.machine = machine
         let current = postID ?? PostProfileStore.defaultID(for: units)
         postID = MachineResolver.post(afterSelecting: machine, current: current, units: units, profiles: profiles)
     }

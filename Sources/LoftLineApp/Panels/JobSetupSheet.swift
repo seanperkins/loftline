@@ -17,8 +17,9 @@ struct JobSetupSheet: View {
 
     var body: some View {
         let u = form.units
-        let machine = machines.machine(id: form.machineID)
-        let problems = MachineResolver.fitProblems(job: form.job, units: form.units, machine: machine) + form.problems
+        // The form's own machine: the project's copy even when that machine is not installed here.
+        let machine = form.machine
+        let problems = form.fitProblems + form.problems
         VStack(alignment: .leading, spacing: 16) {
             HStack { Text("Job Setup").font(.title2.bold()); Spacer(); HelpButton(topic: .jobSetup) }
             // Two compact columns so every setting, including Safe Z and Home, is visible without scrolling.
@@ -38,13 +39,14 @@ struct JobSetupSheet: View {
                             if let m = machines.machine(id: id) { form.selectMachine(m, profiles: posts.profiles) }
                         })) {
                             if form.machineID == nil { Text("Custom (post limits)").tag("") }
-                            ForEach(machines.machines) { Text($0.name).tag($0.id) }
+                            ForEach(form.machineChoices(installed: machines.machines), id: \.id) { Text($0.title).tag($0.id) }
                         }
                         .help("Machine: bed size, travel limits and the post processors that drive it")
                         PostProfilePicker(title: "Post processor",
                                           selection: Binding(get: { form.postID ?? "" }, set: { form.postID = $0 }),
                                           machine: machine)
                             .help("Post processor (G-code dialect) for the selected machine")
+                        ProjectCopyNotice(document: document)
                     }
                     FormGroup("Material") {
                         LengthField("Width (X)", value: $form.job.width, units: u)
@@ -208,6 +210,30 @@ struct FormGroup<Content: View>: View {
             content
         } header: {
             Text(title).font(.headline).padding(.top, 14)
+        }
+    }
+}
+
+/// What the project's own copies of its post, machine and tools say, with Update This Project when one differs from
+/// the installed one. The copy posts the G-code; nothing changes until the button is used.
+private struct ProjectCopyNotice: View {
+    @ObservedObject var document: LoftLineDocument
+    @ObservedObject private var posts = PostProfileCatalog.shared
+    @ObservedObject private var machines = MachineCatalog.shared
+
+    var body: some View {
+        let notice = document.copyNotice
+        if !notice.lines.isEmpty || !notice.warnings.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(notice.lines, id: \.self) { Text($0).font(.caption).foregroundStyle(.secondary) }
+                ForEach(notice.warnings, id: \.self) {
+                    Label($0, systemImage: "exclamationmark.triangle.fill").font(.caption).foregroundStyle(Color.warningText)
+                }
+                if document.hasCopyDifferences {
+                    Button("Update This Project") { document.updateProjectFromInstalled() }
+                        .help("Replace this project's copies with the ones installed on this Mac (Undo brings them back)")
+                }
+            }
         }
     }
 }

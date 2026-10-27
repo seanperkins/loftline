@@ -31,6 +31,9 @@ enum ProjectPost {
         /// Set when the copy is used and an installed post of the same id differs from it.
         var postCopyDiffers: (copy: PostProfile, installed: PostProfile)?
         var machineCopyDiffers: (copy: MachineDefinition, installed: MachineDefinition)?
+        /// Whether a post / machine with the id that posts is installed on this Mac.
+        var postInstalledHere = false
+        var machineInstalledHere = false
     }
 
     /// The post id the project selects: `postProfileID`, else the default for its units (what `postProfile` uses today).
@@ -82,7 +85,9 @@ enum ProjectPost {
         }
         return Resolved(post: MachineResolver.effectiveProfile(base, machine: machine), machine: machine,
                         postSource: postSource, machineSource: machineSource,
-                        postCopyDiffers: postDiff, machineCopyDiffers: machineDiff)
+                        postCopyDiffers: postDiff, machineCopyDiffers: machineDiff,
+                        postInstalledHere: installedPost != nil,
+                        machineInstalledHere: machine.map { m in machines.contains { $0.id == m.id } } ?? false)
     }
 
     // MARK: Keeping the copies in step
@@ -152,6 +157,25 @@ enum ProjectPost {
                 + "Job Setup > Update This Project uses the installed one."))
         }
         return out
+    }
+
+    /// What Job Setup says about the copies: which ones post, and the difference warnings.
+    struct Notice: Equatable {
+        var lines: [String]
+        var warnings: [String]
+    }
+
+    static func notice(for p: LoftLineProject, profiles: [PostProfile], machines: [MachineDefinition]) -> Notice {
+        let r = resolve(p, profiles: profiles, machines: machines)
+        var lines: [String] = []
+        if r.postSource == .projectCopy {
+            lines.append("Using this project's copy of \"\(r.post.name)\" v\(r.post.version)" + (r.postInstalledHere ? "" : " (not installed here)"))
+        }
+        if r.machineSource == .projectCopy, let m = r.machine {
+            lines.append("Using this project's copy of the machine \"\(m.name)\"" + (r.machineInstalledHere ? "" : " (not installed here)"))
+        }
+        let warnings = issues(for: p, profiles: profiles, machines: machines).filter { $0.severity == .warning }.map(\.message)
+        return Notice(lines: lines, warnings: warnings)
     }
 
     private static func bed(_ m: MachineDefinition) -> String {
