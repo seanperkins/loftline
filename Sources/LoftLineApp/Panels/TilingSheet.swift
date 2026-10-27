@@ -133,8 +133,14 @@ struct TilingSheet: View {
         failure = nil
         postedFrom = currentInputs
         guard settings.tileWidth > 0, settings.tileHeight > 0 else { files = []; return }
-        files = TiledExport.files(project: document.outputProject, results: document.results, profile: document.postProfile,
-                                  groupByTool: groupByTool, settings: settings)
+        files = Self.tileFiles(document: document, groupByTool: groupByTool, settings: settings)
+    }
+
+    /// The tile programs as the sheet posts them: the document's post, machine and tool notices come first in every tile,
+    /// as they do in the Export G-code sheet.
+    static func tileFiles(document: LoftLineDocument, groupByTool: Bool, settings: TilingSettings) -> [TiledExport.File] {
+        TiledExport.files(project: document.outputProject, results: document.results, profile: document.postProfile,
+                          groupByTool: groupByTool, settings: settings, extraIssues: document.postProfileIssues)
     }
 
     private func save() {

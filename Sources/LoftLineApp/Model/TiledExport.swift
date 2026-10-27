@@ -18,9 +18,10 @@ enum TiledExport {
         var result: GCodeExportResult
     }
 
-    /// Posts and validates every tile that has something to cut.
+    /// Posts and validates every tile that has something to cut. `extraIssues` (the document's post, machine and tool
+    /// notices, as the other exports show them) go first in every tile's issues.
     static func files(project: LoftLineProject, results: [UUID: ToolpathResult], profile: PostProfile,
-                      groupByTool: Bool, settings: TilingSettings) -> [File] {
+                      groupByTool: Bool, settings: TilingSettings, extraIssues: [GCodeIssue] = []) -> [File] {
         let doc = project.document
         let all = GCodeExporter.toolpaths(scope: .all, operations: project.operations, results: results,
                                           groupByTool: groupByTool)
@@ -43,7 +44,7 @@ enum TiledExport {
                 return moved
             }
             var r = GCodeExporter.export(project: p, toolpaths: tile.toolpaths, profile: profile, jobName: title)
-            r.issues.insert(contentsOf: missing, at: 0)
+            r.issues.insert(contentsOf: extraIssues + missing, at: 0)
             let name = String(format: "%@_tile%02d.%@", stem, tile.number, GCodeExporter.fileExtension(for: profile))
             return File(tile: tile, fileName: name, title: title, result: r)
         }

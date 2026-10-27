@@ -77,3 +77,37 @@ import Testing
         #expect(files[0].tile.toolpaths.count == 2)
     }
 }
+
+/// Tiled export carries the same post, machine and tool notices as the other exports.
+@Suite struct TiledExportNoticeTests {
+    @Test func tileFilesCarryTheExtraIssuesFirst() throws {
+        let d = LayoutTiledExportTests().doc()
+        let settings = TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 0.5)
+        let plain = TiledExport.files(project: d.project, results: d.results, profile: BuiltInPosts.avidMach4Inch,
+                                      groupByTool: false, settings: settings)
+        let notice = GCodeIssue(severity: .warning, message: "This project posts with its own copy of a post.")
+        let withNotice = TiledExport.files(project: d.project, results: d.results, profile: BuiltInPosts.avidMach4Inch,
+                                           groupByTool: false, settings: settings, extraIssues: [notice])
+        #expect(withNotice.count == plain.count && !withNotice.isEmpty)
+        for (a, b) in zip(plain, withNotice) {
+            #expect(b.result.issues.first == notice, "\(b.fileName)")
+            #expect(Array(b.result.issues.dropFirst()) == a.result.issues, "nothing else changes")
+            #expect(a.result.text == b.result.text)
+        }
+    }
+
+    @Test func theSheetPassesTheDocumentsNotices() throws {
+        // The sheet reads `document.postProfileIssues`: a project whose post is gone shows the error in every tile.
+        var p = LoftLineProject(document: Document(name: "T", job: JobSetup(width: 110, height: 24, thickness: 0.75)),
+                                postProfileID: "gone")
+        let l = p.document.defaultLayerID
+        p.document.add(AppTestSupport.rect(45, 8, 20, 6, layer: l))
+        p.operations = [OperationFactory.make(kind: .pocket, project: p, library: .seeded, shapeIDs: [p.document.shapes[0].id])!]
+        let doc = LoftLineDocument(project: p, toolLibrary: AppTestSupport.library())
+        doc.calculateNow(doc.project.operations.map(\.id))
+        let files = TilingSheet.tileFiles(document: doc, groupByTool: false,
+                                          settings: TilingSettings(tileWidth: 60, tileHeight: 96, overlap: 0.5))
+        #expect(!files.isEmpty)
+        #expect(files.allSatisfy { f in f.result.issues.contains { $0.severity == .error && $0.message.contains("gone") } })
+    }
+}
