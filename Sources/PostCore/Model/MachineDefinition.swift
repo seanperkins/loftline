@@ -21,6 +21,9 @@ public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
     public var minRPM: Double?
     public var maxRPM: Double?
     public var notes: String?
+    /// See `PostProfile.currentSchemaVersion`: 1 for every file written before the key existed.
+    public static let currentSchemaVersion = 1
+    @SchemaVersion public var schemaVersion: Int = MachineDefinition.currentSchemaVersion
 
     public init(id: String, name: String, units: LengthUnit, limits: MachineLimits, postIDs: [String],
                 rapidRate: Double? = nil, maxFeed: Double? = nil, minRPM: Double? = nil, maxRPM: Double? = nil,
@@ -68,9 +71,17 @@ public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
         return try enc.encode(self)
     }
 
+    /// Throws `SnapshotError.newerSchema` for a file from a newer LoftLine (see `PostProfile.fromJSON`).
     public static func fromJSON(_ data: Data) throws -> MachineDefinition {
-        try JSONDecoder().decode(MachineDefinition.self, from: data)
+        try SnapshotDecoding.decode(MachineDefinition.self, from: data, supported: currentSchemaVersion)
     }
+
+    /// A machine read back from the copy a project carries (`snapshot()`); refused when newer or unreadable.
+    public init(snapshot: JSONValue) throws {
+        self = try SnapshotDecoding.decode(MachineDefinition.self, from: snapshot, supported: Self.currentSchemaVersion)
+    }
+
+    public func snapshot() throws -> JSONValue { try JSONValue(encoding: self) }
 }
 
 /// Machines shipped with LoftLine. Their limits match the built-in posts, so jobs saved before

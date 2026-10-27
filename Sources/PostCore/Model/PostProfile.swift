@@ -64,6 +64,11 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// {MESSAGE} (the pause's text, comment-safe) and {STOP} (M0, or M1 for an optional stop).
     /// nil = `defaultPause`, which stops the spindle first. Optional so older saved posts still load.
     public var pause: [String]?
+    /// The version of this post's JSON layout, 1 for every file written before the key existed. A project or file whose
+    /// copy has a higher version than `currentSchemaVersion` is refused, never read with fields dropped. A later release
+    /// that adds a post field raises this number.
+    public static let currentSchemaVersion = 1
+    @SchemaVersion public var schemaVersion: Int = PostProfile.currentSchemaVersion
 
     public init(id: String, name: String, version: String = "1.0", fileExtension: String = "tap",
                 units: LengthUnit, commentStyle: CommentStyle = .parentheses, lineNumbers: Bool = false,
@@ -134,9 +139,18 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         return try enc.encode(self)
     }
 
+    /// Throws `SnapshotError.newerSchema` for a file from a newer LoftLine, so a store skips it instead of loading it
+    /// with the fields this version does not know dropped.
     public static func fromJSON(_ data: Data) throws -> PostProfile {
-        try JSONDecoder().decode(PostProfile.self, from: data)
+        try SnapshotDecoding.decode(PostProfile.self, from: data, supported: currentSchemaVersion)
     }
+
+    /// A post read back from the copy a project carries (`snapshot()`); refused when newer or unreadable.
+    public init(snapshot: JSONValue) throws {
+        self = try SnapshotDecoding.decode(PostProfile.self, from: snapshot, supported: Self.currentSchemaVersion)
+    }
+
+    public func snapshot() throws -> JSONValue { try JSONValue(encoding: self) }
 }
 
 /// Machine travel envelope in the profile's units.
