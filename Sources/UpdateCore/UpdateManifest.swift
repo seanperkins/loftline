@@ -8,16 +8,29 @@ public struct UpdateEntry: Equatable, Sendable {
     public let sha256: String
     /// The RSA-4096 signature over the archive (decoded from base64).
     public let signature: Data
+    /// This release's posted programs or golden fixtures differ from the release before it.
     public let gcodeChanged: Bool
     public let notes: String
+    /// The newest release, up to this one, that changed them. `gcodeChanged` alone says nothing about a release that was
+    /// skipped: someone updating from 0.2.0 straight to 0.2.3 passes a change made in 0.2.1 even though 0.2.3 itself is clean.
+    public let gcodeChangedIn: String?
 
-    public init(version: String, url: URL, sha256: String, signature: Data, gcodeChanged: Bool, notes: String) {
+    public init(version: String, url: URL, sha256: String, signature: Data, gcodeChanged: Bool, notes: String,
+                gcodeChangedIn: String? = nil) {
         self.version = version
         self.url = url
         self.sha256 = sha256
         self.signature = signature
         self.gcodeChanged = gcodeChanged
         self.notes = notes
+        self.gcodeChangedIn = gcodeChangedIn
+    }
+
+    /// Whether installing this release passes a change to the post output, for someone running `installed`. With
+    /// `gcodeChangedIn` that is whether the change is newer than what they have; a feed without it falls back to the flag.
+    public func changesPostOutput(since installed: String) -> Bool {
+        if let gcodeChangedIn { return UpdateVersion.isNewer(gcodeChangedIn, than: installed) }
+        return gcodeChanged
     }
 }
 
@@ -43,8 +56,12 @@ public enum UpdateManifest {
         else { return nil }
         let notes = raw.notes ?? ""
         guard notes.count <= maxNotesCharacters else { return nil }
+        if let changedIn = raw.gcodeChangedIn {
+            // A release up to this one, named like a version: never a later one.
+            guard isValidVersion(changedIn), !UpdateVersion.isNewer(changedIn, than: raw.version) else { return nil }
+        }
         return UpdateEntry(version: raw.version, url: url, sha256: raw.sha256, signature: signature,
-                           gcodeChanged: raw.gcodeChanged ?? false, notes: notes)
+                           gcodeChanged: raw.gcodeChanged ?? false, notes: notes, gcodeChangedIn: raw.gcodeChangedIn)
     }
 
     /// The version names the downloaded file, so it holds only version characters and starts with a digit.
@@ -85,6 +102,7 @@ public enum UpdateManifest {
         let sig: String
         let gcodeChanged: Bool?
         let notes: String?
+        let gcodeChangedIn: String?
     }
 
     /// An entry for another platform that does not decode must not block ours.

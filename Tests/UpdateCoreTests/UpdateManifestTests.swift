@@ -34,6 +34,33 @@ import UpdateCore
         #expect(try #require(Self.parse(["gcodeChanged": true])).gcodeChanged)
     }
 
+    @Test func gcodeChangedInIsOptionalAndValidated() throws {
+        #expect(try #require(Self.parse()).gcodeChangedIn == nil)
+        #expect(try #require(Self.parse(["gcodeChangedIn": "0.2.1"])).gcodeChangedIn == "0.2.1")
+        #expect(try #require(Self.parse(["gcodeChangedIn": "0.1.0"])).gcodeChangedIn == "0.1.0", "an older release is the usual case")
+        // It names a release up to this one, never a later one, and only version characters.
+        #expect(Self.parse(["gcodeChangedIn": "0.2.2"]) == nil)
+        for bad in ["../1", "1 2", "", "v0.2.1", "0.2.1\n", String(repeating: "1", count: 33)] {
+            #expect(Self.parse(["gcodeChangedIn": bad]) == nil, "\(bad.debugDescription)")
+        }
+        #expect(Self.parse(["gcodeChangedIn": 5]) == nil)
+    }
+
+    @Test func theWarningFollowsTheInstalledVersion() throws {
+        func entry(_ changes: [String: Any?]) throws -> UpdateEntry { try #require(Self.parse(changes)) }
+        // Output changed in 0.2.1; this feed is for 0.2.3, whose own diff against 0.2.2 is clean.
+        let skipped = try entry(["version": "0.2.3", "gcodeChanged": false, "gcodeChangedIn": "0.2.1"])
+        #expect(skipped.changesPostOutput(since: "0.2.0"), "going from 0.2.0 passes the change")
+        #expect(!skipped.changesPostOutput(since: "0.2.1"), "0.2.1 already has it")
+        #expect(!skipped.changesPostOutput(since: "0.2.2"))
+        // A feed without the field falls back to the flag, whatever the installed version.
+        let flagOnly = try entry(["gcodeChanged": true])
+        #expect(flagOnly.changesPostOutput(since: "0.1.0") && flagOnly.changesPostOutput(since: "0.2.0"))
+        #expect(!(try entry([:])).changesPostOutput(since: "0.1.0"))
+        // The field wins over the flag: it says exactly which release changed the output.
+        #expect(!(try entry(["gcodeChanged": true, "gcodeChangedIn": "0.2.1"])).changesPostOutput(since: "0.2.1"))
+    }
+
     @Test func refusesAWrongHost() {
         #expect(Self.parse(["url": "https://evil.example/seanperkins/loftline/releases/download/v1/x.zip"]) == nil)
         #expect(Self.parse(["url": "https://github.com.evil.example/seanperkins/loftline/releases/download/v1/x.zip"]) == nil)

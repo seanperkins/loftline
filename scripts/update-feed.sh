@@ -76,12 +76,34 @@ gcode_changed() {
 }
 if gcode_changed; then CHANGED=true; else CHANGED=false; fi
 
+# The newest release, up to this one, whose posted programs or golden fixtures differ from the release before it (its version,
+# or nothing when none ever did). `gcode_changed` alone misses a skipped release: someone going from 0.2.0 straight to 0.2.3
+# passes a change made in 0.2.1 even though 0.2.3 itself is clean. Releases are ordered by version, not by name or date.
+gcode_changed_in() {
+  local tags=() t i previous current
+  while IFS= read -r t; do
+    tags+=("$t")
+    [ "$t" = "$TAG" ] && break
+  done < <(git tag --list 'v[0-9]*' --sort=version:refname 2>/dev/null)
+  # This release may not be tagged yet (a local run): then it is HEAD, after every tag there is.
+  if [ "${#tags[@]}" -eq 0 ] || [ "${tags[${#tags[@]}-1]}" != "$TAG" ]; then tags+=("$TAG"); fi
+  for (( i = ${#tags[@]} - 1; i >= 1; i-- )); do
+    previous="${tags[i-1]}" current="${tags[i]}"
+    git rev-parse -q --verify "$current^{commit}" >/dev/null 2>&1 || current=HEAD
+    if ! git diff --quiet "$previous" "$current" -- samples/expected Tests/Fixtures/golden 2>/dev/null; then
+      echo "${tags[i]#v}"
+      return 0
+    fi
+  done
+}
+GCODE_IN="$(gcode_changed_in)"
+
 SIGNATURE="$(openssl dgst -sha256 -sign "$KEY" -binary < "$ZIP" | openssl base64 -A)"
 
-python3 - "$TAG" "$ZIP" "$SIGNATURE" "$CHANGED" "$NOTES" "$OUT" "$REPO" <<'PY'
+python3 - "$TAG" "$ZIP" "$SIGNATURE" "$CHANGED" "$NOTES" "$OUT" "$REPO" "$GCODE_IN" <<'PY'
 import hashlib, json, os, sys
 
-tag, zip_path, signature, changed, notes_path, out, repo = sys.argv[1:]
+tag, zip_path, signature, changed, notes_path, out, repo, changed_in = sys.argv[1:]
 version = tag[1:]
 asset = f"LoftLine-{tag}-macos-arm64.zip"
 
@@ -109,8 +131,10 @@ manifest = {
         }
     },
 }
+if changed_in:
+    manifest["entries"]["macos-arm64"]["gcodeChangedIn"] = changed_in
 os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
 with open(out, "w", encoding="utf-8") as f:
     json.dump(manifest, f, indent=1)
-print(f"wrote {out}: macos-arm64 {version}, gcodeChanged={changed}")
+print(f"wrote {out}: macos-arm64 {version}, gcodeChanged={changed}, gcodeChangedIn={changed_in or 'none'}")
 PY

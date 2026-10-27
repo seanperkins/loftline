@@ -8,10 +8,11 @@ import UpdateCore
 /// The update window is a pure function of the controller's state (`UpdatePresentation`), so every state is checked without
 /// a window; one hosting pass per state catches layout crashes.
 @Suite struct UpdateUITests {
-    static func entry(version: String = "0.2.1", gcodeChanged: Bool = false, notes: String = "Fixes and improvements.") -> UpdateEntry {
+    static func entry(version: String = "0.2.1", gcodeChanged: Bool = false, notes: String = "Fixes and improvements.",
+                      gcodeChangedIn: String? = nil) -> UpdateEntry {
         UpdateEntry(version: version, url: URL(string: UpdateManifest.urlPrefix + "v\(version)/LoftLine-v\(version)-macos-arm64.zip")!,
                     sha256: String(repeating: "a", count: 64), signature: Data(repeating: 1, count: 512),
-                    gcodeChanged: gcodeChanged, notes: notes)
+                    gcodeChanged: gcodeChanged, notes: notes, gcodeChangedIn: gcodeChangedIn)
     }
 
     static var everyState: [UpdateController.State] {
@@ -40,6 +41,16 @@ import UpdateCore
         #expect(same.warning == nil)
         let ready = UpdatePresentation.make(for: .readyToInstall(Self.entry(gcodeChanged: true)), currentVersion: "0.2.0")
         #expect(ready.warning?.contains("post output changed") == true, "the warning stays once it is downloaded")
+    }
+
+    @Test func theWarningSurvivesASkippedReleaseAndIsQuietOnceTheChangeIsInstalled() {
+        // The output changed in 0.2.1; this is 0.2.3, whose own diff against 0.2.2 is clean.
+        let entry = Self.entry(version: "0.2.3", gcodeChanged: false, gcodeChangedIn: "0.2.1")
+        for state in [UpdateController.State.available(entry), .readyToInstall(entry)] {
+            #expect(UpdatePresentation.make(for: state, currentVersion: "0.2.0").warning?.contains("post output changed") == true,
+                    "updating straight from 0.2.0 passes the change: \(state)")
+            #expect(UpdatePresentation.make(for: state, currentVersion: "0.2.1").warning == nil, "0.2.1 already has it")
+        }
     }
 
     @Test func sheetOffersTheFourChoices() {

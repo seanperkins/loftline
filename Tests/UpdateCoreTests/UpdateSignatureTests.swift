@@ -172,6 +172,57 @@ private enum Fixture {
         #expect(try #require(Fixture.feed(tag: "v1.0.3", cwd: repo).0).gcodeChanged == true)
     }
 
+    @Test func gcodeChangedInNamesTheLatestOutputChangeSoASkippedReleaseStillWarns() throws {
+        // 0.0.1 changes the post output, 0.0.2 and 0.0.3 do not: someone updating from 1.0.0 straight to 1.0.3 passes the
+        // change, and `gcodeChanged` (this release against the one before it) is false for 1.0.3.
+        let repo = try Self.repo()
+        try Self.commit(repo, "samples/expected/a.nc", "G0 X0\n", message: "first")
+        try Self.git(repo, "tag", "v1.0.0")
+        try Self.commit(repo, "samples/expected/a.nc", "G0 X1\n", message: "post output changes")
+        try Self.git(repo, "tag", "v1.0.1")
+        try Self.commit(repo, "README.md", "one\n", message: "docs")
+        try Self.git(repo, "tag", "v1.0.2")
+        try Self.commit(repo, "README.md", "two\n", message: "docs again")
+        try Self.git(repo, "tag", "v1.0.3")
+        try Self.commit(repo, "Tests/Fixtures/golden/g.tap", "G1\n", message: "a golden changes later")
+        try Self.git(repo, "tag", "v1.0.4")
+
+        let skipped = try #require(Fixture.feed(tag: "v1.0.3", cwd: repo).0)
+        #expect(skipped.gcodeChanged == false)
+        #expect(skipped.gcodeChangedIn == "1.0.1", "later releases do not count towards an earlier one")
+        let changing = try #require(Fixture.feed(tag: "v1.0.1", cwd: repo).0)
+        #expect(changing.gcodeChanged == true)
+        #expect(changing.gcodeChangedIn == "1.0.1")
+        #expect(try #require(Fixture.feed(tag: "v1.0.4", cwd: repo).0).gcodeChangedIn == "1.0.4")
+        #expect(try #require(Fixture.feed(tag: "v1.0.0", cwd: repo).0).gcodeChangedIn == nil, "the first release has nothing to compare with")
+    }
+
+    @Test func tagsAreOrderedByVersionNotByName() throws {
+        // v1.0.10 sorts before v1.0.9 as text. Its predecessor is v1.0.9, and that is the diff that counts.
+        let repo = try Self.repo()
+        try Self.commit(repo, "samples/expected/a.nc", "G0 X0\n", message: "first")
+        try Self.git(repo, "tag", "v1.0.8")
+        try Self.commit(repo, "README.md", "x\n", message: "docs")
+        try Self.git(repo, "tag", "v1.0.9")
+        try Self.commit(repo, "samples/expected/a.nc", "G0 X9\n", message: "post output changes")
+        try Self.git(repo, "tag", "v1.0.10")
+        let entry = try #require(Fixture.feed(tag: "v1.0.10", cwd: repo).0)
+        #expect(entry.gcodeChanged == true)
+        #expect(entry.gcodeChangedIn == "1.0.10")
+        #expect(try #require(Fixture.feed(tag: "v1.0.9", cwd: repo).0).gcodeChangedIn == nil)
+    }
+
+    @Test func noOutputChangeEverMeansNoGcodeChangedIn() throws {
+        let repo = try Self.repo()
+        try Self.commit(repo, "samples/expected/a.nc", "G0 X0\n", message: "first")
+        try Self.git(repo, "tag", "v1.0.0")
+        try Self.commit(repo, "README.md", "docs\n", message: "docs")
+        try Self.git(repo, "tag", "v1.0.1")
+        let entry = try #require(Fixture.feed(tag: "v1.0.1", cwd: repo).0)
+        #expect(entry.gcodeChanged == false)
+        #expect(entry.gcodeChangedIn == nil)
+    }
+
     @Test func notesAreCutAt4000CharactersAndStillParse() throws {
         let (entry, result) = try Fixture.feed(notes: String(repeating: "é", count: 5000))
         let parsed = try #require(entry, "\(result.text)")

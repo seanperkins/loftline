@@ -42,7 +42,8 @@ struct UpdatePresentation: Equatable {
         case .available(let entry), .readyToInstall(let entry):
             return UpdatePresentation(
                 title: "LoftLine \(entry.version) is available", detail: "You have version \(currentVersion).",
-                notes: entry.notes.isEmpty ? nil : entry.notes, warning: entry.gcodeChanged ? gcodeWarning : nil,
+                notes: entry.notes.isEmpty ? nil : entry.notes,
+                warning: entry.changesPostOutput(since: currentVersion) ? gcodeWarning : nil,
                 choices: [.installAndRestart, .installWhenIQuit, .skipThisVersion, .later], defaultChoice: .installWhenIQuit)
         case .downloading:
             return UpdatePresentation(title: "Downloading the update…", detail: "It is checked against its signature before anything is installed.",
