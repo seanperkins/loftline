@@ -1,0 +1,23 @@
+extension UpdateSignature {
+    /// The PKCS#1 `RSA PUBLIC KEY` that every update must verify against. It is also committed as
+    /// `packaging/updater/update-public-key.pub`, which `scripts/verify-feed.sh` reads; a test keeps the two equal.
+    ///
+    /// PLACEHOLDER until `scripts/update-feed.sh genkey` is run for the release: this key was generated through a pipe and
+    /// its private half was never written anywhere, so nothing can be signed for it. An update can never verify until it is
+    /// replaced, which is the safe way for a missing key to fail.
+    public static let publicKeyPEM = """
+        -----BEGIN RSA PUBLIC KEY-----
+        MIICCgKCAgEAocgnS1999EHOmp3gDoASjkAFhfI9J6jOeOY0QUOMZ4jqY74HU2Em
+        oHMrjUKHgJzemgeQExPiil9uo3WV5ZAi5rDBXFnkj/k5HAesGQWvLBH5cEqRs/7U
+        DKR2N/ca713XBqZaLgypyW/o0IlC0Q6BvVZYoWWrZDJfZ8D4F40LDankEFnLk326
+        xuqRSYTrH37B/lex1bKMzmpMWlndNIv+fFjTs+8wRaEwhA1gIL58zBD1fQETVz7Z
+        gklPb9AsAkvQctXs6svjHWL7WiJKZeLf7cHSKGpMgBbHxhyiJlS7H/JatC+FI5a2
+        Dn1ENUoSfMU9477YfY2brxDcAXmbvigiwKoas7XHQtg+pWQIsub7fDX3fHZx0XM9
+        QOtN6qI8AzWmk/Ijf2KDfNa2pBw01LtAiz341LlQiT9NgmWXBFK2o15vOFHh4HRg
+        o2yF1ryG/OduUy6cevBHU8VMsUIrpXrzKggb7bKLyZBZmo0X48HsrBI0KS26jw36
+        g4+buisC4dQPGHCzqFbWhCdP7f3g82jZ3zB277M1l6+bmjWalBDjgZKdaKfpj/sD
+        ki9kCkgJcyQaHqKPkhOQ04nTbu0A97XDoJ9aL9qNWnCkNW8egeH2jpafXypdNe3v
+        9Ha1yxkMPdcJL+FmUbIDOSPvNRplp4VxoTN9tg0rYgU1ytAg8W2340ECAwEAAQ==
+        -----END RSA PUBLIC KEY-----
+        """
+}
