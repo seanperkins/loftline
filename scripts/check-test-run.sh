@@ -1,10 +1,13 @@
 #!/bin/zsh
 # Decides from a test log whether the run passed, without reading any exit code (AGENTS.md: judge a run by its result
-# lines). scripts/test.sh prints one "Test run with N tests [in S suites] passed|failed ..." line per test target (the
-# suite clause depends on the Swift Testing version: Xcode 16.4 omits it). The run counts only if there is at least one
-# such line, every line says "passed", the N values add up to at least <min-tests> (a run that silently executed far
-# fewer tests fails), and, when <expected-result-lines> is given, exactly that many target lines printed. The count
-# catches what the total cannot: a small target that printed nothing still leaves the total above the minimum.
+# lines). scripts/test.sh prints "Test run with N tests [in S suites] passed|failed ..." lines (the suite clause depends
+# on the Swift Testing version: Xcode 16.4 omits it). The run counts only if there is at least one such line, every line
+# says "passed", the N values add up to at least <min-tests> (a run that silently executed far fewer tests fails), and,
+# when <expected-result-lines> is given, exactly that many target lines printed, one per test target. The count catches
+# what the total cannot: a small target that printed nothing still leaves the total above the minimum.
+# A toolchain that runs every target in one process (Xcode 16.4, the macos-15 runner) prints ONE combined line instead;
+# that is accepted. A single line can only be the whole run, not one target's, because <min-tests> is above the test count
+# of the largest target (724): keep it that way.
 # Usage: scripts/check-test-run.sh <logfile> <min-tests> [<expected-result-lines>]
 set -euo pipefail
 
@@ -35,7 +38,16 @@ done < <(grep -E 'Test run with' -- "$log" || true)
 
 (( count > 0 )) || fail "no result line (\"Test run with N tests ... passed\") in $log"
 (( total >= min )) || fail "only $total tests ran across $count result lines, fewer than the minimum $min"
+combined=0
 if [[ -n $expected_lines ]]; then
-  (( count == expected_lines )) || fail "expected $expected_lines result lines (one per test target), found $count"
+  if (( count == 1 && expected_lines != 1 )); then
+    combined=1  # the minimum above has shown this one line is the whole run, not a single target's
+  else
+    (( count == expected_lines )) || fail "expected $expected_lines result lines (one per test target), found $count"
+  fi
 fi
-print -r -- "ok: $total tests passed across $count result lines (minimum $min)"
+if (( combined )); then
+  print -r -- "ok: $total tests passed in one combined result line (minimum $min)"
+else
+  print -r -- "ok: $total tests passed across $count result lines (minimum $min)"
+fi

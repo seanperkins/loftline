@@ -115,6 +115,25 @@ struct ReleaseScriptsTests {
         #expect(try gate(Self.log([116, 712, 6, 338, 330, 6].map(Self.passed)), minimum: "1450", targets: "5").status == 1)
     }
 
+    @Test func acceptsTheOneCombinedLineOfAToolchainThatRunsEveryTargetTogether() throws {
+        // Observed on the macos-15 runner (run 40538185730): Xcode 16.4's `swift test` runs all five targets in one process
+        // and prints "Test run with 1514 tests passed" once, where a newer toolchain prints one line per target.
+        let combined = Self.log([Self.passedWithoutSuites(1514)])
+        let ok = try gate(combined, minimum: "1450", targets: "5")
+        #expect(ok.status == 0, "\(ok.err)")
+        #expect(ok.out.contains("1514") && ok.out.contains("combined"), "\(ok.out)")
+        let failed = try gate(Self.log([Self.failedWithoutSuites(1514)]), minimum: "1450", targets: "5")
+        #expect(failed.status == 1)
+        #expect(failed.err.contains("failed"), "\(failed.err)")
+    }
+
+    @Test func aLoneLineBelowTheMinimumIsOneTargetNotACombinedRun() throws {
+        // The largest target has 724 tests. Its line alone must not be read as "everything ran".
+        let result = try gate(Self.log([Self.passedWithoutSuites(724)]), minimum: "1450", targets: "5")
+        #expect(result.status == 1)
+        #expect(result.err.contains("724") && result.err.contains("1450"), "\(result.err)")
+    }
+
     @Test func rejectsAnExpectedTargetCountThatIsNotANumber() throws {
         #expect(try gate(Self.log([Self.passed(10)]), minimum: "1", targets: "five").status == 1)
         #expect(try gate(Self.log([Self.passed(10)]), minimum: "1", targets: "0").status == 1)
