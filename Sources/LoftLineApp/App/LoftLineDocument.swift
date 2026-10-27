@@ -167,6 +167,9 @@ final class LoftLineDocument: ReferenceFileDocument {
     /// The operation whose live edits are being merged into the current undo step.
     private var liveOperationEdit: (id: UUID, serial: Int)?
     let toolLibrary: ToolLibraryModel
+    /// The library as this document last saw it, so a Tool Database edit can be told from a difference that was
+    /// already there (`ToolSync.applyingLibraryChange`).
+    private var lastLibrary: ToolLibrary
     /// The installed posts and machines the project's copies are compared with (`.shared` in the app).
     let postCatalog: PostProfileCatalog
     let machineCatalog: MachineCatalog
@@ -216,14 +219,17 @@ final class LoftLineDocument: ReferenceFileDocument {
          postCatalog: PostProfileCatalog = .shared, machineCatalog: MachineCatalog = .shared) {
         // The project's post and machine copies are attached here, in memory: the file is not rewritten until a save,
         // and the document starts unedited (the baseline is the attached project).
-        let attached = ProjectPost.attaching(project, profiles: postCatalog.profiles, machines: machineCatalog.machines)
+        let attached = ToolSync.carrying(
+            ProjectPost.attaching(project, profiles: postCatalog.profiles, machines: machineCatalog.machines),
+            library: toolLibrary.library)
         self.project = attached
         self.lastSavedProject = attached
+        self.lastLibrary = toolLibrary.library
         self.postCatalog = postCatalog
         self.machineCatalog = machineCatalog
         self.toolLibrary = toolLibrary
         toolLibrary.$revision.dropFirst().sink { [weak self] _ in self?.designRevision += 1 }.store(in: &cancellables)
-        toolLibrary.$library.dropFirst().sink { [weak self] lib in self?.showToolNames(of: lib) }.store(in: &cancellables)
+        toolLibrary.$library.dropFirst().sink { [weak self] lib in self?.libraryChanged(to: lib) }.store(in: &cancellables)
     }
 
     convenience init() {
@@ -378,15 +384,38 @@ final class LoftLineDocument: ReferenceFileDocument {
         // Keep the post and machine copies what the (possibly changed) selection means: a picked post, a machine that
         // switches the post, a unit conversion and a template all end up with the right copy without knowing about it.
         p = ProjectPost.syncing(p, profiles: postCatalog.profiles, machines: machineCatalog.machines)
+        p = ToolSync.carrying(p, library: toolLibrary.library)
         guard p != project else { return }
         replaceProject(p, actionName: actionName)
+    }
+
+    /// A Tool Database edit reaching this project: a carried tool that was in step with the library follows the edit, as
+    /// one undoable step ("Update Tool from Library"); a difference that already existed is left for the warning.
+    private func libraryChanged(to lib: ToolLibrary) {
+        let old = lastLibrary
+        lastLibrary = lib
+        // `lib` is passed on rather than read back: this runs while the library is changing, and a tool the project
+        // lacked may now be available.
+        perform("Update Tool from Library") { p in
+            p = ToolSync.applyingLibraryChange(old: old, new: lib, to: p)
+            p = ToolSync.carrying(p, library: lib)
+        }
+    }
+
+    /// True when a tool the project carried before is carried now with a change that can alter its toolpaths (anything
+    /// but the name, notes and folder, which only label a tool: `Tool.cutsSameToolpaths`). Calculated toolpaths are then
+    /// stale. A tool that was only added (a new operation's) or dropped does not touch the others; a rename reaches the
+    /// calculated toolpaths by `showToolNames` without recalculating.
+    private static func toolContentChanged(from old: [Tool], to new: [Tool]) -> Bool {
+        old.contains { t in new.first { $0.id == t.id }.map { !$0.cutsSameToolpaths(as: t) } ?? false }
     }
 
     /// Job Setup > Update This Project: each post and machine copy is replaced with the installed one of the same id
     /// (a copy with no installed counterpart is kept). One undo step.
     func updateProjectFromInstalled() {
         perform("Update Post") {
-            $0 = ProjectPost.updated($0, profiles: postCatalog.profiles, machines: machineCatalog.machines)
+            $0 = ToolSync.updated(ProjectPost.updated($0, profiles: postCatalog.profiles, machines: machineCatalog.machines),
+                                  library: toolLibrary.library)
         }
     }
 
@@ -394,8 +423,9 @@ final class LoftLineDocument: ReferenceFileDocument {
         editSerial += 1
         outputSerial += 1
         let old = project
-        if old.document != new.document { designRevision += 1 }
+        if old.document != new.document || Self.toolContentChanged(from: old.tools, to: new.tools) { designRevision += 1 }
         project = new
+        if old.tools != new.tools { showToolNames(of: mergedLibrary) }   // names in the results follow the carried tools
         undoManager?.registerUndo(withTarget: self) { doc in doc.replaceProject(old, actionName: actionName) }
         undoManager?.setActionName(actionName)
         pruneState()
@@ -435,17 +465,21 @@ final class LoftLineDocument: ReferenceFileDocument {
     /// installed post or machine of the same id.
     var postProfileIssues: [GCodeIssue] {
         ProjectPost.issues(for: project, profiles: postCatalog.profiles, machines: machineCatalog.machines)
+            + ToolSync.issues(for: project, library: toolLibrary.library)
     }
 
     /// What Job Setup says about the project's copies.
     var copyNotice: ProjectPost.Notice {
-        ProjectPost.notice(for: project, profiles: postCatalog.profiles, machines: machineCatalog.machines)
+        var notice = ProjectPost.notice(for: project, profiles: postCatalog.profiles, machines: machineCatalog.machines)
+        notice.warnings += ToolSync.issues(for: project, library: toolLibrary.library).map(\.message)
+        return notice
     }
 
     /// True when a copy the project carries differs from the installed one (Job Setup then offers Update This Project).
     var hasCopyDifferences: Bool {
         let r = resolvedPost
         return r.postCopyDiffers != nil || r.machineCopyDiffers != nil
+            || !ToolSync.differences(project, library: toolLibrary.library).isEmpty
     }
 
     /// Post `id` with this job's machine limits applied; the project's own post when `id` is the one it selects.
@@ -638,7 +672,9 @@ final class LoftLineDocument: ReferenceFileDocument {
             var p = project
             p.upsertOperation(op)
             VariableLinks.reconcile(&p, old: project, pending: expressionRecorder.take())
+            p = ToolSync.carrying(p, library: toolLibrary.library)
             guard p != project else { return }
+            if Self.toolContentChanged(from: project.tools, to: p.tools) { designRevision += 1 }
             project = p  // the open undo step already restores the state before the first edit
             outputSerial += 1
             return
@@ -838,7 +874,7 @@ final class LoftLineDocument: ReferenceFileDocument {
     /// Stores a result unless a newer calculation of the same operation already landed.
     private func store(_ r: ToolpathResult, for id: UUID, generation: Int) {
         guard operation(id) != nil, generation > resultGeneration[id] ?? 0 else { return }
-        results[id] = r.renamingTools(from: toolLibrary.library) ?? r
+        results[id] = r.renamingTools(from: mergedLibrary) ?? r
         resultGeneration[id] = generation
         outputSerial += 1
     }
