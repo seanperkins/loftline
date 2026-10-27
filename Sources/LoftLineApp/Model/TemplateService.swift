@@ -14,14 +14,28 @@ enum TemplateService {
         var skipped: Int
     }
 
-    /// Adds the template's toolpaths (converted to the document's units, unique names) and any
-    /// tools the project does not know yet.
+    /// Adds the template's toolpaths (converted to the document's units, unique names) and the template's own tools: a
+    /// template is a project, so its copy of a tool wins over the library's. When the project already carries a
+    /// *different* tool under a template tool's id, that tool is not replaced (its own toolpaths would change): the
+    /// template's tool is added under a fresh id and the added toolpaths use it. An identical tool is reused. A fresh
+    /// copy keeps its tool number; two different cutters sharing one are caught by the existing checks.
+    /// (`library` is kept for the callers; the template's tools no longer defer to it.)
     @discardableResult
     static func apply(_ template: ToolpathTemplate, to project: inout LoftLineProject, library: ToolLibrary) -> Outcome {
         let f = template.units.factor(to: project.document.units)
         let resolved = template.resolve(in: project.document)
         var names = Set(project.operations.map(\.setup.name))
         var outcome = Outcome(added: 0, unmatched: [], skipped: template.entries.count - resolved.count)
+        var remap: [UUID: UUID] = [:]
+        var carry: [Tool] = []
+        for t in template.tools {
+            guard let have = project.tools.first(where: { $0.id == t.id }) else { carry.append(t); continue }
+            if have.samePostingFields(as: t) { continue }
+            var fresh = t
+            fresh.id = UUID()
+            remap[t.id] = fresh.id
+            carry.append(fresh)
+        }
         for (op, matched) in resolved {
             var o = f == 1 ? op : op.scaled(by: f)
             var setup = o.setup
@@ -31,12 +45,12 @@ enum TemplateService {
             setup.name = name
             names.insert(name)
             o = o.with(setup: setup)
+            for (old, new) in remap { o = o.remappingTool(old, to: new) }
             project.upsertOperation(o)
             outcome.added += 1
             if matched == 0 { outcome.unmatched.append(name) }
         }
-        let known = project.mergedTools(with: library)
-        for t in template.tools where known.tool(id: t.id) == nil { project.tools.append(t) }
+        project.tools.append(contentsOf: carry)
         return outcome
     }
 

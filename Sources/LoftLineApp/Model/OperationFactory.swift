@@ -78,6 +78,16 @@ extension AnyOperation {
         }
         return ids
     }
+
+    /// The operation with every reference to tool `from` (primary, clearance, roughing, rest) pointing at `to`. Done on the
+    /// operation's JSON, where a tool id is a UUID string no other field can equal, so it holds for every kind of
+    /// operation and any parameter that later holds a tool.
+    func remappingTool(_ from: UUID, to: UUID) -> AnyOperation {
+        guard referencedToolIDs.contains(from), let data = try? JSONEncoder().encode(self),
+              let text = String(data: data, encoding: .utf8) else { return self }
+        let mapped = text.replacingOccurrences(of: from.uuidString, with: to.uuidString)
+        return (try? JSONDecoder().decode(AnyOperation.self, from: Data(mapped.utf8))) ?? self
+    }
 }
 
 /// Creates operations with sensible, unit-aware defaults (the parameter structs' defaults are
