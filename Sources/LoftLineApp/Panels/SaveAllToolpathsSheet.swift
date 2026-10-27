@@ -46,7 +46,8 @@ struct SaveAllToolpathsSheet: View {
                 }
                 .pickerStyle(.radioGroup)
                 LabeledContent("Machine", value: document.machine?.name ?? "Custom (post limits)")
-                PostProfilePicker(title: "Post processor", selection: $profileID, machine: document.machine)
+                PostProfilePicker(title: "Post processor", selection: $profileID, machine: document.machine,
+                                  carried: document.carriedPostNotInstalled)
             }
             .formStyle(.grouped)
             .frame(height: 190)
@@ -143,7 +144,7 @@ struct SaveAllToolpathsSheet: View {
         let files = GCodeBatchExport.plan(mode: mode, operations: document.outputProject.operations,
                                           results: document.results, jobName: document.document.name, profile: profile)
         posted = GCodeBatchExport.post(files, project: document.outputProject, profile: profile, jobName: document.document.name)
-        let missing = document.postProfileIssues
+        let missing = document.postProfileIssues(includingPost: profileID == initialProfileID)
             + GCodeExporter.missingOperationIssues(document.outputProject.operations, results: document.results)
         if !missing.isEmpty {
             posted = posted.map { item in

@@ -48,6 +48,11 @@ enum ProjectPost {
         return post
     }
 
+    /// A project with no chosen machine whose file records that none was found for its post: no copy, and the marker.
+    static func machineNoneRecorded(_ p: LoftLineProject) -> Bool {
+        p.machineID == nil && p.machineSnapshot == nil && p.machineInferredFor == effectivePostID(p)
+    }
+
     /// The machine copy, when it is readable and is still the selected machine. With no chosen machine the copy is
     /// what was inferred for one particular post, so it only holds for that post.
     static func machineCopy(of p: LoftLineProject) -> MachineDefinition? {
@@ -78,6 +83,10 @@ enum ProjectPost {
         if let copy = machineCopy(of: p) {
             machine = copy; machineSource = .projectCopy
             if let installed = machines.first(where: { $0.id == copy.id }), installed != copy { machineDiff = (copy, installed) }
+        } else if machineNoneRecorded(p) {
+            // The file says no machine was found for this post when it was set up: the post's own limits apply, whatever
+            // machine this Mac has that lists the post (a travel check must not widen because of the Mac it is opened on).
+            machine = nil; machineSource = nil
         } else if let installed = MachineResolver.machine(for: p, machines: machines) {
             machine = installed; machineSource = .installed
         } else {
@@ -103,13 +112,14 @@ enum ProjectPost {
             q.postSnapshot = profiles.first { $0.id == postID }.flatMap { try? $0.snapshot() }
         }
         if q.machineID != nil { q.machineInferredFor = nil }   // a chosen machine needs no marker
-        if machineCopy(of: q) == nil {
+        if machineCopy(of: q) == nil, !machineNoneRecorded(q) {
             // What the selection names: the chosen machine if it is installed, else (no chosen machine) what
             // `MachineResolver` infers for the post. A chosen machine that is not installed gets no copy: the fallback
             // machine would not be what the project selected.
             let installed = q.machineID.map { id in machines.first { $0.id == id } } ?? MachineResolver.machine(for: q, machines: machines)
             q.machineSnapshot = installed.flatMap { try? $0.snapshot() }
-            q.machineInferredFor = installed != nil && q.machineID == nil ? postID : nil
+            // No chosen machine: the marker records what was inferred, including that nothing was ("post limits only").
+            q.machineInferredFor = q.machineID == nil ? postID : nil
         }
         return q
     }
@@ -133,15 +143,32 @@ enum ProjectPost {
     // MARK: Notices
 
     /// An error when the selected post is neither carried nor installed (today's text); a warning for each copy that
-    /// differs from the installed definition of the same id. They reach the export sheets through the document.
+    /// differs from the installed definition of the same id, and one for each copy that has no installed counterpart (its
+    /// lines or limits then come from the file alone). They reach the export sheets through the document.
     static func issues(for p: LoftLineProject, profiles: [PostProfile], machines: [MachineDefinition],
                        includingPost: Bool = true) -> [GCodeIssue] {
         let r = resolve(p, profiles: profiles, machines: machines)
-        var out: [GCodeIssue] = []
+        var out = differenceWarnings(r, includingPost: includingPost)
         if includingPost, case .fallback = r.postSource, let id = p.postProfileID {
-            out.append(GCodeIssue(severity: .error, message:
-                "The project's post \"\(id)\" is not installed; \"\(r.post.name)\" is shown instead. Pick a post before saving."))
+            out.insert(GCodeIssue(severity: .error, message:
+                "The project's post \"\(id)\" is not installed; \"\(r.post.name)\" is shown instead. Pick a post before saving."), at: 0)
         }
+        if includingPost, r.postSource == .projectCopy, !r.postInstalledHere {
+            out.append(GCodeIssue(severity: .warning, message:
+                "This project posts with its own copy of the post \"\(r.post.name)\", which is not installed on this Mac. "
+                + "Check the program's setup, tool-change and ending lines before running it."))
+        }
+        if r.machineSource == .projectCopy, !r.machineInstalledHere, let m = r.machine {
+            out.append(GCodeIssue(severity: .warning, message:
+                "This project's machine \"\(m.name)\" (bed \(bed(m))) is not installed on this Mac, so its bed and travel limits come from the file, "
+                + "not from a machine you set up. Pick your machine in Job Setup to check the program against it."))
+        }
+        return out
+    }
+
+    /// A warning for each copy that differs from the installed definition of the same id.
+    private static func differenceWarnings(_ r: Resolved, includingPost: Bool) -> [GCodeIssue] {
+        var out: [GCodeIssue] = []
         if includingPost, let d = r.postCopyDiffers {
             let versions = d.copy.version == d.installed.version ? "" : " v\(d.copy.version)"
             let installed = d.copy.version == d.installed.version ? "the installed one" : "the installed v\(d.installed.version)"
@@ -174,7 +201,7 @@ enum ProjectPost {
         if r.machineSource == .projectCopy, let m = r.machine {
             lines.append("Using this project's copy of the machine \"\(m.name)\"" + (r.machineInstalledHere ? "" : " (not installed here)"))
         }
-        let warnings = issues(for: p, profiles: profiles, machines: machines).filter { $0.severity == .warning }.map(\.message)
+        let warnings = differenceWarnings(r, includingPost: true).map(\.message)
         return Notice(lines: lines, warnings: warnings)
     }
 

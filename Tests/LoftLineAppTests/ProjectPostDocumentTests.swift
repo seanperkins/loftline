@@ -202,7 +202,8 @@ import Testing
         var p = project(post: "ghost")
         p.postSnapshot = try ghost.snapshot()
         let (doc, _) = Env().document(p)
-        #expect(doc.postProfileIssues.isEmpty && doc.postProfile.id == "ghost")
+        // Carried and not installed here: it posts, with a warning (not an error) that says the copy is not installed.
+        #expect(doc.postProfile.id == "ghost" && doc.postProfileIssues.map(\.severity) == [.warning])
     }
 
     // MARK: user files

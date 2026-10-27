@@ -142,15 +142,25 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// Throws `SnapshotError.newerSchema` for a file from a newer LoftLine, so a store skips it instead of loading it
     /// with the fields this version does not know dropped.
     public static func fromJSON(_ data: Data) throws -> PostProfile {
-        try SnapshotDecoding.decode(PostProfile.self, from: data, supported: currentSchemaVersion)
+        try SnapshotDecoding.decode(PostProfile.self, from: data, supported: currentSchemaVersion).checkingBounds()
     }
 
     /// A post read back from the copy a project carries (`snapshot()`); refused when newer or unreadable.
     public init(snapshot: JSONValue) throws {
-        self = try SnapshotDecoding.decode(PostProfile.self, from: snapshot, supported: Self.currentSchemaVersion)
+        self = try SnapshotDecoding.decode(PostProfile.self, from: snapshot, supported: Self.currentSchemaVersion).checkingBounds()
     }
 
     public func snapshot() throws -> JSONValue { try JSONValue(encoding: self) }
+
+    /// A post is data from anywhere (a project from someone else, a file in the posts folder): the number of decimals it
+    /// asks for is what every coordinate is formatted with, so an absurd one would exhaust memory at export. 0 to 12 covers
+    /// every controller.
+    func checkingBounds() throws -> PostProfile {
+        for (name, value) in [("decimals", decimals), ("feedDecimals", feedDecimals)] where !(0...12).contains(value) {
+            throw SnapshotError.malformed("\(name) must be 0 to 12 (found \(value))")
+        }
+        return self
+    }
 }
 
 /// Machine travel envelope in the profile's units.

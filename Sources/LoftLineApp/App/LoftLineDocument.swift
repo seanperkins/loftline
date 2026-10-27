@@ -463,9 +463,21 @@ final class LoftLineDocument: ReferenceFileDocument {
     /// An error when the project's post is neither carried nor installed (`postProfile` then falls back to the
     /// default, which may be a different dialect and machine), and a warning for each copy that differs from the
     /// installed post or machine of the same id.
-    var postProfileIssues: [GCodeIssue] {
-        ProjectPost.issues(for: project, profiles: postCatalog.profiles, machines: machineCatalog.machines)
+    var postProfileIssues: [GCodeIssue] { postProfileIssues(includingPost: true) }
+
+    /// The same, for a sheet that posts with another post than the project's own: the project's own post's notices (its
+    /// copy differing, or not being installed) do not apply to that program, so they are left out; the machine's and the
+    /// tools' stay.
+    func postProfileIssues(includingPost: Bool) -> [GCodeIssue] {
+        ProjectPost.issues(for: project, profiles: postCatalog.profiles, machines: machineCatalog.machines,
+                           includingPost: includingPost)
             + ToolSync.issues(for: project, library: toolLibrary.library)
+    }
+
+    /// The project's own post when it is carried but not installed on this Mac, so a post picker can still list it.
+    var carriedPostNotInstalled: PostProfile? {
+        let r = resolvedPost
+        return r.postSource == .projectCopy && !r.postInstalledHere ? r.post : nil
     }
 
     /// What Job Setup says about the project's copies.

@@ -45,7 +45,8 @@ struct ExportGCodeSheet: View {
                     Toggle("Group by tool (fewest tool changes)", isOn: $groupByTool)
                 }
                 LabeledContent("Machine", value: document.machine?.name ?? "Custom (post limits)")
-                PostProfilePicker(title: "Post processor", selection: $profileID, machine: document.machine)
+                PostProfilePicker(title: "Post processor", selection: $profileID, machine: document.machine,
+                                  carried: document.carriedPostNotInstalled)
                 if document.isTwoSided {
                     LabeledContent("Side", value: document.activeSide.displayName + " (switch in the Design menu)")
                 }
@@ -161,7 +162,8 @@ struct ExportGCodeSheet: View {
                                                            results: document.results)
         var r = GCodeExporter.export(project: document.outputProject(for: scope), toolpaths: tps, profile: profile,
                                      jobName: document.document.name)
-        r.issues.insert(contentsOf: document.postProfileIssues + missing, at: 0)
+        // The project's own post's notices apply only while the program is posted with that post.
+        r.issues.insert(contentsOf: document.postProfileIssues(includingPost: profileID == initialProfileID) + missing, at: 0)
         result = r
         postedFrom = currentInputs
     }

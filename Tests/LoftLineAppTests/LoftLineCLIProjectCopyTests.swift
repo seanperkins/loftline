@@ -60,7 +60,8 @@ import Testing
         p.postProfileID = "ghost"; p.postSnapshot = try ghost.snapshot()
         let r = LoftLineCLITests.run(["export", try write(p), "--out", "-", "--builtin-only"])
         #expect(r.status == 0, "\(r.err)")
-        #expect(r.out.contains("(ghost footer)") && !r.err.contains("is not installed"))
+        #expect(r.out.contains("(ghost footer)") && !r.err.contains("Pick a post"), "no missing-post error")
+        #expect(r.err.contains("warning:") && r.err.contains("not installed on this Mac"), "but the copy is called out")
     }
 
     @Test func theOverrideReplacesOnlyThePostAndNeverRewritesTheMachineTheProjectInfers() throws {

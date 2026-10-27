@@ -44,7 +44,7 @@ struct JobSetupSheet: View {
                         .help("Machine: bed size, travel limits and the post processors that drive it")
                         PostProfilePicker(title: "Post processor",
                                           selection: Binding(get: { form.postID ?? "" }, set: { form.postID = $0 }),
-                                          machine: machine)
+                                          machine: machine, carried: document.carriedPostNotInstalled)
                             .help("Post processor (G-code dialect) for the selected machine")
                         ProjectCopyNotice(document: document)
                     }

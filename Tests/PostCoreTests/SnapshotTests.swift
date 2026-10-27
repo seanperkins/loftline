@@ -70,3 +70,27 @@ import Testing
         }
     }
 }
+
+/// A post that asks for absurd precision would exhaust memory when numbers are formatted with it.
+@Suite struct SnapshotBoundsTests {
+    @Test func decimalsAreBoundedWhereverAPostIsRead() throws {
+        for decimals in [1_000_000_000, 13, -1] {
+            var post = BuiltInPosts.avidMach4Inch
+            post.decimals = decimals
+            let snapshot = try post.snapshot()
+            do { _ = try PostProfile(snapshot: snapshot); Issue.record("accepted decimals \(decimals)") } catch let e as SnapshotError {
+                guard case .malformed(let why) = e else { Issue.record("wrong error \(e)"); continue }
+                #expect(why.contains("decimals"), "\(why)")
+            }
+            #expect(throws: SnapshotError.self) { try PostProfile.fromJSON(JSONEncoder().encode(snapshot)) }
+            var feed = BuiltInPosts.avidMach4Inch
+            feed.feedDecimals = decimals
+            #expect(throws: SnapshotError.self) { try PostProfile(snapshot: feed.snapshot()) }
+        }
+        for decimals in [0, 3, 4, 12] {
+            var post = BuiltInPosts.avidMach4Inch
+            post.decimals = decimals; post.feedDecimals = decimals
+            #expect(try PostProfile(snapshot: post.snapshot()) == post)
+        }
+    }
+}
