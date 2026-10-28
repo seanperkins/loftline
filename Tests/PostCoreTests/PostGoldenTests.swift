@@ -225,6 +225,54 @@ func bbAndCarbideWriteOnlyTheirCodes(_ id: String) throws {
     #expect(issues.isEmpty, "\(id): \(issues)")
 }
 
+private struct MachineNumbers: Sendable, CustomStringConvertible {
+    let id, name: String
+    let units: LengthUnit
+    let x, y, z, spoilboard: Double
+    let rapid, feed, minRPM, maxRPM: Double?
+    let posts: [String]
+    var description: String { id }
+}
+
+private let newMachines = [
+    MachineNumbers(id: "genmitsu-3018-prover-v2", name: "Genmitsu 3018-PROVer V2", units: .millimeter, x: 290, y: 180, z: 40,
+                   spoilboard: 1.0, rapid: nil, feed: nil, minRPM: nil, maxRPM: nil, posts: ["generic-grbl-mm"]),
+    MachineNumbers(id: "longmill-mk2-30x30", name: "Sienci LongMill MK2 30x30", units: .millimeter, x: 820, y: 868, z: 114,
+                   spoilboard: 1.0, rapid: 4000, feed: 4000, minRPM: nil, maxRPM: nil, posts: ["generic-grbl-mm"]),
+    MachineNumbers(id: "onefinity-woodworker", name: "Onefinity Woodworker (Buildbotics)", units: .inch, x: 32.125, y: 32.125,
+                   z: 5.25, spoilboard: 0.05, rapid: 400, feed: 400, minRPM: 10000, maxRPM: 30000,
+                   posts: ["onefinity-bb-inch", "onefinity-bb-mm"]),
+    MachineNumbers(id: "shapeoko-5-pro-2x2", name: "Shapeoko 5 Pro 2x2 (Carbide Motion)", units: .millimeter, x: 623, y: 623,
+                   z: 155, spoilboard: 1.0, rapid: nil, feed: nil, minRPM: nil, maxRPM: nil,
+                   posts: ["carbide-motion-inch", "carbide-motion-mm"]),
+]
+
+@Test(arguments: newMachines) private func newMachinesCarryTheirNumbers(_ n: MachineNumbers) throws {
+    let m = try #require(BuiltInMachines.machine(id: n.id))
+    #expect(m.name == n.name && m.units == n.units && m.postIDs == n.posts)
+    #expect(m.limits == MachineLimits(xTravel: n.x, yTravel: n.y, zTravel: n.z, maxSpoilboardCut: n.spoilboard))
+    #expect(m.rapidRate == n.rapid && m.maxFeed == n.feed && m.minRPM == n.minRPM && m.maxRPM == n.maxRPM)
+    // Appended after the existing machines, so no existing project infers a new one first.
+    let ids = BuiltInMachines.all.map(\.id)
+    #expect(try #require(ids.firstIndex(of: n.id)) > #require(ids.firstIndex(of: "othermill")))
+}
+
+/// A changed built-in machine would make every saved project's copy "differ": the generic GRBL router keeps its bytes.
+@Test func theGenericGRBLMachineIsUnchanged() {
+    let m = BuiltInMachines.genericGRBL
+    #expect(m.postIDs == ["generic-grbl-mm"] && m.limits == BuiltInPosts.genericGRBLMM.limits)
+}
+
+/// None of the new posts declares a controller, so park-and-probe refuses them.
+@Test func parkAndProbeRefusesTheNewPosts() {
+    for (machine, post) in [(BuiltInMachines.machine(id: "onefinity-woodworker"), BuiltInPosts.onefinityBBInch),
+                            (BuiltInMachines.machine(id: "shapeoko-5-pro-2x2"), BuiltInPosts.carbideMotionMM)] {
+        guard var m = machine else { Issue.record("missing machine"); continue }
+        m.toolChangeProbe = ToolChangeProbe.defaults(for: m)
+        guard case .refused? = m.applied(to: post).toolChangeProbe else { Issue.record("\(post.id) probed"); continue }
+    }
+}
+
 @Test func othermillMachines() throws {
     let pro = try #require(BuiltInMachines.machine(id: "othermill-pro"))
     let original = try #require(BuiltInMachines.machine(id: "othermill"))

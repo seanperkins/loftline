@@ -22,6 +22,14 @@ import Testing
         #expect(MachineResolver.machine(for: p, machines: all) == nil)
     }
 
+    @Test func theGRBLPostsInferTheSameMachinesAsBefore() {
+        // The new GRBL machines list only the mm post, so an inch-post project still infers no machine.
+        let mm = LoftLineProject(document: Document(), postProfileID: BuiltInPosts.genericGRBLMM.id)
+        #expect(MachineResolver.machine(for: mm, machines: BuiltInMachines.all)?.id == BuiltInMachines.genericGRBL.id)
+        let inch = LoftLineProject(document: Document(), postProfileID: BuiltInPosts.genericGRBLInch.id)
+        #expect(MachineResolver.machine(for: inch, machines: BuiltInMachines.all) == nil)
+    }
+
     @Test func selectingMachineSwitchesIncompatiblePost() {
         var p = LoftLineProject(document: Document(units: .inch), postProfileID: BuiltInPosts.genericGRBLMM.id)
         MachineResolver.select(machine: BuiltInMachines.avidPRO6096, in: &p, profiles: BuiltInPosts.all)

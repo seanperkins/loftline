@@ -177,7 +177,41 @@ public enum BuiltInMachines {
         notes: "5.5 x 4.5 x 1.25 in; tool changes are prompted and touched off by the Bantam Tools software.")
 
     /// The Pro before the original: a project with no machine of its own takes the first machine that lists its post.
-    public static let all: [MachineDefinition] = [avidPRO6096, genericGRBL, othermillPro, othermill]
+    /// GRBL owners: the post's spindle range is a guess until it matches the spindle and GRBL's $30/$31 (#100).
+    static let grblRPMNote = "Duplicate this machine (Preferences > Machines), set the copy's Max RPM to your spindle's top speed "
+        + "and choose it in Job Setup; set GRBL's $30 to the same value ($31 to its lowest), or every S word is scaled wrong."
+
+    /// The new GRBL machines list only the mm post (a mm post drives GRBL whatever the document's units), so no machine starts
+    /// listing the inch post and a project's inferred machine is unchanged; `genericGRBL` comes first for the mm post.
+    public static let genmitsu3018ProverV2 = MachineDefinition(
+        id: "genmitsu-3018-prover-v2", name: "Genmitsu 3018-PROVer V2", units: .millimeter,
+        limits: MachineLimits(xTravel: 290, yTravel: 180, zTravel: 40, maxSpoilboardCut: 1.0),
+        postIDs: [BuiltInPosts.genericGRBLMM.id],
+        notes: "Working area from SainSmart's V2 page. " + grblRPMNote)
+
+    public static let longmillMK2 = MachineDefinition(
+        id: "longmill-mk2-30x30", name: "Sienci LongMill MK2 30x30", units: .millimeter,
+        limits: MachineLimits(xTravel: 820, yTravel: 868, zTravel: 114, maxSpoilboardCut: 1.0),
+        postIDs: [BuiltInPosts.genericGRBLMM.id],
+        rapidRate: 4000, maxFeed: 4000,
+        notes: "Travel and the 4,000 mm/min maximum cutting speed from Sienci's MK2 specs. " + grblRPMNote)
+
+    public static let onefinityWoodworker = MachineDefinition(
+        id: "onefinity-woodworker", name: "Onefinity Woodworker (Buildbotics)", units: .inch,
+        limits: BuiltInPosts.onefinityBBInch.limits,
+        postIDs: [BuiltInPosts.onefinityBBInch.id, BuiltInPosts.onefinityBBMM.id],
+        rapidRate: 400, maxFeed: 400, minRPM: 10000, maxRPM: 30000,
+        notes: "Original/Pro on the Buildbotics controller. An Elite runs MASSO, whose G4 P is milliseconds: not this machine.")
+
+    public static let shapeoko5Pro2x2 = MachineDefinition(
+        id: "shapeoko-5-pro-2x2", name: "Shapeoko 5 Pro 2x2 (Carbide Motion)", units: .millimeter,
+        limits: BuiltInPosts.carbideMotionMM.limits,
+        postIDs: [BuiltInPosts.carbideMotionInch.id, BuiltInPosts.carbideMotionMM.id],
+        notes: "Through Carbide Motion with a BitSetter (it measures each tool at M6). Feeds and spindle range unpublished.")
+
+    /// Order matters: a project with no machine takes the first that lists its post, so new machines are appended.
+    public static let all: [MachineDefinition] = [avidPRO6096, genericGRBL, othermillPro, othermill, genmitsu3018ProverV2,
+                                                  longmillMK2, onefinityWoodworker, shapeoko5Pro2x2]
     public static let defaultID = avidPRO6096.id
 
     public static func machine(id: String) -> MachineDefinition? { all.first { $0.id == id } }
