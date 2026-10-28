@@ -41,7 +41,7 @@ cannot know where the material is in machine coordinates, so only a spot in job 
 
 ## Design
 
-Revision 4, after three review rounds (Executor, Auditor, Claude Skeptic, Claude Simplifier). **The builder writes the park-and-probe
+Revision 5, after three review rounds and a verification pass (Executor, Auditor, Claude Skeptic, Claude Simplifier). **The builder writes the park-and-probe
 sequence in code**, the validator recognises it by value, and every condition under which no valid program can be written is a
 **thrown `PostError`** (the export has no "Save Anyway" for it), not an overridable issue.
 
@@ -73,37 +73,45 @@ machine units, with `scaled(by:)` used by both `applied(to:)` and the Machines e
 
 - `parkX`, `parkY`, `parkZ`: machine coordinates (`G53`). Convention, stated in Help and checked: machine Z 0 is the top of travel and
   Z is negative downward; `-zTravel/4 ≤ parkZ ≤ 0`; `|parkX| ≤ xTravel`, `|parkY| ≤ yTravel` (either sign: X/Y conventions differ).
-  `G53` is meaningful only on a homed machine (Help, TESTING). **Every X/Y traverse of the sequence runs at machine Z 0**, the one
-  height that is above the material by construction; `parkZ` is only how far the spindle comes down at the park for the swap.
-- `plateThickness`, `plateSize` (largest dimension): positive.
+  `G53` is meaningful only on a homed machine (Help, TESTING).
+- `topZ`: machine Z of the traverse height, `≤ 0`, default 0. **Every X/Y traverse of the sequence runs at `topZ`**, a height above the
+  material by construction. On GRBL, whose machine Z 0 after homing can be the limit switch's trigger point, Help says to set it a
+  little below 0 (the pull-off distance). `parkZ ≤ topZ`; `parkZ` is only how far the spindle comes down at the park for the swap.
+- `plateThickness`: positive. `plateSize`: the plate's greatest extent (its diagonal, or a round plate's diameter), positive.
 - `probeFeed`: positive, at most 10 in/min. The limit is defined once as 254 mm/min = 10 in/min and compared in the probe's own units
   with a small tolerance, so a machine at the limit stays valid across a units switch and with either post.
-- `probeTravel`: positive, at most Z travel. The probe starts at machine Z 0, so it must reach the plate from the top of travel (the
-  Machines editor says so); a long travel at a slow feed makes each change slower, not less safe.
+- `probeTravel`: positive, at most 2 in (50.8 mm, same tolerance rule). The probe starts where the operator jogged the bit to, just
+  above the plate (step 6), so it is short; on a missed contact the bit goes at most `probeTravel` minus the jog gap below the plate
+  top, which the Machines editor states with the plate thickness beside it.
 - `controller`: `.grbl` (probe `G38.2`, which alarms when it ends without contact) or `.mach4` (probe `G31`).
-- `probeCheckLines: [String]` (Mach4 only): lines written right after the probe and before Z is set, that must stop the program when
-  the probe made no contact. Mach4's `G31` does not stop by itself, and the exact check depends on the controller's set-up, so it is
-  the owner's own line(s), confirmed by the air-probe procedure. A Mach4 probe with no check lines cannot post (thrown error).
-  `problems` refuses a check line that carries an axis word, `M2`, `M30`, `G10`, `G53` or `G54` to `G59`. The builder restates
-  `G90` and the units word after them, so a mode they change cannot reach the `G10` or a later move.
+- `probeCheckCode: String?` (Mach4 only): one call to the owner's own Mach4 macro, written right after the probe and before Z is set,
+  that must stop the program when the probe made no contact. Mach4's `G31` does not stop by itself, and the check depends on the
+  controller's set-up, so it is the owner's macro, confirmed by the air-probe procedure. The value must match
+  `M[1-9][0-9]{2}` followed by optional `P`/`Q`/`R` number words (an allowlist: no other code, no control characters). A Mach4 probe
+  with no check code cannot post. Because a macro can change any mode, the builder writes the post's preamble lines, `G90`, the units
+  word and `G{53+workOffset}` again after it.
 - `workOffset`: 1 to 6 (`G54` to `G59`), default 1. The sequence **selects** it (`G{53+workOffset}`) before it moves to the spot, and
   sets Z with `G10 L20 P{workOffset}`, never `P0`, so the frame that is zeroed is the frame the cuts run in.
 
 `ToolChangeProbe.problems(limits:)` gives these checks to both the Machines editor and the builder.
 
 **How it reaches the post.** `MachineDefinition.applied(to:)` already folds the machine's limits into the effective post. It also
-assigns, unconditionally, the effective profile's `toolChangeProbe` (the machine's, scaled to the post's units, or nil). That field
-of `PostProfile` uses a coding wrapper that is never encoded and never decoded (a `KeyedDecodingContainer` overload that ignores the
+assigns, unconditionally, the effective profile's `toolChangeProbe: ProbeSetting?` (`.on` with the machine's probe scaled to the
+post's units, `.refused` with the machine's refusal, or nil). That field of `PostProfile` uses a coding wrapper that is never encoded and never decoded (a `KeyedDecodingContainer` overload that ignores the
 key **and** a `KeyedEncodingContainer` overload that writes nothing, so a post's encoded bytes do not change), so no post file or
 project copy can carry or switch on probing; a post with "no machine" never probes. `ProgramBuilder` and `GCodeValidator` read it
 from the profile they are given.
 
-**The project's machine copy must match the installed machine.** Part 1 posts with the project's copy of the machine. For probe
-settings that would post another shop's park position, or a plate this shop no longer uses. So when either the project's copy or the
-installed machine of the same id has a `toolChangeProbe`, the two must be equal, and the machine must be installed here; otherwise the
-export is refused with "This project's machine settings for tool changes differ from Preferences > Machines. Use Job Setup > Update
-This Project." Turning probing on in Preferences therefore reaches an existing project only through Update This Project (Help,
-DECISIONS).
+**Probe settings always come from the machine installed here.** Part 1 posts with the project's copy of the machine. For probe
+settings that would post another shop's park position, or a plate this shop no longer uses. So `ProjectPost.resolve`, after choosing
+the machine copy, replaces its `toolChangeProbe` with the installed machine's of the same id. If the copy has a probe and no machine of
+that id is installed, or the installed one has none (including `loftline-cli --builtin-only`), it clears the probe and sets the
+machine's `probeRefusal: String?` instead (a field that, like the profile's, is never encoded or decoded). `applied(to:)` turns the
+two into the profile's `ProbeSetting` and so carries it into every profile it builds (the
+project's post, a post picked in the export or Save All sheet, the preview), and `ProgramBuilder` throws the refusal. Enforcement is
+therefore in one place that every export path and the CLI pass through; `--force` cannot write past it. The message: "This project
+was set up to probe tool changes on a machine that is not set up for it here." Part 1's copy-differs warning still tells the user
+when the rest of the copy differs.
 
 **Schema.** No bump. Part 1's `schemaVersion` has not shipped in a release (it is not in `v0.2.0`) and parts 1 and 2 ship together,
 so an optional `toolChangeProbe` is simply part of machine version 1. `PostProfile` stays at 1.
@@ -120,13 +128,15 @@ With park-and-probe on, the sequence **replaces** the post's `toolChange` lines 
 toolpath and at every tool change:
 
 1. Retract to safe Z (as today, when a tool was cutting); `M9` if coolant is on; `M5`; `G90 G{53+workOffset}`.
-2. `G53 G0 Z0` (top of travel), `G53 G0 X{parkX} Y{parkY}`, then `G53 G0 Z{parkZ}` (down at the park only).
+2. `G53 G0 Z{topZ}`, `G53 G0 X{parkX} Y{parkY}`, then `G53 G0 Z{parkZ}` (down at the park only).
 3. `T{n}`, a comment "Load T{n}: {name}", `M0`.
-4. `G53 G0 Z0` (back to the top, whatever the operator jogged during the swap).
-5. `G0 X{spot} Y{spot}` through `MachineCoordinates.machineXY`, in the post's units, no Z word (the bit crosses at machine Z 0, in
-   the frame step 1 selected).
-6. A comment "Place the touch plate under the bit", `M0`. The plate goes where the bit is, not at a coordinate.
-7. `G91`, `{G38.2 | G31} Z-{probeTravel} F{probeFeed}`, `G90`; then the Mach4 `probeCheckLines`, then `G90 G{20|21}` restated.
+4. `G53 G0 Z{topZ}` (back up, whatever the operator jogged during the swap).
+5. `G0 X{spot} Y{spot}` through `MachineCoordinates.machineXY`, in the post's units, no Z word (the bit crosses at `topZ`, in the
+   frame step 1 selected).
+6. A comment "Clip the probe lead on the bit and touch the plate to it: the probe light must come on. Place the plate under the bit
+   and jog down to about {gap} above it", `M0`, where `gap` is half of `probeTravel`. The plate goes where the bit is.
+7. `G91`, `{G38.2 | G31} Z-{probeTravel} F{probeFeed}`, `G90`; then, on Mach4, the `probeCheckCode` line followed by the post's
+   preamble lines, `G90`, the units word and `G{53+workOffset}`.
 8. `G10 L20 P{workOffset} Z{plateZ}`, `plateZ = MachineCoordinates.z(aboveTop: plateThickness)` (material top: the plate thickness;
    spoilboard: material thickness plus plate thickness).
 9. `G0 Z{clearZ}` with the `G0` written out (after `G38.2` the motion mode is the probe), `clearZ = z(aboveTop: plateThickness +
@@ -136,14 +146,15 @@ toolpath and at every tool change:
     nothing moves down at the spot (a plate left in place is never hit). Then the spindle start, dwell and coolant.
 
 The stops are written as `M0` directly, not through the post's pause lines (a custom pause template need not stop). The probe feed
-is written rounded **down** at `feedDecimals`, the travel at `decimals`; if either formats to zero the post is refused. `G92` is never
-written. The header is unchanged.
+and the travel are written rounded **down** (at `feedDecimals` and `decimals`); if either formats to zero the post is refused. The
+first feed move after the sequence restates `F` (the probe's feed is modal). `G92` is never written. The header is unchanged.
 
 **Refused in the builder (thrown `PostError`):** probing on with no touch-off spot; probing with `useToolLengthOffset`;
-`ToolChangeProbe.problems`; `plateThickness + safeZ` beyond Z travel; a Mach4 probe with no `probeCheckLines`; a probe feed or travel
-that formats to zero; a two-sided job with probing on (`job.isTwoSided` is on the `PostJob`). **Refused before the builder:** tiled
-export with probing on, in `TiledExport.files` before the tile loop (a tile is not marked on the `PostJob`); a machine copy that
-differs from the installed one (§2). The spot's frame is not defined per tile or per side; a later part can add it.
+`ToolChangeProbe.problems`; `plateThickness + safeZ` beyond Z travel; a Mach4 probe with no `probeCheckCode`; a probe feed or travel
+that formats to zero; a `.refused` probe setting (§2); a two-sided job with probing on (`job.isTwoSided` is on the `PostJob`, and a
+side export keeps it). **Tiled export** with probing on is refused in `TiledExport.files`: every tile's result carries the refusal as
+its error and no text (a tile is not marked on the `PostJob`). The spot's frame is not defined per tile or per side; a later part can
+add it.
 
 ### 5. The spot is checked against the whole sheet
 
@@ -154,39 +165,55 @@ At export, whatever is being written (a whole program, one toolpath, one file pe
   material any tool removes. This reuses `LayoutChecks.keepOut` with a zone of the plate footprint at height 0 (it already grows a
   zone by the tool radius and tests every segment below the zone's top).
 
-The footprint is a disc of radius `plateSize` around the spot: the bit may touch the plate anywhere, and the plate may lie at any
-angle, so the plate can reach that far from the spot in any direction.
+The footprint is a disc of radius `plateSize` (the plate's greatest extent) around the spot: the bit may touch the plate anywhere,
+including a corner, and the plate may lie at any angle. Zones are polygons, so the disc is approximated by a polygon that
+circumscribes it. Help notes that stock narrower than twice `plateSize` cannot be probed.
 
-**Where the sheet comes from.** `GCodeExporter.export` gains one argument, `sheetToolpaths: [Toolpath]`: every enabled toolpath of the
-current sheet, all files, ungrouped, built by one helper beside `GCodeExporter.toolpaths` from the project and the calculated results
-(not from the export's own, possibly reduced, project). Its callers pass it: `ExportGCodeSheet`, `LoftLineCLI`, `ValidationReport`
-(once per report, not per operation) and `GCodeBatchExport`. If any enabled toolpath on the sheet has no fresh result, the export is
-refused ("Calculate every toolpath on this sheet before posting with the touch plate"); the CLI calculates the whole sheet when
-probing is on. Each failure is returned the way thrown `PostError`s are, an error message and no text, so there is no Save Anyway.
+**Which sheet.** The sheet whose `JobSetup` is being posted: for an `.operation(id)` export, `sheetID(of: op)` (whatever sheet is on
+screen); for a whole program, the current sheet, as `sideProject` already chooses. An operation whose vectors span sheets
+(`sheetID` nil) is refused with probing on.
+
+**Where its toolpaths come from.** `GCodeExporter.export` gains a required argument (no default), `sheetToolpaths: [Toolpath]`: every
+enabled toolpath of that sheet, all files, ungrouped, built by one helper beside `GCodeExporter.toolpaths` from the project, the
+calculated results and a staleness predicate (the document's `isStale`, which needs `designRevision`). Its callers pass it:
+`ExportGCodeSheet`, `LoftLineCLI`, `ValidationReport` (once per report, not per operation), `GCodeBatchExport` and `TiledExport`.
+With probing on, the app's export, Save All and Check Toolpaths calculate every enabled operation of that sheet (the export sheet's
+`targetOperations()` widens for the `.operation` scope), and so does the CLI. If an enabled toolpath of the sheet still has a missing
+or stale result, the export is refused. Each failure is returned the way thrown `PostError`s are, an error message and no text, so
+there is no Save Anyway.
 
 ### 6. The validator recognises the sequence by value
 
-Only when the profile carries a `ToolChangeProbe`; otherwise every rule is today's. The validator tracks one state per tool change:
-`needsProbe → parked → atSpot → probed → zeroed → cutting`. **The program starts in `needsProbe`**, and a `T` word returns to it, so a
-cut (`G1`/`G2`/`G3`) before `zeroed` is an error: a missing first sequence fails as surely as a later one. A pre-pass marks the
-`G91` / probe / `G90` triple so the incremental warning is not raised for it.
+Only when the profile carries an `.on` probe setting; otherwise every rule is today's. **The program starts in `needsProbe`.** A cut
+(`G1`/`G2`/`G3`) is allowed only in `zeroed`, so a missing first sequence fails as surely as a later one. The states and the only
+moves between them:
 
+| From | Block | To |
+|---|---|---|
+| `needsProbe`, `zeroed` | `G53 G0 Z{topZ}` | `lifted` |
+| `lifted` | `G53 G0 X{parkX} Y{parkY}` (a `G53` X/Y move anywhere else is an error) | `parked` |
+| `parked` | `G53 G0 Z{parkZ}`; the `T` word (a `T` in any other state is an error) | `parked` |
+| `parked` (after its `T`) | `M0` | `swapped` |
+| `swapped` | `G53 G0 Z{topZ}` | `leaving` |
+| `leaving` | the spot rapid, `G0 X Y` equal to `machineXY(spot)` from the validator's own job, no Z | `atSpot` |
+| `atSpot` | `M0` (the placement stop; a probe without it is an error) | `placed` |
+| `placed` | the probe unit (below) | `probed` |
+| `probed` | `G10 L20 P{workOffset} Z v` | `zeroed` |
+
+- `G53` moves whose targets equal `topZ` or the park values (tolerance, so rounding at `decimals` passes) give no coordinate-shift
+  warning and are not counted in the travel extents; X, Y and Z become unknown. A `T` word is allowed only in `parked`, so a program
+  that drops the park keeps its `T` and still fails; a sequence deleted together with its `T` cannot be seen (there is no other sign a
+  tool changed), and the tests do not expect it.
 - **Work offset.** `G{53+workOffset}` is required before the spot rapid; any other `G54` to `G59` is an error.
-- `G53 G0 Z0`, and `G53 G0` with targets equal to the park values (tolerance, so rounding at `decimals` passes): no coordinate-shift
-  warning, not counted in the travel extents; X, Y and Z become unknown. A `G53 G0` X/Y move is an error unless the last `G53` Z was
-  `Z0`. State `parked`; a stop keeps it parked; `G53 G0 Z0` after the stop is required before the spot move.
-- The spot rapid: `G0 X Y` equal to `machineXY(spot)` (computed by the validator from the job), no Z, only while parked: state
-  `atSpot`, no unknown-Z warning.
-- The probe triple: non-motion (it is not checked as a rapid or a cut, and does not widen the Z extent), distance ≤ `probeTravel`,
-  feed ≤ `probeFeed` (plus half a feed digit), the command matching the controller; the motion mode becomes unknown afterwards, and
-  the next axis block without a motion word is an error (not today's warning). `31` and `38.2` join the known G codes. State
-  `probed`.
-- **Check lines are opaque by position.** The blocks after the probe that equal the profile's `probeCheckLines`, in order, are exempt
-  from the garbage, unknown-G and unknown-M warnings and do not set the program-end flag; an axis word in them is an error. The
-  restated `G90` and units word must follow them before the `G10`.
-- `G10 L20 P{workOffset} Z v`: only when `probed`, and `v` equal to `z(aboveTop: plateThickness)` from the validator's own job and
-  machine values (an independent check of the builder's units, mode and thickness, both through the single Z-zero helper). Z = `v`,
-  state `zeroed`; the next Z move must go up, and no move goes below `clearZ` until X/Y has left the spot.
+- **The probe unit, one pre-pass.** A text pre-pass recognises the `G91` line, the probe line, the `G90` line and, on Mach4, the
+  profile's `probeCheckCode` line and the restated preamble, records their physical line range, validates the probe (distance ≤
+  `probeTravel` and feed ≤ `probeFeed`, each plus half a digit; the command matching the controller), and hands the main loop one
+  `probe` event. Blocks and garbage in the range are skipped, so the incremental, unknown-M and program-end rules never see them. On
+  Mach4 a probe unit without the check code is an error. After the unit the motion mode is unknown, and the next axis block without
+  a motion word is an error (not today's warning). `31` and `38.2` join the known G codes.
+- `G10 L20 P{workOffset} Z v`: `v` equal to `z(aboveTop: plateThickness)` from the validator's own job and machine values (an
+  independent check of the builder's units, mode and thickness, both through the single Z-zero helper). Z = `v`; the next Z move must
+  go up, and no move goes below `clearZ` until X/Y has left the spot.
 
 `GCodeReader` (the preview) handles the codes, not the values: `G31`/`G38.x` is non-modal and not drawn, `G10 L20` with Z sets the
 preview's Z, and `G53` gives no "not previewed" note. Tool segments: a program with any `M6` keeps today's rule (a segment starts at
@@ -196,8 +223,8 @@ the tool, so a two-tool probed program previews as two tools with no phantom plu
 ### 7. What the user sees
 
 - Toolpath form: Coolant (Off / Mist / Air).
-- Preferences > Machines: a "Tool change: park and probe" switch with its values, the controller and the Mach4 check lines, the
-  problems shown as the user types.
+- Preferences > Machines: a "Tool change: park and probe" switch with its values, the controller and the Mach4 check code, the
+  problems shown as the user types, and the missed-contact depth (`probeTravel − gap` below the plate top) shown beside the travel.
 - Job Setup: the touch-off spot when the machine has park-and-probe on.
 - Deferred: a canvas marker for the spot, header lines, and adding the probe time to the estimate (the user's tool-change allowance
   covers it).
@@ -211,35 +238,45 @@ the tool, so a two-tool probed program previews as two tools with no phantom plu
 2. Sequence: exact lines for one and two tools, GRBL and Mach4, inch and mm posts, an mm document with an inch post, `.center` origin
    with a datum offset, both Z-zero modes (`plateZ`, `clearZ`), plate thicker than safe Z (nothing below `clearZ` at the spot), probe
    feed rounded down (`4.99` in/min → `F4.9`; inch machine, mm post `126.746` → `F126`), `toolChange` and `G43` absent,
-   `G90 G54` (and `G55` with `workOffset` 2) before the park, every `G53` X/Y move after a `G53 G0 Z0`, `G90 G20`/`G21` after the
-   check lines, `G0` written on the move after the probe.
-3. Refusals: no spot, `G43`, machine problems (including check lines with an axis word or `M30`), plate + safe Z beyond travel,
-   Mach4 with no check lines, feed or travel that formats to zero (mm post with zero feed decimals), two-sided with probing (builder),
-   tiled with probing (`TiledExport.files`), a machine copy with a different `plateThickness`, a copy with probing for a machine not
-   installed, a copy without probing when the installed machine has it (an identical copy posts); spot near an edge (disc radius
-   `plateSize`), in a keep-out zone, in a clamp, over a pocket in another file (file per tool, single operation, CLI), an enabled
-   toolpath on the sheet not calculated. Every refusal gives no text.
-4. Validator: the builder's program, with one realistic bracketed Mach4 check line and one `M1xx` check line, has no coordinate-shift,
-   incremental, unknown-G, unknown-M, garbage, unknown-Z, too-deep or spindle-off warnings and still catches a too-deep cut after the
-   second tool; errors for: wrong `G10` value or `P`, missing or different `G5x`, a `G53` X/Y move not at `Z0`, probe longer or
-   faster than allowed, a park or spot that is not the computed one, a cut before `zeroed` (the first sequence deleted, and a later
-   one), a down move at the spot, an axis word in a check line, an axis block with no motion word after the probe; limits exactly at
-   the rounding edge pass; without a probe on the profile, today's warnings.
+   `G90 G54` (and `G55` with `workOffset` 2) before the park, every `G53` X/Y move after a `G53 G0 Z{topZ}` (`topZ` 0 and −1 mm),
+   the Mach4 check code followed by the preamble, `G90`, units and `G5x`, `G0` written on the move after the probe, `F` restated on
+   the first feed move after the sequence, the same lines with line numbers on.
+3. Refusals: no spot, `G43`, machine problems (a check code that is not one `M1xx`–`M9xx` call with `P`/`Q`/`R` words, e.g. `M3`,
+   `G28`, `M6`, `M100 X1`, a newline; `parkZ` above `topZ`; travel over 2 in), plate + safe Z beyond travel, Mach4 with no check code,
+   feed or travel that formats to zero (mm post with zero feed decimals), two-sided with probing (builder, also a single side),
+   tiled with probing (every tile's result), a project copy with probing for a machine not installed or installed without probing
+   (also `--builtin-only`, and `--force` does not write past it); a copy with a different `plateThickness` posts the installed value;
+   spot near an edge (disc of radius `plateSize`, a 3 × 3 in plate touched at a corner), in a keep-out zone, in a clamp, over a pocket
+   in another file (file per tool, single operation, CLI); a multi-sheet project with a pocket under sheet B's spot and a single
+   toolpath of sheet B exported while sheet A is current (app helper and CLI); an operation spanning sheets; a sheet toolpath made
+   stale by a vector edit. Every refusal gives no text, through each entry point: the export sheet with the project's post and with a
+   picked post, Save All, Check Toolpaths, tiled, the CLI.
+4. Validator: the builder's program, with a Mach4 check code `M199 P1`, has no coordinate-shift, incremental, unknown-G, unknown-M,
+   garbage, unknown-Z, too-deep or spindle-off warnings and still catches a too-deep cut after the second tool; errors for: wrong
+   `G10` value or `P`, missing or different `G5x`, a `G53` X/Y move not after `topZ`, a `T` outside `parked`, `T2`, `G53 G0 Z0`, spot
+   with no park or swap stop, no placement stop before the probe, probe longer or faster than allowed, a Mach4 probe unit without the
+   check code, a park or spot that is not the computed one, a cut before `zeroed` (the first sequence deleted, and a later one with its
+   `T` kept), a down move at the spot, an axis block with no motion word after the probe; limits exactly at the rounding edge pass;
+   without a probe on the profile, today's warnings.
 5. A post JSON carrying a `toolChangeProbe` key posts no sequence, with and without a machine; `applied(to:)` with probing off clears
    it; a post's encoded bytes are unchanged by the new field.
 6. Preview: a probed two-tool program gives two tool segments, no phantom plunge, Z after `G10 L20`; the Avid `T{T} M6` program and a
    program that pre-stages `T2` after `T1 M6` keep today's segments.
-7. Machines: a machine with a probe round-trips at schema 1; `probeFeed` 10 in/min survives the units switch and posts with an mm post.
+7. Machines: a machine with a probe round-trips at schema 1; `probeFeed` 10 in/min and `probeTravel` 2 in survive the units switch
+   and post with an mm post; a 201 mm travel on an inch post (7.913386 in) floors to `7.9133` and passes.
 8. Goldens, samples and `scripts/check-samples.sh` unchanged; the full suite green.
 
 ## Risks
 
-- **Mach4 probing.** `G31` does not alarm without contact; the program relies on the owner's `probeCheckLines`, confirmed by the
-  air-probe procedure in TESTING.md (plate held under the bit; no plate with a hand on the E-stop; bit over bare wood; `G10 L20 P1`
-  sets G54 Z while G54 is active; a dry run to the park position confirms that `G53 Z0` is the top of travel and the `G53` signs).
-  The feature is off by default and a Mach4 probe cannot post without check lines.
-- **Probe time.** The probe starts at the top of travel, so each change probes up to `probeTravel` at `probeFeed` (8 in at 10 in/min
-  is 48 s). Slower, never less safe; a two-stage seek probe can come later.
+- **Mach4 probing.** `G31` does not alarm without contact; the program relies on the owner's check macro, confirmed by the
+  air-probe procedure in TESTING.md (plate held under the bit; a no-contact run at full `probeTravel` over scrap with a hand on the
+  E-stop, which must stop at the macro; bit over bare wood; `G10 L20 P1` sets G54 Z while G54 is active; a dry run to the park
+  position confirms that `G53 Z{topZ}` is near the top of travel, clear of the limit switch, and the `G53` signs). The feature is off
+  by default and a Mach4 probe cannot post without the check code.
+- **A missed contact.** With the lead off or the plate not under the bit, the probe still runs its full travel with the spindle off:
+  the bit ends up to `probeTravel − gap` below the plate top (at most 1 in below it with the 2 in limit and the stated half-travel
+  gap), which may reach into the material. The placement stop's continuity check (the probe light) and the short travel bound it.
+- **The operator jogs.** The jog at the placement stop is by hand; a jog too low is a jog into the plate, as with any touch plate.
 - **Park in machine coordinates.** A wrong value can drive the gantry into a fixture; the checks cover the envelope only.
 - **A plate left on the material.** The re-entry never moves down at the spot, but a plate left there is still on the work.
 - **Spoilboard mode.** The new Z comes from the probed material top minus the entered thickness, so a wrong thickness moves
@@ -259,7 +296,7 @@ air-probe procedure, the coolant check), Help (Toolpaths, Machines, Job Setup).
 
 ## Order of work
 
-Coolant ships as its own commits first (model, stamping, builder, form). Then: 2. `ToolChangeProbe`, the never-coded profile field,
-`applied(to:)`, the copy-must-match refusal and the touch-off spot. 3. The sequence and the builder's refusals. 4. Validator states
+Coolant ships as its own commits first (model, stamping, builder, form). Then: 2. `ToolChangeProbe`, `ProbeSetting` as the
+never-coded profile field, `applied(to:)`, the installed-machine rule in `resolve` and the touch-off spot. 3. The sequence and the builder's refusals. 4. Validator states
 and the preview reader. 5. `sheetToolpaths`, the whole-sheet spot check and the tiled refusal. 6. UI (Machines, Job Setup). 7. Docs
 and the air-probe procedure.
