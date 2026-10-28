@@ -103,7 +103,7 @@ struct JobSetupSheet: View {
                                                                  set: { form.job.touchOffSpot = Vec2(form.job.touchOffSpot?.x ?? form.job.width / 2, $0) }),
                                         units: u, help: "Where the touch plate goes on the material, from its lower-left corner")
                             if form.job.touchOffSpot == nil {
-                                Button("Use the material's centre") { form.job.touchOffSpot = Vec2(form.job.width / 2, form.job.height / 2) }
+                                Button("Use the material's center") { form.job.touchOffSpot = Vec2(form.job.width / 2, form.job.height / 2) }
                                     .help("Sets the spot; the export refuses until it is set")
                             }
                             Text("The plate must lie on material no toolpath on this sheet removes, off clamps and keep-out zones.")

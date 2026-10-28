@@ -210,7 +210,7 @@ machine's "Tool change: park and probe" settings. Do every step with the spindle
 3. **No contact.** Over scrap, with the plate NOT under the bit, continue past the placement stop. GRBL must alarm; on Mach4 your
    zero macro must stop the program. The bit must not go further than the probe travel.
 4. **Probe already touching.** Start the probe with the plate already touching the bit (the light on). The program must stop (GRBL
-   is expected to raise "probe fail"; Mach4's behaviour depends on your macro).
+   is expected to raise "probe fail"; Mach4's behavior depends on your macro).
 5. **The zero.** After a normal probe, remove the plate, jog to work Z 0 over bare stock: the bit must just touch the material top
    (a paper check). Do this in both Z-zero modes and with every post the machine lists (inch and mm: the macro's `P` is in the
    program's units), and check that the zero landed in the work offset the machine is set to (G54 for 1).
