@@ -54,11 +54,12 @@ extension AnyOperation {
         }
     }
 
-    /// The operation with its operator pause removed, to compare what affects the toolpath.
-    var withoutPause: AnyOperation {
+    /// The operation without its post-time settings (operator pause, coolant), to compare what affects the toolpath.
+    var withoutPostSettings: AnyOperation {
         var copy = self
         var s = copy.editableSetup
         s.pauseAfter = nil
+        s.coolant = nil
         copy.editableSetup = s
         return copy
     }

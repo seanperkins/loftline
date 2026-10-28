@@ -54,7 +54,7 @@ enum GCodeBatchExport {
             }
         case .filePerToolpath:
             for op in enabled {
-                let tps = results[op.id]?.toolpaths ?? []
+                let tps = GCodeExporter.operationToolpaths(op, results: results)
                 guard !tps.isEmpty else { continue }
                 files.append(PlannedGCodeFile(
                     fileName: GCodeExporter.suggestedFileName(jobName: jobName, operationName: op.setup.name,

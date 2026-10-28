@@ -32,11 +32,23 @@ enum GCodeExporter {
                           results: [UUID: ToolpathResult], groupByTool: Bool) -> [Toolpath] {
         switch scope {
         case .operation(let id):
-            return results[id]?.toolpaths ?? []
+            guard let op = operations.first(where: { $0.id == id }) else { return results[id]?.toolpaths ?? [] }
+            return operationToolpaths(op, results: results)
         case .all:
-            let tps = operations.filter(\.setup.isEnabled).flatMap { withPause($0.setup.pauseAfter, results[$0.id]?.toolpaths ?? []) }
+            let tps = operations.filter(\.setup.isEnabled).flatMap { withPause($0.setup.pauseAfter, operationToolpaths($0, results: results)) }
             return groupByTool ? ToolpathOrdering.groupedByTool(tps) : tps
         }
+    }
+
+    /// One operation's calculated toolpaths with its post-time settings that belong on every toolpath (coolant).
+    /// Every export path collects an operation's toolpaths through here; the pause is added only for whole programs.
+    static func operationToolpaths(_ op: AnyOperation, results: [UUID: ToolpathResult]) -> [Toolpath] {
+        withCoolant(op.setup.coolant, results[op.id]?.toolpaths ?? [])
+    }
+
+    /// `toolpaths` with `coolant` on every one (unlike a pause, which belongs only after the last).
+    static func withCoolant(_ coolant: Coolant?, _ toolpaths: [Toolpath]) -> [Toolpath] {
+        toolpaths.map { var t = $0; t.coolant = coolant; return t }
     }
 
     /// `toolpaths` (one operation's) with the operation's operator pause on the last one that cuts.

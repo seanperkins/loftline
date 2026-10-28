@@ -11,6 +11,7 @@ extension LoftLineProject {
         let a = operations[i], b = operations[i + 1]
         if a.kind == .relief3D || b.kind == .relief3D { return "3D toolpaths cannot be merged." }
         if a.setup.toolID != b.setup.toolID { return "The next toolpath uses a different tool." }
+        if a.setup.coolant != b.setup.coolant { return "The next toolpath uses a different coolant." }
         // A merged operation is one toolpath; a stop in the middle of it has nowhere to go.
         if a.setup.pauseAfter != nil { return "This toolpath pauses the machine after it. Turn the pause off to merge it with the next one." }
         if a.setup.isEnabled != b.setup.isEnabled {
@@ -31,6 +32,7 @@ extension LoftLineProject {
         merged.setup.isEnabled = a.setup.isEnabled && b.setup.isEnabled
         // The pause after the last part is the pause after the whole.
         merged.setup.pauseAfter = b.setup.pauseAfter
+        merged.setup.coolant = a.setup.coolant
         operations.replaceSubrange(i...(i + 1), with: [.merge(merged)])
         return merged.setup.id
     }
@@ -38,7 +40,12 @@ extension LoftLineProject {
     /// Puts a merged operation's toolpaths back in its place; its pause goes back on the last one.
     mutating func splitMerged(_ id: UUID) {
         guard let i = operationIndex(id), case .merge(let m) = operations[i] else { return }
-        var children = m.params.children
+        var children = m.params.children.map { child in
+            var c = child, s = child.editableSetup
+            s.coolant = m.setup.coolant
+            c.editableSetup = s
+            return c
+        }
         if let last = children.indices.last {
             var s = children[last].editableSetup
             s.pauseAfter = m.setup.pauseAfter

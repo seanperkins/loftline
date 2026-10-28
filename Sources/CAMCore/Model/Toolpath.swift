@@ -23,6 +23,9 @@ public struct Toolpath: Codable, Hashable, Identifiable, Sendable {
     /// The operator stop that follows this toolpath in the program. Set when toolpaths are collected
     /// for export, from the operation's `pauseAfter`; generators leave it nil.
     public var pauseAfter: PauseStep?
+    /// Coolant while this toolpath cuts (nil = Off). Set when toolpaths are collected for export, from the
+    /// operation's `coolant`; generators leave it nil.
+    public var coolant: Coolant?
     /// Depth below the material top (document units) above which the material is already gone
     /// where this toolpath cuts: an operation's start depth, or the carved surface a projected
     /// toolpath follows. The flute check measures the cut from there. Nil = from the top. Set by
