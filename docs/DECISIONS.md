@@ -941,3 +941,26 @@
   that declares no controller still writes M1; its owner can declare GRBL or put M0 in its pause template. The program
   header lists an M1 as "M1, stops only with Optional Stop on" instead of claiming the machine waits; the job sheet and the
   pause form say what the post writes. LinuxCNC keeps M1 (it has the switch).
+- **othermill-post — built-in Othermill posts and machines, with the Bantam Tools software's setup checked at export (#114).**
+  Spec: docs/specs/2026-10-28-othermill-post-design.md (revision 4; four reviewers, three rounds). `othermill-inch` and
+  `othermill-mm` write only codes the software runs (a line it cannot run is skipped silently): units, `G90 G94 G17 G55`, a
+  tool change of `M5`, a comment and `T{n} M6`, a 4 s dwell, helices as lines, `M30`; the machines `othermill-pro` (listed
+  first, since a project with no machine takes the first that lists its post) and `othermill`. Dissent: Autodesk's
+  `othermill.cps` leaves M6 off by default and refuses a second tool; LoftLine allows several tools because Bantam's
+  Troubleshooting page says `M6 T1` prompts for the swap and touches off. That is the weakest fact, and TESTING's owner
+  check runs a two-tool file first. The software puts file X0 Y0 Z0 at the stock's front-left top, so `OthermillSetup.issues`
+  (PostCore, called beside `ToolChangeZ` in `GCodeExporter.export`) reports as errors a Z zero other than the material top,
+  an XY origin other than the lower left, a non-zero datum offset (nil counts as zero, so tiles pass), a move or the move
+  home past the X/Y travel measured from that corner, and coolant (one error naming the toolpaths); and warns when the stock
+  plus the highest Z any move, Home Z, Safe Z or a raised approach reaches is more than the Z travel, and when the travel,
+  feed, rapid or spindle range checked against is bigger than the Othermill's. Errors, not a refusal: they keep Save Anyway
+  because the Z-zero convention is the vendor's documented default, not confirmed for imported G-code, and nothing in the
+  post processor changes, so the post editor's sample (with Mist) and the golden loops still post every built-in. The posts
+  are recognised by id, which a project's copy keeps, so a later edit to the built-in cannot switch the checks off for saved
+  projects; a duplicate under a new id loses them (Help says so), and a LoftLine older than this has none. The optional
+  stop writes M0 by id too (TinyG treats M1 as M0, so this is a labelling choice), unlike GRBL's by-value rule from #115: an
+  edited post that keeps an Othermill id still writes M0. The program header keeps "the machine waits for Cycle Start" (the
+  Bantam button is Resume; changing it would move every post's golden bytes for a synonym). `goldenProgramsPassTheValidator`
+  checks the Othermill rows on the Avid's limits, since its 12 x 8 in fixture cannot fit the 5.5 x 4.5 in bed, and a separate
+  small job checks their own limits. `samples/expected/othermill-*` are regression bytes, not runnable Othermill files: the
+  samples are 24 x 12 and 12 x 8 in, posted with their own machine (the Avid).

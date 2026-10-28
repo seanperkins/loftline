@@ -207,6 +207,20 @@ machine defined for it in Preferences ▸ Machines:
    seconds, not milliseconds. LinuxCNC shows the tool's name in the `MSG` line; stock GRBL drops comments, so your sender
    may not show it: check the loaded tool against the file's name.
 
+**Othermill (Bantam Tools software):** the Othermill posts have not run on a machine. Each check below confirms something the
+post assumes (in brackets); stop and report if one does not hold.
+1. Job Setup: the Othermill Pro machine, a 4 x 3 x 0.25 in sheet, Z zero at the material top, XY origin lower left, Home Z
+   0.5 in. Export shows no errors. Load the `.gcode` in the Bantam software with Material Size 4 x 3 x 0.25 in.
+2. The preview places the cuts on the stock as in LoftLine, with no collision or red warnings [file X0 Y0 Z0 is the stock's
+   front-left top; the file is placed by its origin, not its toolpaths' outline]. An outside profile reaches past the stock
+   by the tool radius: check that it stays on the bed.
+3. No line is skipped or reported, including the header comments with `:`, `[` and `]` [they load].
+4. Air-cut a two-tool file with the spindle off, Z zero raised 0.5 in: at `T1 M6` before the first cut the software asks for
+   the tool and touches it off, even with T1 already loaded; at the second tool it pauses, asks for the swap and touches off
+   again [both happen].
+5. A pause step: the program stops and Resume continues [the stop always happens; its message may show with a leading comma].
+6. Note whether 1.35 in is the axis travel or the room under the collet [axis travel].
+
 **Editing a post (Toolpaths ▸ Post Processors…):**
 1. Select the Avid inch post: the form is read-only and the sample program shows "Posts the sample job cleanly".
 2. Duplicate it, change the footer, Save. The posts folder (Folder button) holds `<id>.json`; the post is listed under Custom.
