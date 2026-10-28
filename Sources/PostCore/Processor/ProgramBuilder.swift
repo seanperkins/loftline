@@ -47,6 +47,7 @@ struct ProgramBuilder {
         let probe = try probeForBuild(active)
 
         var w = GCodeWriter(profile: profile, safeZ: coords.safeZ)
+        for line in render(profile.prelude ?? []) { w.raw(line) }
         if profile.headerComments { writeHeader(into: &w, toolpaths: active) }
         w.code(profile.unitsCode)
         for line in render(profile.preamble) { w.code(line) }
@@ -110,6 +111,7 @@ struct ProgramBuilder {
     private func baseValues() -> [String: String] {
         [
             "SAFE_Z": fmt(coords.safeZ),
+            "APPROACH_Z": fmt(approachZ),
             "HOME_X": fmt(setup.home.x),
             "HOME_Y": fmt(setup.home.y),
             "HOME_Z": fmt(coords.homeZ),

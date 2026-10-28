@@ -242,10 +242,20 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// The longest dwell a program may hold (spin-up or toolpath): an hour. Beyond it `{MILLISECONDS}` could print `INF`.
     public static let maxDwellSeconds = 3600.0
 
-    /// The dwell template's values: `{SECONDS}` (3 s → `3`) and `{MILLISECONDS}` (3 s → `3000`; whole, `%.0f`), for a
-    /// controller whose `G4 P` is milliseconds (MASSO, NcStudio, UCCNC by default; #99 item 1).
+    /// The dwell template's values: `{SECONDS}` (3 s → `3`), `{MILLISECONDS}` (3 s → `3000`; whole, `%.0f`), for a
+    /// controller whose `G4 P` is milliseconds (MASSO, NcStudio, UCCNC by default; #99 item 1), and `{DECIMAL_SECONDS}` (3 s →
+    /// `3.000`, always a dot), for Syntec's `G4 X`, the one dwell word its manual does not leave to a machine setting (#110).
     public func dwellValues(seconds: Double) -> [String: String] {
-        ["SECONDS": NumberFormat.compact(seconds), "MILLISECONDS": NumberFormat.fixed(seconds * 1000, decimals: 0)]
+        ["SECONDS": NumberFormat.compact(seconds), "MILLISECONDS": NumberFormat.fixed(seconds * 1000, decimals: 0),
+         "DECIMAL_SECONDS": NumberFormat.fixed(seconds, decimals: 3)]
+    }
+
+    /// Whether a dwell of `seconds` is written: it must be positive and print as a non-zero number in the dwell template (below
+    /// 0.0005 s every placeholder prints zero, which Syntec's X does not accept). The writer and the validator's toolpath check
+    /// both ask this, so a dwell the program leaves out is never counted as one.
+    public func writesDwell(seconds: Double) -> Bool {
+        guard seconds > 0 else { return false }
+        return dwellValues(seconds: seconds).filter { dwell.contains("{\($0.key)}") }.allSatisfy { (Double($0.value) ?? 1) != 0 }
     }
 
     /// Why this post's dwell would be written in the wrong unit, or nil. The editor lists it; the builder refuses to post with

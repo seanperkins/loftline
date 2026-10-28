@@ -36,10 +36,18 @@ struct GCodeWriter {
         append(text)
     }
 
+    /// A line written as it is, never numbered: the post's program wrapper (`prelude`), which a controller reads before any
+    /// numbered block.
+    mutating func raw(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if !trimmed.isEmpty { lines.append(trimmed) }
+    }
+
     private mutating func append(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        if trimmed.hasPrefix("(") || trimmed.hasPrefix(";") || !profile.lineNumbers {
+        // A `%` is the tape's end marker, never a numbered block.
+        if trimmed.hasPrefix("(") || trimmed.hasPrefix(";") || trimmed == "%" || !profile.lineNumbers {
             lines.append(trimmed)
         } else {
             lineNumber += 10
@@ -140,7 +148,7 @@ struct GCodeWriter {
     }
 
     mutating func dwell(seconds: Double) {
-        guard seconds > 0 else { return }
+        guard profile.writesDwell(seconds: seconds) else { return }
         code(TemplateRenderer(values: profile.dwellValues(seconds: seconds)).render(profile.dwell))
     }
 
