@@ -106,6 +106,15 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         ["M5", style == .semicolon ? "; {MESSAGE}" : "(MSG, {MESSAGE})", "{STOP}"]
     }
 
+    /// The post as every reader takes it: an empty pause list means the default pause. An empty template would post no stop at
+    /// all, so a file or a project copy that holds one is read this way wherever a post is read (the posts folder, an import,
+    /// a project's copy).
+    public var normalized: PostProfile {
+        var p = self
+        if p.pause?.isEmpty == true { p.pause = nil }
+        return p
+    }
+
     /// The pause template in effect.
     public var pauseLines: [String] { pause ?? Self.defaultPause(for: commentStyle) }
 

@@ -17,6 +17,8 @@ struct PostProfileStore {
     var readsUserFiles = true
     /// How Delete removes a file: to the Trash, so a post (machine output) can be recovered. Tests pass their own.
     var trash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+    /// How a new post's bytes are written to the file `saveNew` created (tests make it fail).
+    var write: (FileHandle, Data) throws -> Void = { try $0.write(contentsOf: $1) }
 
     init(directory: URL = ToolLibraryStore.supportDirectory.appendingPathComponent("posts", isDirectory: true)) {
         self.directory = directory
@@ -63,9 +65,7 @@ struct PostProfileStore {
                 skip("a post file must be named after its id: \(profile.id).json"); continue
             }
             guard claimed.insert(profile.id).inserted else { skip("another file already has the id \"\(profile.id)\""); continue }
-            var p = profile
-            if p.pause?.isEmpty == true { p.pause = nil }   // an empty pause template stops nothing: it means the default
-            user.append(p)
+            user.append(profile.normalized)
         }
         let userIDs = Set(user.map(\.id))
         return (BuiltInPosts.all.filter { !userIDs.contains($0.id) } + user, skipped)
@@ -114,22 +114,38 @@ struct PostProfileStore {
         return url
     }
 
+    struct IDTaken: LocalizedError {
+        var id: String
+        var errorDescription: String? {
+            "A post with the id \"\(id)\" was just saved elsewhere; it is installed now, or rename that file."
+        }
+    }
+
     /// Saves a new post without ever replacing a file: created exclusively, and when the file now exists (another window
-    /// saved a post with this id) under the next free id. Returns the post as saved.
-    func saveNew(_ profile: PostProfile) throws -> PostProfile {
+    /// saved a post with this id) under the next free id, or, with `keepingID` (a project's post, which the project finds by
+    /// its id), not at all. A write that fails removes the file it created, so no partial file holds the id. Returns the post as
+    /// saved.
+    func saveNew(_ profile: PostProfile, keepingID: Bool = false) throws -> PostProfile {
         guard Self.isSafeID(profile.id) else { throw UnsafeID(id: profile.id) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var p = profile
         for _ in 0..<1000 {
-            let fd = open(fileURL(for: p.id).path, O_WRONLY | O_CREAT | O_EXCL, 0o644)
+            let url = fileURL(for: p.id)
+            let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL, 0o644)
             if fd < 0 {
                 guard errno == EEXIST else { throw CocoaError(.fileWriteUnknown) }
+                if keepingID { throw IDTaken(id: p.id) }
                 p.id = newID(from: p.id)
                 continue
             }
             let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
-            try handle.write(contentsOf: p.toJSON())
-            try handle.close()
+            do {
+                try write(handle, p.toJSON())
+                try handle.close()
+            } catch {
+                try? FileManager.default.removeItem(at: url)
+                throw error
+            }
             return p
         }
         throw CocoaError(.fileWriteFileExists)

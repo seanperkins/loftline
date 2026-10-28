@@ -45,7 +45,7 @@ enum ProjectPost {
     /// The post copy, when it is readable and is still the selected post.
     static func postCopy(of p: LoftLineProject) -> PostProfile? {
         guard let v = p.postSnapshot, let post = try? PostProfile(snapshot: v), post.id == effectivePostID(p) else { return nil }
-        return post
+        return post.normalized   // an empty pause list would post no stop at all: it means the default pause
     }
 
     /// A project with no chosen machine whose file records that none was found for its post: no copy, and the marker.
