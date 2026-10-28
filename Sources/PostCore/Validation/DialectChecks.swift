@@ -7,7 +7,8 @@ public enum DialectChecks {
     public static func issues(toolpaths: [Toolpath], profile: PostProfile) -> [GCodeIssue] {
         guard BuiltInPosts.noCoolantIDs.contains(profile.id) else { return [] }
         var seen = Set<String>()
-        let cooled = toolpaths.filter { $0.coolant != nil }.map(\.name).filter { seen.insert($0).inserted }
+        // Only toolpaths that post: one with no moves is left out of the program (`ProgramBuilder`), coolant and all.
+        let cooled = toolpaths.filter { $0.coolant != nil && !$0.moves.isEmpty }.map(\.name).filter { seen.insert($0).inserted }
         guard !cooled.isEmpty else { return [] }
         let reason = OthermillSetup.postIDs.contains(profile.id)
             ? "The Othermill has no coolant, and its G-code reference lists M7, M8 and M9 as unsupported"

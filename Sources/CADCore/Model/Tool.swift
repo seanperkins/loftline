@@ -168,6 +168,7 @@ extension Tool {
         return kind == other.kind && abs(inches(diameter, units) - inches(other.diameter, other.units)) < tol
             && abs((angle ?? 0) - (other.angle ?? 0)) < 1e-6
             && abs(inches(tipDiameter, units) - inches(other.tipDiameter, other.units)) < tol
-            && shape == other.shape
+            && CutterShape.same(shape.map { $0.scaled(by: units.factor(to: .inch)) },
+                                other.shape.map { $0.scaled(by: other.units.factor(to: .inch)) }, tolerance: tol)
     }
 }

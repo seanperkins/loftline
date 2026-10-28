@@ -55,5 +55,21 @@ import Testing
                 .contains { $0.severity == .error && $0.message.contains("different geometry") })
         }
         #expect(v.validate(toolpaths: [tp(base, "a"), tp(twin, "b")]).contains { $0.severity == .warning })
+        // The same shape in other units, or within rounding, is the same cutter.
+        var nose = PostFixtures.endMill
+        nose.shape = .bullNose(cornerRadius: 0.05)
+        var metric = nose.converted(to: .millimeter)
+        metric.id = UUID()
+        #expect(nose.hasSameGeometry(as: metric))
+        var rounded = nose
+        rounded.id = UUID(); rounded.shape = .bullNose(cornerRadius: 0.05000001)
+        #expect(nose.hasSameGeometry(as: rounded))
+    }
+
+    /// A toolpath with no moves is never posted (`ProgramBuilder`), so its coolant is never written.
+    @Test func anEmptyToolpathsCoolantIsNotReported() {
+        var empty = path("Empty", coolant: .mist)
+        empty.moves = []
+        #expect(errors(BuiltInPosts.carbideMotionMM, [path("Plain", coolant: nil), empty]).isEmpty)
     }
 }

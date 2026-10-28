@@ -29,6 +29,20 @@ public enum CutterShape: Codable, Hashable, Sendable {
         }
     }
 
+    /// The same outline within `tolerance` (lengths, in the units both are given in; angles to 1e-6): a shape scaled between
+    /// units, or rounded, is still the same cutter.
+    static func same(_ a: CutterShape?, _ b: CutterShape?, tolerance: Double) -> Bool {
+        func close(_ x: Double, _ y: Double) -> Bool { abs(x - y) < tolerance }
+        switch (a, b) {
+        case (nil, nil): return true
+        case (.bullNose(let c0)?, .bullNose(let c1)?): return close(c0, c1)
+        case (.taperedBallNose(let t0, let a0)?, .taperedBallNose(let t1, let a1)?): return close(t0, t1) && abs(a0 - a1) < 1e-6
+        case (.form(let p0)?, .form(let p1)?):
+            return p0.count == p1.count && zip(p0, p1).allSatisfy { close($0.height, $1.height) && close($0.radius, $1.radius) }
+        default: return false
+        }
+    }
+
     func scaled(by f: Double) -> CutterShape {
         switch self {
         case .bullNose(let c): return .bullNose(cornerRadius: c * f)
