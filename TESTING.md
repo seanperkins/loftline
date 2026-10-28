@@ -207,6 +207,9 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
 5. Put a file named `wrong.json` holding another id in the posts folder and press Reload Post Profiles: it is listed under Did
    not load with the reason.
 6. A custom post with a declared controller: run the air-probe check below with it before cutting.
+7. Export a custom post, then Import the file: a draft opens with a new id (the original still has its id); Save adds it.
+8. Open a project from another Mac whose post is not installed here: Job Setup says "(not installed here: add it in Toolpaths >
+   Post Processors)"; Add This Project's Post, then Save: Job Setup now says the post is installed, with no "differs" warning.
 
 **Air-probe check (before the first job with park-and-probe on):** Preferences ▸ Machines, the
 machine's "Tool change: park and probe" settings. Do every step with the spindle off and a hand on the E-stop.
