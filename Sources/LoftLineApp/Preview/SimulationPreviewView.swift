@@ -262,9 +262,7 @@ struct SimulationPreviewView: View {
                    in: 0...1)
                 .frame(minWidth: 160)
                 .flexibleInWrappingStack()
-            Text("\(MachiningTimeEstimator.format(model.time)) / \(MachiningTimeEstimator.format(model.totalTime))")
-                .font(.caption.monospacedDigit())
-                .frame(minWidth: 110, alignment: .trailing)
+            PlaybackTimeLabel(time: model.time, total: model.totalTime)
             Picker("Speed", selection: $model.speed) {
                 ForEach(PlaybackSpeed.allCases) { Text($0.label).tag($0) }
             }
@@ -292,7 +290,7 @@ struct SimulationPreviewView: View {
                     TimeEstimatePopover(store: timeStore, toolpaths: toolpaths, rapidRate: rapidRate, units: units)
                 }
             viewMenu
-            if model.isBusy { ProgressView().controlSize(.small) }
+            BusyIndicator(isBusy: model.isBusy)
         }
         .disabled(toolpaths.isEmpty)
     }
@@ -373,5 +371,42 @@ struct ToolpathPreviewPanel: View {
                     rapidRate: SimulationPreviewView.rapidRate(for: postProfile, units: document.units))
             }
         }
+    }
+}
+
+/// "1m 02s / 15m 37s" under the 3D preview. Its width is that of the total time on both sides, which no running time
+/// exceeds, so it keeps one width for the whole simulation: the playback bar wraps in a narrow pane, and a label that
+/// grew as the clock ran re-wrapped the bar mid-playback, shrinking the 3D view so the stock seemed to jump with the tool.
+struct PlaybackTimeLabel: View {
+    var time: TimeInterval
+    var total: TimeInterval
+
+    static func text(time: TimeInterval, total: TimeInterval) -> String {
+        "\(MachiningTimeEstimator.format(time)) / \(MachiningTimeEstimator.format(total))"
+    }
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            Text(Self.text(time: total, total: total)).hidden()
+            Text(Self.text(time: time, total: total))
+        }
+        .font(.caption.monospacedDigit())
+        .lineLimit(1)
+        .fixedSize()
+    }
+}
+
+/// Shown while a simulation frame is being rendered. It always takes the same room and only fades in: in the wrapping
+/// playback bar a spinner that came and went with every frame reflowed the bar, the 3D view above it changed height, and
+/// the stock seemed to jump with the tool.
+struct BusyIndicator: View {
+    var isBusy: Bool
+
+    var body: some View {
+        ProgressView()
+            .controlSize(.small)
+            .frame(width: 16, height: 16)
+            .opacity(isBusy ? 1 : 0)
+            .accessibilityHidden(!isBusy)
     }
 }
