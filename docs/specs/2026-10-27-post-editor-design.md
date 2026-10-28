@@ -66,7 +66,8 @@ Grouped like the file, every field of `PostProfile`:
 The list on the left: Built in, Custom, and Did not load (file name and reason). Buttons: Duplicate, Folder, Delete (custom
 posts), Save (disabled while there is a blocking problem), Cancel. Save of a new draft never replaces a file: if `<id>.json`
 appeared since Duplicate (another window's new post), Save takes the next free id and says so. The new file is created
-exclusively (a write that fails if the file exists), so two windows saving at the same moment cannot overwrite each other. Save of an edit to an existing
+exclusively (`O_EXCL`, as `GCodeFileSet` already does); when that fails because the file now exists, Save takes the next free
+id and tries again, so two windows saving at the same moment cannot overwrite each other. Save of an edit to an existing
 custom post replaces its own file.
 
 ## The report
@@ -120,12 +121,14 @@ limits widened to at least 100 × 100 × 10 in, converted to the draft's units (
 replaces; the sample tests the dialect). The report runs `GCodeValidator.validate(toolpaths:)` and `validate(gcode:)` on it, as
 the exporter does. It blocks when:
 
-- the builder throws, or the validator reports **any** error or warning, except a `coordinate-shift` warning on a block whose
-  only G words are `G53` and `G0` (a footer may legitimately lift with `G53 G0 Z0`; a `G92` or `G10` in a template blocks). Every built-in posts the sample with no issue at all, so this blocks a units change in a template, a stop
+- the builder throws, or the validator reports **any** error or warning, except a `coordinate-shift` warning on a block that is
+  exactly `G53 G0 Z0` (a footer may legitimately lift to the top of travel; `G53 G0 Z-100`, a `G92` or a `G10` in a template
+  blocks). Every built-in posts the sample with no issue at all, so this blocks a units change in a template, a stop
   with the spindle running, `M3` with no speed, garbage text and a missing program end;
 - in the **parsed** program, at **each** tool change (before A's first cut, with tool 1, and between B's last cut and C's first,
   with tool 2) there is neither an `M0` nor a `T<that tool>` followed by an `M6` (on the same block or a later one, with no other
-  `T` in between) before the next cut. `M1` does not count: it stops only when the operator's Optional Stop switch is on, and
+  `T` in between) before the next cut, and every `T` word in that window names that tool (so `["M5", "T2 M6", "M0"]`, which
+  always selects tool 2, is refused). `M1` does not count: it stops only when the operator's Optional Stop switch is on, and
   GRBL ignores it. Otherwise the tool's paths would be cut with another bit;
 - after the pause comment (the sample's pause is a mandatory one, `M0`), no parsed `M0` comes before the next X/Y move or feed
   move (a lift before the stop is fine; a `{STOP}` in a comment, a hard-coded `M1`, or an empty pause stops nothing).
@@ -172,7 +175,7 @@ The preview pane shows `program` read-only in a monospaced view, and the issues 
    `{S}` in spindle off, a lone `{`, `{TOOL_NAME}` outside a comment, `{STOP}` inside a comment, a version with `)`, a non-ASCII
    quote in a template, decimals 2 and 7 on an inch post, an arc tolerance of 0.05 in, an infinite travel, max RPM 0, a
    controller with the tool length offset; and the sample: a tool change of `["M5"]`, `[]`, `["M5", "M6"]` (no `T`), `["M5", "M1"]` and
-   `["M5", "T2 M6"]` (always tool 2) refused; `["M5", "T{T}", "M6"]` accepted; a pause of `["M5", "(MSG, {MESSAGE})", "M1"]`
+   `["M5", "T2 M6"]` and `["M5", "T2 M6", "M0"]` (always tool 2) refused; `["M5", "T{T}", "M6"]` accepted; a pause of `["M5", "(MSG, {MESSAGE})", "M1"]`
    refused and `["M5", "G53 G0 Z0", "(MSG, {MESSAGE})", "{STOP}"]` accepted;
    a tool change with `M5` removed refused; a pause of `["M05"]` refused; `G21` in an inch post's footer refused; a footer
    `G53 G0 Z0` accepted without a controller and refused on a Duplicate of the Avid post (which declares Mach4); a `G92 Z10`
