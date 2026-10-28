@@ -208,6 +208,16 @@ import Testing
                     "descent at the spot")
     }
 
+    /// A G4 block's X is a time (Syntec's `G4 X`), not a move away from the spot: it must not switch the descent check off.
+    @Test func aDwellsXDoesNotLeaveTheSpot() throws {
+        let m = try Self.mach4()
+        var lines = m.text.components(separatedBy: "\n")
+        let removal = try #require(lines.firstIndex { $0.hasPrefix("(MSG, Remove the touch plate") })
+        lines[removal + 3] = "G4 X99.000"
+        expectError(Program(text: lines.joined(separator: "\n"), profile: m.profile, job: m.job, units: m.units),
+                    "descent at the spot after a G4 X")
+    }
+
     @Test func withoutAProbeTodaysWarningsStand() throws {
         let g = try Self.grbl()
         var plain = g

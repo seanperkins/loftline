@@ -43,6 +43,16 @@ import Testing
         #expect(shortSpoil.text(units: .inch) == "Z 0.25 in (0.25 in above the material bottom)")
     }
 
+    /// A Syntec program states G70/G71, which the reader does not apply: read in the post's units, the deepest cut of an inch
+    /// G70 program in a mm document is the same as the G20 program's, not 25.4 times off.
+    @Test func readsAG70ProgramInThePostsUnits() throws {
+        let mm = JobSetup(thickness: 19.05, zZero: .materialTop)
+        let g20 = try #require(DeepestCut.find(in: program(cutZ: -0.75), job: mm, units: .millimeter))
+        let g70 = try #require(DeepestCut.find(in: program(cutZ: -0.75, units: "G70"), job: mm, units: .millimeter, postUnits: .inch))
+        #expect(g70 == g20)
+        #expect(approx(g70.depthBelowTop, 19.05, 1e-9))
+    }
+
     @Test func readsMillimeterProgramsInTheDocumentsUnits() throws {
         let mm = JobSetup(thickness: 19.05, zZero: .materialTop)
         let cut = try #require(DeepestCut.find(in: program(cutZ: -19.5, units: "G21"), job: mm, units: .millimeter))

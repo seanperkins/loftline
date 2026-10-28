@@ -118,4 +118,47 @@ import Testing
         p.footer = ["G4 P{SECONDS}"] + p.footer
         #expect(p.dwellProblem != nil)
     }
+
+    // MARK: Reading G70/G71 and G4 X (spec E2, E3)
+
+    func issues(_ gcode: String, _ profile: PostProfile) -> [String] {
+        GCodeValidator(profile: profile, job: PostFixtures.job(), units: .inch).validate(gcode: gcode).map(\.message)
+    }
+
+    @Test func g70AndG71AreUnitsOnlyForAPostThatWritesThem() {
+        let syntec = custom { $0.unitsCodes = .g70g71 }
+        let program = "G70\nG90\nG0 Z0.2\nM30\n"
+        #expect(!issues(program, syntec).contains { $0.contains("never sets units") || $0.contains("not a code this validator knows") })
+        #expect(issues("G71\nG90\nG0 Z5\nM30\n", syntec).contains { $0.contains("Program units mm differ") })
+        #expect(issues("G90\nG0 Z0.2\nM30\n", syntec).contains { $0.contains("G70/G71") })
+        // Elsewhere G70 is a cycle (Haas, Fanuc lathes): still a word this validator cannot vouch for.
+        let avid = issues(program, BuiltInPosts.avidMach4Inch)
+        #expect(avid.contains { $0.contains("G70 is not a code this validator knows") })
+        #expect(avid.contains { $0.contains("never sets units") })
+    }
+
+    @Test func theReaderReadsGFourXAsSecondsAndWarnsOnG70() {
+        let read = GCodeReader.read("G21\nG90\nG4 X3.000\nM30\n", units: .inch, startZ: 0.2)
+        let moves = read.segments.flatMap(\.moves)
+        #expect(moves.contains { if case .dwell(let s) = $0 { return s == 3 }; return false })
+        #expect(!moves.contains { $0.target != nil })
+        let g70 = GCodeReader.read("G70\nG90\nG0 Z0.2\nM30\n", units: .inch, startZ: 0.2)
+        #expect(g70.warnings.filter { $0.contains("G70/G71") }.count == 1)
+    }
+
+    /// A drill's dwell that prints as zero is not in the program: the toolpath check must not forget the hole for it either.
+    @Test func aDwellThatIsNotWrittenDoesNotForgetTheHole() {
+        let p = custom { $0.dwell = "G4 P{MILLISECONDS}" }
+        let mc = MachineCoordinates(job: PostFixtures.job())
+        let d = mc.z(depth: 0.5), up = mc.safeZ
+        func check(_ dwell: Double?) -> [GCodeIssue] {
+            var moves: [Move] = [.rapid(to: Vec3(1, 1, up)), .linear(to: Vec3(1, 1, d), feed: 20), .rapid(to: Vec3(1, 1, up))]
+            if let dwell { moves.append(.dwell(seconds: dwell)) }
+            moves += [.rapid(to: Vec3(1, 1, d + 0.05)), .linear(to: Vec3(1, 1, d - 0.2), feed: 20), .rapid(to: Vec3(1, 1, up))]
+            let tp = Toolpath(name: "Peck", kind: .drill, tool: PostFixtures.endMill, moves: moves)
+            return GCodeValidator(profile: p, job: PostFixtures.job(), units: .inch).validate(toolpaths: [tp])
+        }
+        #expect(check(0.0004) == check(nil))
+        #expect(check(0.001) != check(nil))   // a written dwell does forget it (the test reaches the rule)
+    }
 }

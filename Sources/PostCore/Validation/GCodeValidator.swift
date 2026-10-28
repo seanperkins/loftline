@@ -74,8 +74,8 @@ public struct GCodeValidator: Sendable {
                 switch move {
                 case .dwell(let seconds):
                     // Posts as G4, which is not a plain move in the G-code check; the writer drops a
-                    // dwell of no length, so it does not forget the hole here either.
-                    if seconds > 0 { check.leaveHole() }
+                    // dwell that prints as zero, so it does not forget the hole here either.
+                    if profile.writesDwell(seconds: seconds) { check.leaveHole() }
                     continue
                 case .rapid(let p):
                     // The post retracts before a toolpath's first rapid, so an unknown start is fine.
@@ -170,7 +170,10 @@ public struct GCodeValidator: Sendable {
             if sawEnd, b.value("X") != nil || b.value("Y") != nil || b.value("Z") != nil {
                 carried.add("after-end", .warning, line: b.line, "Motion after the program end (M30/M2)")
             }
-            for g in b.values("G") {
+            for word in b.values("G") {
+                // A post that writes G70/G71 (Syntec, #110) means units by them; for any other they stay unknown (a cycle on
+                // Haas and Fanuc lathes).
+                let g = profile.unitsCodes == .g70g71 && (word == 70 || word == 71) ? word - 50 : word
                 if !Self.knownG.contains(g) {
                     carried.add("unknown-g", .warning, line: b.line,
                                 "G\(NumberFormat.compact(g, maxDecimals: 1)) is not a code this validator knows")
@@ -340,7 +343,8 @@ public struct GCodeValidator: Sendable {
         check.finish()
 
         if gUnits == nil {
-            carried.add("no-units", .warning, line: nil, "Program never sets units (G20/G21)")
+            let words = profile.unitsCodes == .g70g71 ? "G70/G71" : "G20/G21"
+            carried.add("no-units", .warning, line: nil, "Program never sets units (\(words))")
         }
         if !sawEnd {
             carried.add("no-end", .warning, line: nil, "Program does not end with M30/M2")

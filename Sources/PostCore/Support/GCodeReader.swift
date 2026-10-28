@@ -67,6 +67,7 @@ public enum GCodeReader {
         var currentTool: Int?
         /// Set by a probe until the zero that follows it (G10 L20, or the Mach4 zero macro's P).
         var probed = false
+        var warnedUnitsWords = false
 
         for b in parsed.blocks {
             var nonModal = false
@@ -94,8 +95,18 @@ public enum GCodeReader {
                 case 99: retractToR = true
                 case 4:
                     nonModal = true
-                    let p = b.value("P") ?? 0
-                    emit(.dwell(seconds: p > 100 ? p / 1000 : p)) // Mach treats P as seconds; >100 is likely ms
+                    if let x = b.value("X") {
+                        emit(.dwell(seconds: x))   // Syntec's G4 X: seconds as written, never a length
+                    } else {
+                        let p = b.value("P") ?? 0
+                        emit(.dwell(seconds: p > 100 ? p / 1000 : p)) // Mach treats P as seconds; >100 is likely ms
+                    }
+                case 70, 71:
+                    if !warnedUnitsWords {
+                        warnedUnitsWords = true
+                        warn(b.line, "G70/G71 set inches/millimetres on a Syntec controller; not applied here, units assumed "
+                             + "\((progUnits ?? assumedUnits ?? units).abbreviation)")
+                    }
                 case 31, 38.2:
                     // A probe stops where it touches: not drawn, and the zero that follows sets Z.
                     nonModal = true
