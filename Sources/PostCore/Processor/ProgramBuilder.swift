@@ -38,6 +38,7 @@ struct ProgramBuilder {
         for tp in active where !tp.moves.allSatisfy(Self.isFinite) {
             throw PostError.nonFiniteMove(toolpath: tp.name)
         }
+        let probe = try probeForBuild(active)
 
         var w = GCodeWriter(profile: profile, safeZ: coords.safeZ)
         if profile.headerComments { writeHeader(into: &w, toolpaths: active) }
@@ -55,7 +56,7 @@ struct ProgramBuilder {
             if tp.tool.id != currentTool {
                 if currentTool != nil { w.retract(to: coords.safeZ) }
                 coolantOff(&coolantOn, into: &w)
-                writeToolChange(tp, into: &w)
+                if let probe { writeProbedToolChange(tp, probe: probe, into: &w) } else { writeToolChange(tp, into: &w) }
                 currentTool = tp.tool.id
                 currentRPM = nil
             }
@@ -182,11 +183,14 @@ struct ProgramBuilder {
     /// After a tool change or a stop the controller may have moved (a tool-change macro, the operator
     /// jogging): restate everything, climb to the approach height and cross to the next toolpath at
     /// that height, so the traverse still clears clamps and keep-out zones taller than safe Z.
-    private func reenter(before next: Toolpath, into w: inout GCodeWriter) {
+    /// `minHeight`: after a touch-plate zero, the height that clears the plate (`clearZ`), always above safe Z, so the cross
+    /// to the toolpath happens before anything moves down at the touch-off spot.
+    private func reenter(before next: Toolpath, into w: inout GCodeWriter, minHeight: Double? = nil) {
+        let height = max(approachZ, minHeight ?? approachZ)
         w.resetModalState()
-        w.forceRapidZ(approachZ)
-        if approachZ > coords.safeZ + 1e-9, let first = next.moves.first(where: { $0.target != nil })?.target {
-            w.rapid(to: Vec3(first.xy, z: approachZ))
+        w.forceRapidZ(height)
+        if height > coords.safeZ + 1e-9, let first = next.moves.first(where: { $0.target != nil })?.target {
+            w.rapid(to: Vec3(first.xy, z: height))
         }
     }
 
@@ -212,6 +216,107 @@ struct ProgramBuilder {
             case .dwell(let s): w.dwell(seconds: s)
             }
         }
+    }
+
+    // MARK: Park and probe (spec §4)
+
+    /// The mode line written after the Mach4 zero macro: a macro can change any mode, and the post's own preamble is
+    /// editable (it could start the spindle), so this fixed line restores what the program relies on.
+    static func recoveryLine(profile: PostProfile, workOffset: Int) -> String {
+        "G17 G40 G49 G80 G90 G94 \(profile.arcOutput == .absoluteIJ ? "G90.1" : "G91.1") \(profile.unitsCode) G\(53 + workOffset)"
+    }
+
+    /// Z the plate's top is set to, and the height that clears it (output units, through the single Z-zero helper).
+    func plateZ(_ p: ToolChangeProbe) -> Double { coords.z(aboveTop: p.plateThickness) }
+    func clearZ(_ p: ToolChangeProbe) -> Double { coords.z(aboveTop: p.plateThickness + setup.safeZ) }
+
+    /// The probe to write at each tool change, or nil for the post's own tool change. Throws when no valid program can be
+    /// written, before anything is.
+    private func probeForBuild(_ active: [Toolpath]) throws -> ToolChangeProbe? {
+        guard let setting = profile.toolChangeProbe else { return nil }
+        guard case .on(let p) = setting else {
+            if case .refused(let m) = setting { throw PostError.probe(m) }
+            return nil
+        }
+        let units = profile.units
+        func probe(_ m: String) -> PostError { .probe(m) }
+        if job.job.isTwoSided {
+            throw probe("A two-sided job cannot be posted with touch-plate tool changes yet: the touch-off spot is not defined per side. "
+                        + "Switch probing off in Preferences > Machines to post it.")
+        }
+        guard setup.touchOffSpot != nil else {
+            throw probe("Set the touch-off spot in Job Setup: this machine re-zeroes Z on a touch plate at each tool change.")
+        }
+        if profile.useToolLengthOffset {
+            throw probe("This post writes a tool length offset (G43), which the touch-plate zero replaces: turn the offset off.")
+        }
+        if let first = p.problems(limits: profile.limits, units: units).first { throw probe(first) }
+        if p.plateThickness + setup.safeZ > profile.limits.zTravel + 1e-9 {
+            throw probe("The touch plate's thickness plus safe Z is more than the machine's Z travel.")
+        }
+        if Double(NumberFormat.floored(p.probeFeed, decimals: profile.feedDecimals)) == 0 {
+            throw probe("The probe feed writes as 0 with this post's feed decimals: raise the probe feed.")
+        }
+        if Double(NumberFormat.floored(p.probeTravel, decimals: profile.decimals)) == 0 {
+            throw probe("The probe travel writes as 0 with this post's decimals: raise the probe travel.")
+        }
+        let plate = plateZ(p), written = Double(fmt(plate))!
+        if abs(written - plate) > 0.001 * LengthUnit.inch.factor(to: units) + 1e-12 {
+            throw probe("This post writes too few decimals to set Z from the touch plate accurately (\(fmt(plate)) for \(plate)).")
+        }
+        if Double(fmt(clearZ(p)))! - written < LengthUnit.millimeter.factor(to: units) - 1e-9 {
+            throw probe("Safe Z is too small to clear the touch plate: the bit must lift at least 1 mm (0.04 in) above it "
+                        + "before the plate is removed.")
+        }
+        if p.controller == .grbl, let tp = active.first(where: { $0.tool.number > 255 }) {
+            throw probe("GRBL accepts tool numbers up to 255: T\(tp.tool.number) (\(tp.tool.name)) cannot be written.")
+        }
+        return p
+    }
+
+    /// A message the controller shows while it waits at the next `M0` (the pause's form, so Mach4 displays it).
+    private func message(_ text: String, into w: inout GCodeWriter) {
+        let safe = TemplateRenderer.commentSafe(text)
+        w.code(profile.commentStyle == .semicolon ? "; \(safe)" : "(MSG, \(safe))")
+    }
+
+    /// Park, swap by hand, move to the touch-off spot, probe the plate, set Z, clear the plate, re-enter from above.
+    private func writeProbedToolChange(_ tp: Toolpath, probe p: ToolChangeProbe, into w: inout GCodeWriter) {
+        let d = profile.decimals
+        func g53(_ v: Double) -> String { NumberFormat.towardZero(v, decimals: d) }
+        let top = "G53 G0 Z" + g53(p.topZ)
+        let spot = coords.machineXY(setup.touchOffSpot ?? .zero)
+        let unit = profile.units.abbreviation
+        w.code(profile.spindleOff)
+        w.code("G90 G92.1 G\(53 + p.workOffset)")
+        w.code(top)
+        w.resetModalState()   // the writer no longer knows where the tool is
+        w.code("G53 G0 X\(g53(p.parkX)) Y\(g53(p.parkY))")
+        w.code("G53 G0 Z" + g53(p.parkZ))
+        w.code("T\(tp.tool.number)")
+        message("Load T\(tp.tool.number): \(tp.tool.name)", into: &w)
+        w.code("M0")
+        w.code(top)
+        w.rapidXY(spot)
+        message("Clip the probe lead on the bit and touch the plate to it: the probe light must come on. Place the plate under "
+                + "the bit. Jog Z only, down to about \(NumberFormat.compact(p.probeTravel / 2, maxDecimals: d)) \(unit) above the plate",
+                into: &w)
+        w.code("M0")
+        w.code("G91")
+        w.code("\(p.controller.probeCode) Z-\(NumberFormat.floored(p.probeTravel, decimals: d)) "
+               + "F\(NumberFormat.floored(p.probeFeed, decimals: profile.feedDecimals))")
+        w.code("G90")
+        switch p.controller {
+        case .grbl:
+            w.code("G10 L20 P\(p.workOffset) Z\(fmt(plateZ(p)))")
+        case .mach4:
+            w.code("M\(p.mach4ZeroMacro ?? 0) P\(fmt(plateZ(p)))")
+            w.code(Self.recoveryLine(profile: profile, workOffset: p.workOffset))
+        }
+        w.code("G0 Z" + fmt(clearZ(p)))
+        message("Remove the touch plate", into: &w)
+        w.code("M0")
+        reenter(before: tp, into: &w, minHeight: clearZ(p))
     }
 
     static func originName(_ o: XYOrigin) -> String {

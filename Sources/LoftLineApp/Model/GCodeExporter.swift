@@ -193,6 +193,8 @@ enum GCodeExporter {
             return GCodeExportResult(text: nil, issues: issues,
                                      errorMessage: "\(what) is not available in this build yet.",
                                      toolpathCount: toolpaths.count)
+        } catch PostError.probe(let message) {
+            return GCodeExporter.refused(message, issues: issues, toolpathCount: toolpaths.count)
         } catch PostError.spindleSpeedOutOfRange(let rpm) {
             return GCodeExportResult(text: nil, issues: issues,
                                      errorMessage: String(format: "Spindle speed %.0f RPM is outside the machine's range (%.0f–%.0f).",
@@ -201,6 +203,11 @@ enum GCodeExporter {
         } catch {
             return GCodeExportResult(text: nil, issues: issues, errorMessage: "\(error)", toolpathCount: toolpaths.count)
         }
+    }
+
+    /// No program: a condition under which no valid program can be written (there is no Save Anyway for it).
+    static func refused(_ message: String, issues: [GCodeIssue] = [], toolpathCount: Int) -> GCodeExportResult {
+        GCodeExportResult(text: nil, issues: issues, errorMessage: message, toolpathCount: toolpathCount)
     }
 
     private static let fileNameCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_."))
