@@ -78,4 +78,44 @@ import Testing
             #expect(try lines(p, toolpaths: dwelling(0.001)).contains { $0.hasPrefix("G4 ") }, "\(dwell)")
         }
     }
+
+    // MARK: Dwell forms (spec E3)
+
+    @Test func theDwellFormIsTheWordAndThePlaceholder() {
+        #expect(PostProfile.dwellForm("G4 P{SECONDS}")! == ("P", "SECONDS"))
+        #expect(PostProfile.dwellForm("p{MILLISECONDS}  G04")! == ("P", "MILLISECONDS"))
+        #expect(PostProfile.dwellForm("G4 X{DECIMAL_SECONDS}")! == ("X", "DECIMAL_SECONDS"))
+        #expect(PostProfile.dwellForm("G4 P3") == nil && PostProfile.dwellForm("G1 P{SECONDS}") == nil)
+    }
+
+    @Test func decimalSecondsGoOnlyWithXAndXOnlyWithDecimalSeconds() {
+        // An Avid copy (a P-seconds family) may not take Syntec's X form; no post may write a whole X or a dotted P.
+        #expect(custom { $0.id = BuiltInPosts.avidMach4Inch.id + "-custom-1"; $0.dwell = "G4 X{DECIMAL_SECONDS}" }.dwellProblem != nil)
+        var own = BuiltInPosts.avidMach4Inch
+        own.id = "my-own-post"
+        for dwell in ["G4 P{DECIMAL_SECONDS}", "G4 X{SECONDS}", "G4 X{MILLISECONDS}"] {
+            var p = own
+            p.dwell = dwell
+            #expect(p.dwellProblem != nil, "\(dwell)")
+        }
+        own.dwell = "G4 X{DECIMAL_SECONDS}"
+        #expect(own.dwellProblem == nil)   // a post of the owner's own may dwell in decimal seconds
+    }
+
+    @Test func secondsInThePreludeOfAMillisecondPostAreRefused() throws {
+        var p = BuiltInPosts.massoG3Inch
+        p.id = BuiltInPosts.massoG3Inch.id + "-custom-1"
+        p.prelude = ["G4 P{SECONDS}"]
+        #expect(p.dwellProblem?.contains("cannot also write {SECONDS}") == true)
+        let read = try PostProfile.fromJSON(p.toJSON())
+        #expect(throws: PostError.self) { try TemplatePostProcessor(profile: read).post(PostFixtures.postJob()) }
+    }
+
+    @Test func secondsElsewhereInADecimalSecondsPostAreRefused() {
+        var p = BuiltInPosts.avidMach4Inch
+        p.id = "my-own-post"
+        p.dwell = "G4 X{DECIMAL_SECONDS}"
+        p.footer = ["G4 P{SECONDS}"] + p.footer
+        #expect(p.dwellProblem != nil)
+    }
 }

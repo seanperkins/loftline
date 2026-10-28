@@ -258,26 +258,57 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         return dwellValues(seconds: seconds).filter { dwell.contains("{\($0.key)}") }.allSatisfy { (Double($0.value) ?? 1) != 0 }
     }
 
+    /// The dwell word and placeholder a dwell template writes (`G4 P{SECONDS}` → `P`, `SECONDS`), case, spacing and leading
+    /// zeros ignored, either order; nil when it is not a G4 and one placeholder word.
+    public static func dwellForm(_ template: String) -> (letter: Character, placeholder: String)? {
+        let words = template.uppercased().split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+        guard words.count == 2, let g = words.firstIndex(where: { $0.range(of: #"^G0*4$"#, options: .regularExpression) != nil })
+        else { return nil }
+        let word = words[1 - g]
+        guard let m = word.range(of: #"^[A-Z]\{(SECONDS|MILLISECONDS|DECIMAL_SECONDS)\}$"#, options: .regularExpression) else {
+            return nil
+        }
+        return (word.first!, String(word[word.index(word.startIndex, offsetBy: 2)..<word.index(before: m.upperBound)]))
+    }
+
     /// Why this post's dwell would be written in the wrong unit, or nil. The editor lists it; the builder refuses to post with
     /// it, since a post file or a project copy never passes the editor.
     public var dwellProblem: String? {
         if !(0...Self.maxDwellSeconds).contains(spindleDwellSeconds) {
             return "The spindle dwell must be 0 to \(Int(Self.maxDwellSeconds)) s."
         }
+        let form = Self.dwellForm(dwell)
+        // Syntec reads a whole X, or any P, in its smallest time unit: seconds with a dot go after X, and X takes only them.
+        if dwell.contains("{DECIMAL_SECONDS}"), form?.letter != "X" {
+            return "{DECIMAL_SECONDS} goes with G4 X: a P word is read in the controller's own time unit."
+        }
+        if form?.letter == "X", form?.placeholder != "DECIMAL_SECONDS" {
+            return "A whole X dwell is read in the controller's smallest time unit: write the dwell as G4 X{DECIMAL_SECONDS}."
+        }
         let millis = dwell.contains("{MILLISECONDS}")
-        // A built-in family's dwell unit is its own template's, both ways (#107, #108, #103).
+        // A built-in family's dwell form is its own template's, both ways (#107, #108, #103, #110).
         if let family = BuiltInPosts.family(of: id), let builtIn = BuiltInPosts.profile(id: family),
-           builtIn.dwell.contains("{MILLISECONDS}") != millis {
-            return millis
-                ? "This controller reads G4 P in seconds: a dwell in milliseconds would wait a thousand times too long."
-                : "This controller reads G4 P in milliseconds: a dwell in seconds would last a thousandth as long."
+           let own = Self.dwellForm(builtIn.dwell), form.map({ $0 != own }) ?? true {
+            switch own.placeholder {
+            case "MILLISECONDS":
+                return "This controller reads G4 P in milliseconds: a dwell in seconds would last a thousandth as long."
+            case "DECIMAL_SECONDS":
+                return "This controller reads a whole P in its smallest time unit: write the dwell as G4 X{DECIMAL_SECONDS}."
+            default:
+                return millis
+                    ? "This controller reads G4 P in seconds: a dwell in milliseconds would wait a thousand times too long."
+                    : "This controller reads G4 P in seconds: write the dwell as G4 P{SECONDS}."
+            }
         }
-        guard millis else { return nil }
-        let others = preamble + toolChange + [toolLengthOffset, spindleOn] + footer + pauseLines
+        guard form.map({ $0 != ("P", "SECONDS") }) ?? millis else { return nil }
+        let others = (prelude ?? []) + preamble + toolChange + [toolLengthOffset, spindleOn] + footer + pauseLines
         if others.contains(where: { $0.contains("{SECONDS}") }) {
-            return "A post that dwells in milliseconds cannot also write {SECONDS}: a G4 P{SECONDS} elsewhere would dwell milliseconds."
+            return millis
+                ? "A post that dwells in milliseconds cannot also write {SECONDS}: a G4 P{SECONDS} elsewhere would dwell milliseconds."
+                : "A post whose dwell is not G4 P{SECONDS} cannot also write {SECONDS}: a G4 P{SECONDS} elsewhere would be read in "
+                    + "another time unit."
         }
-        if controller == .grbl {
+        if millis, controller == .grbl {
             return "This controller reads G4 P in seconds: a dwell in milliseconds would wait a thousand times too long."
         }
         return nil
