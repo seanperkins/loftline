@@ -223,6 +223,18 @@ machine defined for it in Preferences ▸ Machines:
 4. A tool numbered above 255: does Carbide Motion accept it?
 5. At the end the program lifts and moves home before `M2`: check that the move clears your clamps.
 
+**MASSO G3:** before the first cut, time the spin-up dwell in an air cut: about 3 seconds (`G4 P3000`). If it waits 50 minutes,
+MASSO reads `P` in seconds here: stop and report it. Then: the `.nc` file loads (LoftLine writes LF line endings; MASSO's own post
+writes CRLF); start with the spindle well above the work; a two-tool job stops at `T2 M6` and the export warned to save one file
+per tool; tools are numbered T1–T100.
+
+**UCCNC:** before the first cut, set the UCCNC profile to the post's units (export reminds you) and check "Unknown g-codes" is
+"Don't run" while testing; time the spin-up dwell (about 3 s); check the tool change stops (`M0`) and the arcs, written as short
+lines, look right in UCCNC's toolpath view.
+
+**Centroid CNC12:** before the first cut, read Parameter 2 bit 2 (dwell in milliseconds): it must be off, or the 3 s spin-up is
+3 ms. Then time the spin-up dwell, check `M6` lifts Z and prompts for the tool, and that `;` comments load.
+
 **GRBL machines (Genmitsu, LongMill):** check `$30` against the machine's Max RPM in LoftLine (duplicate the built-in machine
 to set it), and `$31` against its lowest speed, before trusting any S word.
 

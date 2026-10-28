@@ -1019,3 +1019,21 @@
   `<use>` expansions (10,000) are capped, and COLLADA past its caps fails with the reason instead of importing part of the
   model; a mesh whose indices pass its vertices is refused on decode. Not yet: the file preview's position after `G53` (#120
   item 4), duplicate operation ids, recovery metadata order, the unsigned G-code-change flag (#123) and ramp angles (#124).
+- **masso-uccnc-centroid-posts — MASSO G3, UCCNC and Centroid CNC12 posts; controller rules by built-in family (#107, #108,
+  #103).** Spec: docs/specs/2026-10-28-masso-uccnc-centroid-ncstudio-posts-design.md (revision 3; two review rounds and
+  rulings). Each post follows its manual's documented default and, where a setting is the owner's and undocumented, the
+  reading that fails safe. MASSO: one word per preamble line (it skips a whole line with an invalid word), no G49, `T M6` after
+  M5, `S M3`, dwell `G4 P{MILLISECONDS}` (its docs; read as seconds it is only a long wait), incremental I/J (documented), tools
+  T1–T100 (T0 is the laser), no Tool Length Offset (no G43). UCCNC: arcs as lines (I/J mode unstated), M0 tool change (M6 can be
+  set to "ignore"), dwell in milliseconds (its default), and a warning on every export that UCCNC takes units from its profile
+  (an mm program on an inch profile moves 25.4 times too far); no UCCNC machine is built in, since a machine picks its post by
+  the document's units. Centroid: `;` comments, arcs as lines (Parameter 2 bit 0 decides I/J), `T M6`, `S M3`, dwell in seconds,
+  the documented default, against the fail-safe reading (milliseconds would be outside CNC12's 0.01–327.67 s range on every
+  default machine): the owner check reads Parameter 2 bit 2 before the first cut; dwells outside that range are an error. The
+  generic envelope is the LinuxCNC posts'. Rules now read `BuiltInPosts.family(of:)` (a built-in id, or a duplicate's
+  `<id>-custom-<n>`), so a duplicated post keeps its controller's rules: `optionalStopIDs` lists only Mach4 and LinuxCNC (every
+  other built-in, GRBL included, writes M0, and a built-in added later defaults to M0); a built-in family's dwell unit is its own
+  template's, refused both ways (an Avid copy with `{MILLISECONDS}` is refused: a Mach4 set to milliseconds needs a post under
+  a new id); `toolChangeKeepsZIDs` (MASSO, Centroid) makes their M6 not count as setting Z; `noCoolantReasons` and
+  `DialectChecks` (coolant, MASSO tools and G43, UCCNC units, Centroid dwells). `ToolChangeZ`'s message now says the post "does
+  not set Z for the new bit". NcStudio (#109) moves to its own change with the apostrophe comment style it needs.
