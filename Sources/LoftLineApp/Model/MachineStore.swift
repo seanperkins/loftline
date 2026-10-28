@@ -20,7 +20,13 @@ struct MachineStore {
         let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
         return files.filter { $0.pathExtension.lowercased() == "json" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            .compactMap { try? MachineDefinition.fromJSON(Data(contentsOf: $0)) }
+            .compactMap { url in
+                // A machine names its own file: an id that is not a plain file name, or a file named for another id, could
+                // make Save or Delete reach outside this folder (#122).
+                guard let m = try? MachineDefinition.fromJSON(Data(contentsOf: url)), PostProfileStore.isSafeID(m.id),
+                      url.deletingPathExtension().lastPathComponent == m.id else { return nil }
+                return m
+            }
     }
 
     func allMachines() -> [MachineDefinition] {
@@ -31,8 +37,14 @@ struct MachineStore {
 
     func fileURL(for id: String) -> URL { directory.appendingPathComponent(id).appendingPathExtension("json") }
 
+    struct UnsafeID: LocalizedError {
+        var id: String
+        var errorDescription: String? { "The machine id \"\(id)\" is not a plain file name." }
+    }
+
     @discardableResult
     func save(_ machine: MachineDefinition) throws -> URL {
+        guard PostProfileStore.isSafeID(machine.id) else { throw UnsafeID(id: machine.id) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = fileURL(for: machine.id)
         try machine.toJSON().write(to: url, options: .atomic)
@@ -40,12 +52,15 @@ struct MachineStore {
     }
 
     func delete(id: String) throws {
+        guard PostProfileStore.isSafeID(id) else { return }
         let url = fileURL(for: id)
         if FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
     }
 
     /// True when `id` is stored as a user file (editable/deletable).
-    func isUserMachine(_ id: String) -> Bool { FileManager.default.fileExists(atPath: fileURL(for: id).path) }
+    func isUserMachine(_ id: String) -> Bool {
+        PostProfileStore.isSafeID(id) && FileManager.default.fileExists(atPath: fileURL(for: id).path)
+    }
 }
 
 /// Which machine a project uses, and the post profile with that machine's limits applied. Pure.

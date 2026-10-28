@@ -30,6 +30,27 @@ import Testing
         #expect(MachineResolver.machine(for: inch, machines: BuiltInMachines.all) == nil)
     }
 
+    /// A machine file names its own file by id: an id that is not a plain file name never reaches the disk (#122).
+    @Test func aMachineIdThatEscapesTheFolderIsRefused() throws {
+        let root = AppTestSupport.tempDir()
+        let folder = root.appendingPathComponent("machines")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let library = root.appendingPathComponent("tools.json")
+        try Data("library".utf8).write(to: library)
+        var evil = BuiltInMachines.genericGRBL
+        evil.id = "../tools"
+        try evil.toJSON().write(to: folder.appendingPathComponent("example.json"))
+        var renamed = BuiltInMachines.genericGRBL
+        renamed.id = "elsewhere"
+        try renamed.toJSON().write(to: folder.appendingPathComponent("mismatch.json"))
+        let store = MachineStore(directory: folder)
+        #expect(store.userMachines().isEmpty)   // neither the escaping id nor a file named for another id loads
+        #expect(!store.isUserMachine("../tools"))
+        #expect(throws: (any Error).self) { try store.save(evil) }
+        try store.delete(id: "../tools")
+        #expect(try String(contentsOf: library, encoding: .utf8) == "library")
+    }
+
     @Test func selectingMachineSwitchesIncompatiblePost() {
         var p = LoftLineProject(document: Document(units: .inch), postProfileID: BuiltInPosts.genericGRBLMM.id)
         MachineResolver.select(machine: BuiltInMachines.avidPRO6096, in: &p, profiles: BuiltInPosts.all)
