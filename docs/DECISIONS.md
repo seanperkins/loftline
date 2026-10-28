@@ -982,3 +982,28 @@
   still guesses a `G4 P` unit (`P > 100` is ms), right for a millisecond spin-up and wrong for a millisecond dwell of 100 ms
   or less. The rest of #99 (a first-line prelude, CRLF, units words, a forced-dot seconds placeholder) moves to the dialect
   issues that need them, with the readers this review found.
+- **onefinity-carbide-posts — Onefinity Buildbotics and Carbide Motion posts; GRBL-family machines (#104, #105, #100).** Spec:
+  docs/specs/2026-10-28-onefinity-carbide-posts-design.md (revision 4; three review rounds). `onefinity-bb-*`: the CAMotics
+  planner's words only (`G90 G91.1 G17 G49 G94`; `G40` and `G80` are undocumented there, so omitted), a tool change that stops
+  with `M0` (owners cannot jog during BB's M6 pause, so Z cannot be set; the `ToolChangeZ` warning says one file per tool),
+  seconds dwell (verified), `M2` (BB's M30 is a TODO), the Woodworker's limits converted exactly for mm. `carbide-motion-*`:
+  Carbide Motion's supported-codes list is the dialect: `;` comments, `G90 G17 G40 G49 G54`, `T M6` (it prompts, and a BitSetter
+  measures: the post assumes one), `M2`; the dwell is assumed seconds (GRBL underneath; staff "P seems to be seconds") and is
+  the first owner check; limits are the 5 Pro 2x2's (623 mm, rounded down for inch); feeds and spindle range are the GRBL posts',
+  since Carbide publishes neither. One id set, `BuiltInPosts.secondsNoOptionalStopIDs` (Othermill, BB, Carbide Motion), makes an
+  optional stop `M0` (BB resumes an "Optional pause" at once and hides the control that arms it; Carbide Motion's M1 "Sleep" is
+  undocumented) and refuses a millisecond dwell, by id; the GRBL ids refuse a millisecond dwell too, while their optional stop
+  stays judged by value (#115). `DialectChecks` (export) reports coolant on a controller without it (`noCoolantIDs`: Othermill,
+  Carbide Motion, each with its reason); the Othermill's coolant error moved there. Carbide Motion wants a distinct T number per
+  tool that needs a change: the validator already makes two cutters of different geometry sharing a number an error, and
+  `Tool.hasSameGeometry(as:)` now also compares tip diameter and cutter shape (kind, diameter and angle alone let two different
+  bits count as one), used by the validator and pre-flight. Semicolon comments now bracket parentheses like parenthesis comments
+  do (a `(` locks up some Shapeoko senders); no built-in post used semicolons, so no sample moved. GRBL family: grblHAL and
+  FluidNC with #100's defaults take the GRBL posts' bytes, so no new posts. Machines appended (a project with no machine takes
+  the first that lists its post): the Genmitsu 3018-PROVer V2 (SainSmart's V2 working area) and the Sienci LongMill MK2 30x30
+  (Sienci: 868 mm Y, 4,000 mm/min) list only `generic-grbl-mm`, so no machine starts listing the inch post and saved projects'
+  inference is unchanged; `genericGRBL` keeps its bytes (a changed built-in machine makes every saved copy "differ"). Their
+  notes say to duplicate the machine, set Max RPM and match GRBL's `$30`. The Onefinity Woodworker and Shapeoko 5 Pro 2x2 list
+  their posts only (an Onefinity Elite runs MASSO, whose `P` is milliseconds). The `samples/expected` folders for the new posts
+  are regression bytes posted with the samples' Avid machine. GRBL's M7 stays out of scope (some builds enable it; the coolant
+  form warns).

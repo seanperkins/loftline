@@ -349,7 +349,7 @@ struct ArrayCopyForm: View {
 struct PauseStepForm: View {
     @Binding var pause: PauseStep?
     var toolpathName: String
-    /// The project's post: a controller with no Optional Stop (GRBL, the Othermill's TinyG) gets M0 for an optional stop.
+    /// The project's post: a controller with no Optional Stop (GRBL, the Othermill's TinyG, Buildbotics, Carbide Motion) gets M0 for an optional stop.
     var profile: PostProfile
 
     var body: some View {

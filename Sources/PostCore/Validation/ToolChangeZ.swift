@@ -1,7 +1,7 @@
 import CAMCore
 import Foundation
 
-/// A post whose tool change only stops (M0, as the GRBL and LinuxCNC posts do) gives the operator no way to set Z for the new
+/// A post whose tool change only stops (M0, as the GRBL, LinuxCNC and Onefinity Buildbotics posts do) gives the operator no way to set Z for the new
 /// bit: LinuxCNC cannot touch off while a program is paused, and the program resumes at the old Z zero. A program that changes
 /// to a second tool with such a post gets a warning. A post sets Z when it probes on a touch plate, applies a tool length
 /// offset, or hands the change to the controller's M6 (the Avid's Mach4 macro).

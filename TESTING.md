@@ -207,6 +207,25 @@ machine defined for it in Preferences ▸ Machines:
    seconds, not milliseconds. LinuxCNC shows the tool's name in the `MSG` line; stock GRBL drops comments, so your sender
    may not show it: check the loaded tool against the file's name.
 
+**Onefinity (Buildbotics controller):** the Onefinity posts have not run on a machine.
+1. Air-cut a one-tool job with the spindle off and Z zero raised 1 in: it runs to `M2` with no error (no `G40`/`G80` is written;
+   check the controller accepts `G91.1` and `G49`).
+2. Post a two-tool job with Save All Toolpaths ▸ one file per tool; each file stops at the top (`M0`) with the tool's name.
+3. Add an optional-stop pause: the program stops there (LoftLine writes `M0`, because BB resumes an `M1` at once).
+4. Time the spin-up dwell: about 3 seconds.
+
+**Carbide Motion (Shapeoko):** the Carbide Motion posts have not run on a machine.
+1. Load the `.nc` file: Carbide Motion shows no error for the `;` comments or the preamble (`G90 G17 G40 G49 G54`).
+2. Time the spin-up dwell in an air cut: about 3 seconds. If it is instant, `G4 P` is milliseconds here: stop and report it.
+3. A two-tool job: at `T2 M6` Carbide Motion asks for the swap and measures the bit with the BitSetter. Without a BitSetter,
+   note where Z zero is after the swap. Then run a file whose first tool has the number of the bit already loaded: does it
+   still prompt and measure?
+4. A tool numbered above 255: does Carbide Motion accept it?
+5. At the end the program lifts and moves home before `M2`: check that the move clears your clamps.
+
+**GRBL machines (Genmitsu, LongMill):** check `$30` against the machine's Max RPM in LoftLine (duplicate the built-in machine
+to set it), and `$31` against its lowest speed, before trusting any S word.
+
 **Othermill (Bantam Tools software):** the Othermill posts have not run on a machine. Each check below confirms something the
 post assumes (in brackets); stop and report if one does not hold.
 1. Job Setup: the Othermill Pro machine, a 4 x 3 x 0.25 in sheet, Z zero at the material top, XY origin lower left, Home Z
