@@ -261,14 +261,19 @@ enum LoftLineCLI {
         var library = ToolLibrary.seeded
         for tool in project.tools { library.upsert(tool) }
         var results: [UUID: ToolpathResult] = [:]
-        for op in targets {
+        // With touch-plate tool changes every operation of the posted sheet is calculated: the spot is checked against all.
+        let calculate = GCodeExporter.calculationTargets(project: project, exported: targets.map(\.id), scope: scope, profile: profile)
+            .compactMap { id in project.operations.first { $0.id == id } }
+        for op in calculate {
             results[op.id] = ToolpathCalculator.calculate(op, project: project, library: library, designRevision: 0,
                                                           rapidRate: rapid)
         }
         let tps = GCodeExporter.toolpaths(scope: scope, operations: outputProject.operations, results: results,
                                           groupByTool: options.groupByTool)
         let jobName = options.name ?? project.document.name
-        var result = GCodeExporter.export(project: outputProject, toolpaths: tps, profile: profile, jobName: jobName)
+        let sheet = GCodeExporter.sheetToolpathsIfProbing(project: project, results: results, scope: scope, profile: profile)
+        var result = GCodeExporter.export(project: outputProject, toolpaths: tps, profile: profile, jobName: jobName,
+                                          sheetToolpaths: sheet)
         // A toolpath asked for by name is judged even when it is switched off, as the one that is missing from this program.
         let asked = targets.map { op -> AnyOperation in
             var setup = op.editableSetup

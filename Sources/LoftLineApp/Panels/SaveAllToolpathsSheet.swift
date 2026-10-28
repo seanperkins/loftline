@@ -126,7 +126,8 @@ struct SaveAllToolpathsSheet: View {
         failure = nil
         calcTask?.cancel()
         calcTask = nil
-        let targets = document.outputProject.operations.filter { $0.setup.isEnabled }.map(\.id)
+        let enabled = document.outputProject.operations.filter { $0.setup.isEnabled }.map(\.id)
+        let targets = GCodeExporter.calculationTargets(project: document.project, exported: enabled, scope: .all, profile: profile)
         let stale = targets.filter { document.isStale($0) }
         guard !stale.isEmpty else { post(); return }
         posted = []
@@ -143,7 +144,10 @@ struct SaveAllToolpathsSheet: View {
     private func post() {
         let files = GCodeBatchExport.plan(mode: mode, operations: document.outputProject.operations,
                                           results: document.results, jobName: document.document.name, profile: profile)
-        posted = GCodeBatchExport.post(files, project: document.outputProject, profile: profile, jobName: document.document.name)
+        let sheet = GCodeExporter.sheetToolpathsIfProbing(project: document.project, results: document.results, scope: .all,
+                                                          profile: profile)
+        posted = GCodeBatchExport.post(files, project: document.outputProject, profile: profile, jobName: document.document.name,
+                                       sheetToolpaths: sheet)
         let missing = document.postProfileIssues(includingPost: profileID == initialProfileID)
             + GCodeExporter.missingOperationIssues(document.outputProject.operations, results: document.results)
         if !missing.isEmpty {

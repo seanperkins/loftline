@@ -136,7 +136,9 @@ struct ExportGCodeSheet: View {
         failure = nil
         calcTask?.cancel()
         calcTask = nil
-        let targets = targetOperations()
+        // With touch-plate tool changes every toolpath of the sheet is checked against the spot, so all are calculated.
+        let targets = GCodeExporter.calculationTargets(project: document.project, exported: targetOperations(), scope: scope,
+                                                       profile: profile)
         let stale = targets.filter { document.isStale($0) }
         guard !stale.isEmpty else { post(); return }
         result = nil
@@ -160,8 +162,10 @@ struct ExportGCodeSheet: View {
                                           results: document.results, groupByTool: groupByTool)
         let missing = GCodeExporter.missingOperationIssues(targetOperations().compactMap { document.operation($0) },
                                                            results: document.results)
+        let sheet = GCodeExporter.sheetToolpathsIfProbing(project: document.project, results: document.results, scope: scope,
+                                                          profile: profile)
         var r = GCodeExporter.export(project: document.outputProject(for: scope), toolpaths: tps, profile: profile,
-                                     jobName: document.document.name)
+                                     jobName: document.document.name, sheetToolpaths: sheet)
         // The project's own post's notices apply only while the program is posted with that post.
         r.issues.insert(contentsOf: document.postProfileIssues(includingPost: profileID == initialProfileID) + missing, at: 0)
         result = r

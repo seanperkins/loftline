@@ -157,12 +157,17 @@ enum GCodeExporter {
         return "\(f(j.width)) x \(f(j.height)) x \(f(j.thickness)) \(doc.units.abbreviation)"
     }
 
+    /// `sheetToolpaths`: with a probing post, every toolpath of the posted sheet (`sheetToolpathsIfProbing`), which the
+    /// touch-off spot is checked against; nil with a probing post refuses, so a caller that forgets it fails closed.
     static func export(project: LoftLineProject, toolpaths: [Toolpath], profile: PostProfile,
-                       jobName: String) -> GCodeExportResult {
+                       jobName: String, sheetToolpaths: SheetToolpaths? = nil) -> GCodeExportResult {
         let doc = project.document
         guard !toolpaths.isEmpty else {
             return GCodeExportResult(text: nil, issues: [], errorMessage: "There are no calculated toolpaths to export.",
                                      toolpathCount: 0)
+        }
+        if let problem = spotProblem(project: project, exported: toolpaths, sheet: sheetToolpaths, profile: profile) {
+            return refused(problem, toolpathCount: toolpaths.count)
         }
         // Travel between toolpaths crosses lift-over zones at safe Z unless raised here: each
         // operation was re-routed on its own, so only the final order shows these moves.
