@@ -151,8 +151,27 @@ import Testing
         #expect(inchGRBL.probeProgram?.contains("G53 G0 Z-0.0393") == true)
     }
 
+    @Test func aMillisecondDwellIsAccepted() {
+        accepted({ $0.dwell = "G4 P{MILLISECONDS}" }, "G4 P{MILLISECONDS}")
+        accepted({ $0.dwell = "P{MILLISECONDS} G4" }, "P{MILLISECONDS} G4")
+        for bad in ["G4 P{SECONDS}000", "G4 P{MILLISECONDS}0", "G4 X{MILLISECONDS}"] {
+            let r = draft({ $0.dwell = bad })
+            #expect(r.problems.contains { $0.hasPrefix("Dwell must be G4 P{SECONDS} or G4 P{MILLISECONDS}") }, "\(bad): \(r.problems)")
+        }
+    }
+
+    @Test func theDwellUnitRulesAreProblems() {
+        let problems = { (change: (inout PostProfile) -> Void) in draft(change).problems }
+        #expect(problems { $0.dwell = "G4 P{MILLISECONDS}"; $0.pause = ["M5", "G4 P{SECONDS}", "M0"] }
+            .contains { $0.contains("cannot also write {SECONDS}") })
+        #expect(problems { $0.dwell = "G4 P{MILLISECONDS}"; $0.controller = .grbl }
+            .contains { $0.contains("reads G4 P in seconds") })
+        #expect(problems { $0.spindleDwellSeconds = 3601 }.contains { $0.contains("0 to 3600 s") })
+        accepted({ $0.spindleDwellSeconds = 3600 }, "an hour's dwell")
+    }
+
     @Test func placeholderTableDrivesTheCaptions() {
-        #expect(PostDraftReport.placeholders[.dwell] == ["SECONDS"])
+        #expect(PostDraftReport.placeholders[.dwell] == ["SECONDS", "MILLISECONDS"])
         #expect(PostDraftReport.placeholders[.pause]?.contains("STOP") == true)
         #expect(PostDraftReport.placeholders[.toolChange]?.contains("TOOL_NAME") == true)
         #expect(PostDraftReport.placeholders[.footer]?.contains("T") == false)

@@ -38,7 +38,7 @@ public struct PostDraftReport: Sendable {
         .toolChange: base.union(["T", "TOOL_NAME", "S"]), .toolLengthOffset: base.union(["T", "TOOL_NAME", "S"]),
         .spindleOn: base.union(["T", "TOOL_NAME", "S"]),
         .pause: base.union(["MESSAGE", "STOP"]),
-        .dwell: ["SECONDS"],
+        .dwell: ["SECONDS", "MILLISECONDS"],
     ]
     /// User text: allowed only inside a comment on its line, where a tool name like "1/4 Z-2" cannot write a Z word.
     static let textPlaceholders: Set<String> = ["JOB_NAME", "POST_NAME", "POST_VERSION", "TOOL_NAME", "MESSAGE"]
@@ -90,7 +90,7 @@ public struct PostDraftReport: Sendable {
         func nonNegative(_ v: Double, _ name: String) { if !(v.isFinite && v >= 0) { out.append("\(name) must be 0 or more.") } }
         positive(p.limits.xTravel, "X travel"); positive(p.limits.yTravel, "Y travel"); positive(p.limits.zTravel, "Z travel")
         positive(p.rapidRate, "Rapid rate"); positive(p.maxFeed, "Max feed")
-        nonNegative(p.limits.maxSpoilboardCut, "Allowed spoilboard cut"); nonNegative(p.spindleDwellSeconds, "Dwell seconds")
+        nonNegative(p.limits.maxSpoilboardCut, "Allowed spoilboard cut")
         nonNegative(p.minRPM, "Min RPM")
         if !(p.maxRPM.isFinite && p.maxRPM >= 1) { out.append("Max RPM must be at least 1.") }
         if p.minRPM > p.maxRPM { out.append("Min RPM is above max RPM.") }
@@ -105,7 +105,8 @@ public struct PostDraftReport: Sendable {
             (p.arcCW, #"^[Gg]0*2$"#, "Arc CW must be G2"), (p.arcCCW, #"^[Gg]0*3$"#, "Arc CCW must be G3"),
             (p.spindleOff, #"^[Mm]0*5$"#, "Spindle off must be M5"),
             (p.spindleOn, #"^([Mm]0*3 [Ss]\{S\}|[Ss]\{S\} [Mm]0*3)$"#, "Spindle on must be M3 S{S}"),
-            (p.dwell, #"^([Gg]0*4 [Pp]\{SECONDS\}|[Pp]\{SECONDS\} [Gg]0*4)$"#, "Dwell must be G4 P{SECONDS}"),
+            (p.dwell, #"^([Gg]0*4 [Pp]\{(SECONDS|MILLISECONDS)\}|[Pp]\{(SECONDS|MILLISECONDS)\} [Gg]0*4)$"#,
+             "Dwell must be G4 P{SECONDS} or G4 P{MILLISECONDS}"),
         ]
         for (value, pattern, message) in codes where value.range(of: pattern, options: .regularExpression) == nil {
             out.append("\(message) (found \"\(value)\").")
@@ -114,6 +115,7 @@ public struct PostDraftReport: Sendable {
             guard let template else { continue }
             for line in lines { out += placeholderProblems(line, template: template, label: label) }
         }
+        if let problem = p.dwellProblem { out.append(problem) }
         if p.controller != nil, p.useToolLengthOffset {
             out.append("A post that declares a controller for touch-plate tool changes cannot use a tool length offset (G43).")
         }

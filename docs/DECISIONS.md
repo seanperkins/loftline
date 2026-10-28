@@ -964,3 +964,21 @@
   checks the Othermill rows on the Avid's limits, since its 12 x 8 in fixture cannot fit the 5.5 x 4.5 in bed, and a separate
   small job checks their own limits. `samples/expected/othermill-*` are regression bytes, not runnable Othermill files: the
   samples are 24 x 12 and 12 x 8 in, posted with their own machine (the Avid).
+- **dwell-ms — a post can dwell in milliseconds (#99 item 1).** Spec: docs/specs/2026-10-28-post-engine-options-design.md
+  (revision 4; three review rounds). `{SECONDS}` printed `G4 P3` for the spin-up, a 3 ms wait on a controller whose `P` is
+  milliseconds (MASSO, NcStudio, UCCNC by default), then a plunge into a bit not up to speed. The dwell template may now use
+  `{MILLISECONDS}` (`PostProfile.dwellValues`: whole ms, `%.0f`), and only the dwell template: `{SECONDS}` stays seconds
+  everywhere. `PostProfile.dwellProblem` keeps a post from mixing them (a millisecond post may not use `{SECONDS}` in another
+  template) or using milliseconds where `P` is seconds (a post declaring GRBL, an Othermill post by id), and bounds the
+  spin-up dwell to 0–3600 s; the editor lists it, and the builder refuses to post with it (`PostError.invalidPost`), since a
+  post file or a project copy never passes the editor. Every toolpath dwell is bounded to 3600 s too, for every post
+  (`PostError.dwellTooLong`; a 4,000 s drill dwell exported before and is now refused): beyond about 1.8e305 s `%.0f` prints
+  `INF`. Schema: this supersedes the write rule in `snapshot-schema`. `PostProfile.currentSchemaVersion` (the highest version
+  read) is 2; a post is written with `requiredSchemaVersion`, 2 only when its dwell uses `{MILLISECONDS}`, and read back as 1,
+  so memory always holds 1 and the version never reaches value equality (`BuiltInPosts.probeController`, which #115's GRBL M0
+  rule needs). Builds from `98858e5` on refuse a millisecond post ("made with a newer LoftLine") and still read every other
+  post; v0.2.0, the one release, predates `schemaVersion` and would load a millisecond post file from the posts folder and post
+  `G4 P{MILLISECONDS}` literally (projects are refused there by the project format version). Gap: the G-code file preview
+  still guesses a `G4 P` unit (`P > 100` is ms), right for a millisecond spin-up and wrong for a millisecond dwell of 100 ms
+  or less. The rest of #99 (a first-line prelude, CRLF, units words, a forced-dot seconds placeholder) moves to the dialect
+  issues that need them, with the readers this review found.
