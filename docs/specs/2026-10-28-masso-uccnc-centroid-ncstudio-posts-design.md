@@ -1,6 +1,6 @@
 # MASSO, UCCNC and Centroid posts (issues #107, #108, #103)
 
-Revision 2, 2026-10-28. Part of the dialect roadmap (#98), approved by Sean ("go"; "keep moving through post processors";
+Revision 3, 2026-10-28 (final: rulings on round 2 at the end, overriding the text above where they differ). Part of the dialect roadmap (#98), approved by Sean ("go"; "keep moving through post processors";
 "continue until they are all done"); owner checks deferred. Revision 2 answers the first review (executor, auditor, skeptic,
 simplifier): NcStudio (#109) and the apostrophe comment style move to their own later change; the Stepcraft machine is cut;
 Centroid and UCCNC arcs are written as lines; the dwell rule reads the built-in's own template; the optional-stop list is
@@ -97,3 +97,33 @@ DECISIONS (`masso-uccnc-centroid-posts`: each choice and source, Centroid's docu
 optional-stop list), Help (Machines: the posts, dwell units, UCCNC profile units, Centroid's Parameter 2 bits, MASSO tool
 numbers; a duplicated post under a new id loses the id-based rules), TESTING (owner checks, "before the first cut" for the
 dwell unit and UCCNC units), README and PARITY, a comment on #103, #107, #108, and on #109 that it moves to its own change.
+
+## Rulings on round 2 (final)
+
+1. **Built-in families.** Duplicate names a copy `<built-in id>-custom-<n>` (`PostProfileStore.newID`), so every id-based rule
+   (optional stop, dwell unit, tool-change Z, coolant, the Othermill setup, the MASSO and Centroid checks, the UCCNC warning)
+   reads `BuiltInPosts.family(of: id)`: the id with a trailing `-custom-<n>` removed, when that is a built-in id. A duplicated
+   post keeps its controller's rules; Help's "a duplicate loses these checks" note goes.
+2. **Optional stop, in order:** a declared GRBL controller writes `M0`; then a built-in family writes `M1` only if it is in
+   `optionalStopIDs` (Avid, LinuxCNC); then a user post keeps today's rule. The GRBL posts now write `M0` by id, edited or
+   not (GRBL ignores M1, so `M0` is always right); `PostPauseTests`' "edited GRBL keeps M1" assertion and comment change.
+   Test: an Avid-id copy declaring GRBL writes `M0`.
+3. **Dwell rule, both directions:** `dwellProblem` compares the family's built-in dwell unit first, before the existing
+   `{MILLISECONDS}` guard, with a message for each direction ("reads G4 P in milliseconds: a dwell in seconds would last a
+   thousandth as long"; the seconds message unchanged, which `PreflightChecksTests` matches).
+4. **MASSO and Tool Length Offset:** MASSO has no `G43`, and it ignores a line with an invalid word, so a MASSO-family post with
+   Tool Length Offset on is an export error (`DialectChecks`); Centroid documents `G43 H`, so a Centroid copy with it on gets no
+   tool-change warning (`ToolChangeZ` credits the offset). Tests for both.
+5. **MASSO lift:** LoftLine retracts to safe Z before every tool change after the first; the first is at the program's start,
+   where the operator left the spindle. No controller behaviour is assumed; the owner check asks for the spindle to start well
+   above the work.
+6. **ToolChangeZ wording:** the message keeps its prefix "This program changes tools" and says the post "does not set Z for the
+   new bit" (true of M0 posts and of MASSO and Centroid's M6); the doc comment and Help list UCCNC's M0 and MASSO and
+   Centroid's M6.
+7. **Centroid dwell bounds:** a Centroid-family toolpath dwell outside 0.01–327.67 s (CNC12's documented range) is an export
+   error. What CNC12 does out of range is unverified, so the spec says "outside the documented range", not "refused".
+8. **Tests, precisely:** forbidden codes are checked on parsed words (`GCodeParser`, `has(letter, value)`), never substrings
+   (`G20` contains `G2`); UCCNC writes no `T` word. The schema test lists the version-2 built-ins explicitly (MASSO and UCCNC)
+   and expects 1 for every other.
+9. **Owner checks added:** MASSO loads an LF file (its vendor post writes CRLF); a Mach4 set to millisecond dwells needs a
+   duplicated post with `{MILLISECONDS}` under a new id (an Avid-family copy is refused).
