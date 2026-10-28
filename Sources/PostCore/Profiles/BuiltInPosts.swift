@@ -237,6 +237,9 @@ public enum BuiltInPosts {
     /// Built-in families whose M6 changes the tool without applying its length (MASSO has no G43; Centroid's needs G43 H):
     /// a second tool resumes at the old Z, so `ToolChangeZ` does not count their M6.
     public static let toolChangeKeepsZIDs: Set<String> = [massoG3Inch.id, massoG3MM.id, centroidInch.id, centroidMM.id]
+    /// Built-in families whose M3 is a switch with no speed (ShopBot, #106): their spindle line is M3 alone, and the speed
+    /// warning every export gives is expected (the post editor's sample allows it).
+    public static let noSpindleSpeedIDs: Set<String> = []
     /// Built-in families whose controller has no G43 (MASSO), so a Tool Length Offset line is skipped, never applied.
     public static let noToolLengthOffsetIDs: Set<String> = [massoG3Inch.id, massoG3MM.id]
     /// Built-in families whose controller has no coolant, with the reason export gives.

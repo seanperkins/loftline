@@ -55,6 +55,19 @@ import Testing
         }
     }
 
+    /// The program wrapper, `{APPROACH_Z}` and `{DECIMAL_SECONDS}` (#106, #110, #111).
+    @Test func theProgramStartAndTheNewPlaceholders() {
+        accepted({ $0.prelude = ["%", "O1000 ({JOB_NAME})"] }, "a wrapper with the job in a comment")
+        refused({ $0.prelude = ["O1000 {JOB_NAME}"] }, "the job's name outside a comment in the program start")
+        refused({ $0.prelude = ["%", "O1000 \u{2013} x"] }, "a dash that is not ASCII in the program start")
+        refused({ $0.prelude = ["{STOP}"] }, "a placeholder the program start does not have")
+        accepted({ $0.useToolLengthOffset = true; $0.toolLengthOffset = "G0 G43 Z{APPROACH_Z} H{T}" }, "the approach height")
+        accepted({ $0.dwell = "G4 X{DECIMAL_SECONDS}" }, "Syntec's dwell on a post of the owner's own")
+        refused({ $0.dwell = "G4 X{SECONDS}" }, "a whole X dwell")
+        refused({ $0.spindleOn = "M3" }, "a plain M3 outside the families that set no speed")
+        #expect(PostDraftReport.Template.prelude.label == "Program start")
+    }
+
     @Test func fixedCodes() {
         refused({ $0.arcCW = "G3"; $0.arcCCW = "G2" }, "swapped arc codes")
         refused({ $0.arcCW = "" }, "an empty arc code")
@@ -156,7 +169,8 @@ import Testing
         accepted({ $0.dwell = "P{MILLISECONDS} G4" }, "P{MILLISECONDS} G4")
         for bad in ["G4 P{SECONDS}000", "G4 P{MILLISECONDS}0", "G4 X{MILLISECONDS}"] {
             let r = draft({ $0.dwell = bad })
-            #expect(r.problems.contains { $0.hasPrefix("Dwell must be G4 P{SECONDS} or G4 P{MILLISECONDS}") }, "\(bad): \(r.problems)")
+            #expect(r.problems.contains { $0.hasPrefix("Dwell must be G4 P{SECONDS}, G4 P{MILLISECONDS} or G4 X{DECIMAL_SECONDS}") },
+                    "\(bad): \(r.problems)")
         }
     }
 
@@ -171,7 +185,9 @@ import Testing
     }
 
     @Test func placeholderTableDrivesTheCaptions() {
-        #expect(PostDraftReport.placeholders[.dwell] == ["SECONDS", "MILLISECONDS"])
+        #expect(PostDraftReport.placeholders[.dwell] == ["SECONDS", "MILLISECONDS", "DECIMAL_SECONDS"])
+        #expect(PostDraftReport.placeholders[.prelude] == PostDraftReport.placeholders[.preamble])
+        #expect(PostDraftReport.placeholders[.toolLengthOffset]?.contains("APPROACH_Z") == true)
         #expect(PostDraftReport.placeholders[.pause]?.contains("STOP") == true)
         #expect(PostDraftReport.placeholders[.toolChange]?.contains("TOOL_NAME") == true)
         #expect(PostDraftReport.placeholders[.footer]?.contains("T") == false)
