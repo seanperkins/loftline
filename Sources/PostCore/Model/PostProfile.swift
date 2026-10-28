@@ -123,21 +123,13 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     public var pauseLines: [String] { pause ?? Self.defaultPause(for: commentStyle) }
 
     /// Whether the controller can stop at M1 (an Optional Stop switch); where it cannot, an optional stop writes M0 and is
-    /// described as a stop that always happens.
-    /// - GRBL has no switch and ignores M1 (gnea/grbl `gcode.c`: "Optional stop not supported. Ignore."), so a post that speaks
-    ///   GRBL, built in or declared, writes M0 (#115). Judged by value, with the numbers a machine replaces
-    ///   (`MachineDefinition.applied(to:)`) put back first, so the post export uses is still recognised as the built-in.
-    /// - The Othermill, Buildbotics and Carbide Motion have no usable switch (`BuiltInPosts.secondsNoOptionalStopIDs`). Judged by
-    ///   id, so an edited post that keeps the id still writes M0.
+    /// described as a stop that always happens. A post declaring GRBL writes M0 (GRBL ignores M1, #115); a built-in family
+    /// writes M1 only if it is in `BuiltInPosts.optionalStopIDs`, so an edited or duplicated copy keeps its controller's rule;
+    /// a post of the owner's own honours the switch.
     public var honoursOptionalStop: Bool {
-        if BuiltInPosts.secondsNoOptionalStopIDs.contains(id) { return false }
-        var base = self
-        base.toolChangeProbe = nil
-        if let builtIn = BuiltInPosts.profile(id: id) {
-            base.limits = builtIn.limits; base.rapidRate = builtIn.rapidRate; base.maxFeed = builtIn.maxFeed
-            base.minRPM = builtIn.minRPM; base.maxRPM = builtIn.maxRPM
-        }
-        return BuiltInPosts.probeController(for: base) != .grbl
+        if controller == .grbl { return false }
+        if let family = BuiltInPosts.family(of: id) { return BuiltInPosts.optionalStopIDs.contains(family) }
+        return true
     }
 
     /// "G20" or "G21".
@@ -239,12 +231,20 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         if !(0...Self.maxDwellSeconds).contains(spindleDwellSeconds) {
             return "The spindle dwell must be 0 to \(Int(Self.maxDwellSeconds)) s."
         }
-        guard dwell.contains("{MILLISECONDS}") else { return nil }
+        let millis = dwell.contains("{MILLISECONDS}")
+        // A built-in family's dwell unit is its own template's, both ways (#107, #108, #103).
+        if let family = BuiltInPosts.family(of: id), let builtIn = BuiltInPosts.profile(id: family),
+           builtIn.dwell.contains("{MILLISECONDS}") != millis {
+            return millis
+                ? "This controller reads G4 P in seconds: a dwell in milliseconds would wait a thousand times too long."
+                : "This controller reads G4 P in milliseconds: a dwell in seconds would last a thousandth as long."
+        }
+        guard millis else { return nil }
         let others = preamble + toolChange + [toolLengthOffset, spindleOn] + footer + pauseLines
         if others.contains(where: { $0.contains("{SECONDS}") }) {
             return "A post that dwells in milliseconds cannot also write {SECONDS}: a G4 P{SECONDS} elsewhere would dwell milliseconds."
         }
-        if controller == .grbl || BuiltInPosts.secondsNoOptionalStopIDs.contains(id) || BuiltInPosts.grblIDs.contains(id) {
+        if controller == .grbl {
             return "This controller reads G4 P in seconds: a dwell in milliseconds would wait a thousand times too long."
         }
         return nil

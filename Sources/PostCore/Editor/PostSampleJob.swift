@@ -44,7 +44,7 @@ public enum PostSampleJob {
             .rapid(to: Vec3(3.5, 2.5, safe)),
         ])
         // A controller with no coolant (the Othermill, Carbide Motion) gets a sample without one.
-        c.coolant = BuiltInPosts.noCoolantIDs.contains(draft.id) ? nil : .mist
+        c.coolant = BuiltInPosts.family(of: draft.id).flatMap { BuiltInPosts.noCoolantReasons[$0] } == nil ? .mist : nil
         return PostJob(name: "Sample", units: .inch, job: setup, toolpaths: [a, b, c])
     }
 

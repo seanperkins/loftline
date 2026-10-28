@@ -149,20 +149,100 @@ public enum BuiltInPosts {
         limits: MachineLimits(xTravel: 623, yTravel: 623, zTravel: 155, maxSpoilboardCut: 1.0),
         rapidRate: 8000, maxFeed: 8000)
 
+    /// MASSO, UCCNC and Centroid run on many machines: these posts carry a generic 48 x 48 x 6 in envelope (the LinuxCNC
+    /// posts'), which a machine replaces.
+    static let genericInchLimits = MachineLimits(xTravel: 48, yTravel: 48, zTravel: 6, maxSpoilboardCut: 0.05)
+    static let genericMMLimits = MachineLimits(xTravel: 1219.2, yTravel: 1219.2, zTravel: 152.4, maxSpoilboardCut: 1.27)
+
+    /// MASSO G3 (#107): one word per preamble line (MASSO ignores a whole line with an invalid word), no G49 (it has no
+    /// G43/G49), M5 before `T M6` with T first, `S M3`, dwell in milliseconds ("Dwell time in milliseconds"; read as seconds it
+    /// is only a long wait), incremental I/J ("always incremental on MASSO").
+    static let massoPreamble = ["G90", "G17", "G40", "G80", "G94"]
+    static let massoToolChange = ["M5", "(Change to Tool: {TOOL_NAME})", "T{T} M6"]
+
+    public static let massoG3Inch = PostProfile(
+        id: "masso-g3-inch", name: "MASSO G3 (inch)", version: "1.0",
+        fileExtension: "nc", units: .inch, decimals: 4, feedDecimals: 1,
+        preamble: massoPreamble, toolChange: massoToolChange, spindleOn: "S{S} M3",
+        spindleDwellSeconds: 3, dwell: "G4 P{MILLISECONDS}", minRPM: 0, maxRPM: 24000,
+        arcOutput: .incrementalIJ, arcTolerance: 0.0005, footer: othermillFooter,
+        limits: genericInchLimits, rapidRate: 200, maxFeed: 200)
+
+    public static let massoG3MM = PostProfile(
+        id: "masso-g3-mm", name: "MASSO G3 (mm)", version: "1.0",
+        fileExtension: "nc", units: .millimeter, decimals: 3, feedDecimals: 1,
+        preamble: massoPreamble, toolChange: massoToolChange, spindleOn: "S{S} M3",
+        spindleDwellSeconds: 3, dwell: "G4 P{MILLISECONDS}", minRPM: 0, maxRPM: 24000,
+        arcOutput: .incrementalIJ, arcTolerance: 0.01, footer: othermillFooter,
+        limits: genericMMLimits, rapidRate: 5080, maxFeed: 5080)
+
+    /// UCCNC (#108): arcs as lines (the manual does not say whether I/J are incremental), M0 for a tool change (UCCNC can be
+    /// set to ignore M6), dwell in milliseconds (its default). Units come from the UCCNC profile: export warns.
+    static let uccncPreamble = ["G90", "G17", "G40", "G49", "G80", "G94"]
+    static let uccncToolChange = ["M5", "(Change to Tool: {TOOL_NAME})", "M0"]
+
+    public static let uccncInch = PostProfile(
+        id: "uccnc-inch", name: "UCCNC (inch)", version: "1.0",
+        fileExtension: "nc", units: .inch, decimals: 4, feedDecimals: 1,
+        preamble: uccncPreamble, toolChange: uccncToolChange,
+        spindleDwellSeconds: 3, dwell: "G4 P{MILLISECONDS}", minRPM: 0, maxRPM: 24000,
+        arcOutput: .linearize, arcTolerance: 0.0005, footer: othermillFooter,
+        limits: genericInchLimits, rapidRate: 200, maxFeed: 200)
+
+    public static let uccncMM = PostProfile(
+        id: "uccnc-mm", name: "UCCNC (mm)", version: "1.0",
+        fileExtension: "nc", units: .millimeter, decimals: 3, feedDecimals: 0,
+        preamble: uccncPreamble, toolChange: uccncToolChange,
+        spindleDwellSeconds: 3, dwell: "G4 P{MILLISECONDS}", minRPM: 0, maxRPM: 24000,
+        arcOutput: .linearize, arcTolerance: 0.01, footer: othermillFooter,
+        limits: genericMMLimits, rapidRate: 5080, maxFeed: 5080)
+
+    /// Centroid Acorn / CNC12 (#103): `;` comments (parentheses are not documented as comments), arcs as lines (Parameter 2
+    /// bit 0 decides whether I/J are absolute), `T M6` (it lifts Z and prompts; without G43 the length is not applied, so
+    /// export warns on a second tool), `S M3`, dwell in seconds (the documented default; Parameter 2 bit 2 flips it).
+    public static let centroidInch = PostProfile(
+        id: "centroid-inch", name: "Centroid CNC12 (inch)", version: "1.0",
+        fileExtension: "nc", units: .inch, commentStyle: .semicolon, decimals: 4, feedDecimals: 1,
+        preamble: uccncPreamble, toolChange: carbideToolChange, spindleOn: "S{S} M3",
+        spindleDwellSeconds: 3, minRPM: 0, maxRPM: 24000,
+        arcOutput: .linearize, arcTolerance: 0.0005, footer: othermillFooter,
+        limits: genericInchLimits, rapidRate: 200, maxFeed: 200)
+
+    public static let centroidMM = PostProfile(
+        id: "centroid-mm", name: "Centroid CNC12 (mm)", version: "1.0",
+        fileExtension: "nc", units: .millimeter, commentStyle: .semicolon, decimals: 3, feedDecimals: 0,
+        preamble: uccncPreamble, toolChange: carbideToolChange, spindleOn: "S{S} M3",
+        spindleDwellSeconds: 3, minRPM: 0, maxRPM: 24000,
+        arcOutput: .linearize, arcTolerance: 0.01, footer: othermillFooter,
+        limits: genericMMLimits, rapidRate: 5080, maxFeed: 5080)
+
     public static let all: [PostProfile] = [avidMach4Inch, avidMach4MM, genericGRBLMM,
                                             genericGRBLInch, linuxCNCInch, linuxCNCMM, othermillInch, othermillMM,
-                                            onefinityBBInch, onefinityBBMM, carbideMotionInch, carbideMotionMM]
+                                            onefinityBBInch, onefinityBBMM, carbideMotionInch, carbideMotionMM,
+                                            massoG3Inch, massoG3MM, uccncInch, uccncMM, centroidInch, centroidMM]
 
-    /// Built-in posts whose controller reads `G4 P` in seconds and has no usable Optional Stop: the Othermill (TinyG treats M1
-    /// as M0), Buildbotics (it resumes an "Optional pause" at once; the control that arms it is hidden) and Carbide Motion
-    /// (its M1 "Sleep" is undocumented). Judged by id, so an edited copy keeping the id keeps the rules: an optional stop
-    /// writes M0, and a dwell may not be in milliseconds. The GRBL posts are judged apart (#115: by value or a declared
-    /// controller) for the optional stop, and by id too for the dwell (`grblIDs`).
-    public static let secondsNoOptionalStopIDs: Set<String> = [othermillInch.id, othermillMM.id, onefinityBBInch.id,
-                                                               onefinityBBMM.id, carbideMotionInch.id, carbideMotionMM.id]
-    public static let grblIDs: Set<String> = [genericGRBLMM.id, genericGRBLInch.id]
-    /// Built-in posts whose controller has no coolant: the Othermill and Carbide Motion (which ignores M7 and lacks M8).
-    public static let noCoolantIDs: Set<String> = [othermillInch.id, othermillMM.id, carbideMotionInch.id, carbideMotionMM.id]
+    /// The built-in a post belongs to: its own id when that is a built-in's, or the built-in a duplicate was made from
+    /// (Duplicate names a copy `<built-in id>-custom-<n>`, `PostProfileStore.newID`), so a copy keeps its controller's rules.
+    public static func family(of id: String) -> String? {
+        if profile(id: id) != nil { return id }
+        guard let r = id.range(of: #"-custom-[0-9]+$"#, options: .regularExpression) else { return nil }
+        let base = String(id[..<r.lowerBound])
+        return profile(id: base) != nil ? base : nil
+    }
+
+    /// The built-in families whose controller stops at M1 only with its Optional Stop switch on (Mach4, LinuxCNC). Every other
+    /// built-in family writes M0 for an optional stop: GRBL ignores M1, TinyG treats it as M0, Buildbotics resumes it at once,
+    /// and Carbide Motion, MASSO, UCCNC and Centroid document no switch. A built-in added later defaults to M0.
+    public static let optionalStopIDs: Set<String> = [avidMach4Inch.id, avidMach4MM.id, linuxCNCInch.id, linuxCNCMM.id]
+    /// Built-in families whose M6 changes the tool without applying its length (MASSO has no G43; Centroid's needs G43 H):
+    /// a second tool resumes at the old Z, so `ToolChangeZ` does not count their M6.
+    public static let toolChangeKeepsZIDs: Set<String> = [massoG3Inch.id, massoG3MM.id, centroidInch.id, centroidMM.id]
+    /// Built-in families whose controller has no coolant, with the reason export gives.
+    public static let noCoolantReasons: [String: String] = {
+        let othermill = "The Othermill has no coolant, and its G-code reference lists M7, M8 and M9 as unsupported"
+        let carbide = "Carbide Motion ignores M7 and does not support M8"
+        return [othermillInch.id: othermill, othermillMM.id: othermill, carbideMotionInch.id: carbide, carbideMotionMM.id: carbide]
+    }()
 
     public static func profile(id: String) -> PostProfile? { all.first { $0.id == id } }
 

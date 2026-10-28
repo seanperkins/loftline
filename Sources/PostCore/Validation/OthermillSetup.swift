@@ -27,7 +27,8 @@ public enum OthermillSetup {
     ///   - approachHeight: the raised approach height above the material top after a tool change, when a clamp needs one.
     public static func issues(job: JobSetup, units: LengthUnit, moves: [Toolpath], toolpaths: [Toolpath], profile: PostProfile,
                               approachHeight: Double?) -> [GCodeIssue] {
-        guard postIDs.contains(profile.id), let builtIn = BuiltInPosts.profile(id: profile.id) else { return [] }
+        guard let family = BuiltInPosts.family(of: profile.id), postIDs.contains(family),
+              let builtIn = BuiltInPosts.profile(id: family) else { return [] }
         let eps = units == .inch ? 0.0005 : 0.01
         let u = units.abbreviation
         func f(_ v: Double) -> String { NumberFormat.compact(v, maxDecimals: units == .inch ? 4 : 2) }

@@ -16,6 +16,21 @@ struct ToolChangeZTests {
         }
     }
 
+    /// MASSO and Centroid write M6 but apply no tool length without G43 (MASSO has none): a second tool still warns. UCCNC
+    /// stops with M0. A Centroid copy with Tool Length Offset on sets Z (#107, #108, #103).
+    @Test func massoUCCNCAndCentroidWarnOnASecondTool() throws {
+        for p in [BuiltInPosts.massoG3Inch, BuiltInPosts.massoG3MM, BuiltInPosts.uccncInch, BuiltInPosts.centroidMM] {
+            let w = try #require(ToolChangeZ.warning(toolpaths: twoTools, profile: p), "\(p.id)")
+            #expect(w.message.hasPrefix("This program changes tools") && w.message.contains("does not set Z"))
+        }
+        var duplicate = BuiltInPosts.massoG3Inch
+        duplicate.id = "masso-g3-inch-custom-1"
+        #expect(ToolChangeZ.warning(toolpaths: twoTools, profile: duplicate) != nil)
+        var centroid = BuiltInPosts.centroidInch
+        centroid.useToolLengthOffset = true
+        #expect(ToolChangeZ.warning(toolpaths: twoTools, profile: centroid) == nil)
+    }
+
     @Test func oneToolDoesNotWarn() {
         #expect(ToolChangeZ.warning(toolpaths: [twoTools[0]], profile: BuiltInPosts.linuxCNCInch) == nil)
         var again = twoTools[1]

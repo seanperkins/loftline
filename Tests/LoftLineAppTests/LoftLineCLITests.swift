@@ -298,6 +298,7 @@ import Testing
                 // Othermill post warns that the samples' machine (the Avid) is bigger than the Othermill.
                 let expectedPrefixes = ["warning: This program changes tools"]
                     + (OthermillSetup.postIDs.contains(post.id) ? OthermillSetup.warningPrefixes.map { "warning: " + $0 } : [])
+                    + (post.id.hasPrefix("uccnc") ? ["warning: " + DialectChecks.uccncUnitsWarningPrefix] : [])
                 let other = r.err.split(separator: "\n").filter { line in !expectedPrefixes.contains { line.hasPrefix($0) } }
                 #expect(r.status == 0 && other.isEmpty, "\(name) with \(post.id): \(r.err)")
                 let file = expected.appendingPathComponent(post.id).appendingPathComponent(

@@ -35,6 +35,59 @@ import Testing
         #expect(errors(BuiltInPosts.carbideMotionMM, [path("Plain", coolant: nil)]).isEmpty)
     }
 
+    func tooled(_ number: Int, moves: Bool = true) -> Toolpath {
+        var t = PostFixtures.endMill
+        t.number = number
+        var tp = Toolpath(name: "T\(number)", kind: .profile, tool: t,
+                          moves: moves ? [.rapid(to: Vec3(1, 1, 0.2)), .linear(to: Vec3(1, 1, -0.1), feed: 30)] : [])
+        tp.coolant = nil
+        return tp
+    }
+
+    /// MASSO gives T0 to the dry-run laser and T101 up to other heads: a main-spindle bit must be T1–T100 (#107).
+    @Test func massoToolNumbersMustBeOneToAHundred() {
+        for p in [BuiltInPosts.massoG3Inch, { var q = BuiltInPosts.massoG3MM; q.id = "masso-g3-mm-custom-1"; return q }()] {
+            #expect(errors(p, [tooled(0)]).contains { $0.contains("T0") }, "\(p.id)")
+            #expect(errors(p, [tooled(101)]).contains { $0.contains("T101") }, "\(p.id)")
+            #expect(errors(p, [tooled(1), tooled(100)]).isEmpty, "\(p.id)")
+            #expect(errors(p, [tooled(1), tooled(101, moves: false)]).isEmpty, "\(p.id): an empty toolpath does not post")
+        }
+        #expect(errors(BuiltInPosts.avidMach4Inch, [tooled(101)]).isEmpty)
+    }
+
+    @Test func massoHasNoToolLengthOffset() {
+        var p = BuiltInPosts.massoG3Inch
+        p.useToolLengthOffset = true
+        #expect(errors(p, [tooled(1)]).contains { $0.contains("G43") })
+    }
+
+    @Test func uccncWarnsWhichUnitsItsProfileMustUse() {
+        for (p, unit) in [(BuiltInPosts.uccncInch, "inches"), (BuiltInPosts.uccncMM, "millimetres")] {
+            let w = DialectChecks.issues(toolpaths: [tooled(1)], profile: p).filter { $0.severity == .warning }
+            #expect(w.count == 1 && w[0].message.hasPrefix(DialectChecks.uccncUnitsWarningPrefix) && w[0].message.contains(unit))
+        }
+    }
+
+    /// CNC12 documents dwells of 0.01 to 327.67 s (#103).
+    @Test func centroidDwellsStayInTheirDocumentedRange() {
+        func dwelling(_ s: Double) -> Toolpath {
+            var tp = tooled(1)
+            tp.moves.append(.dwell(seconds: s))
+            return tp
+        }
+        let p = BuiltInPosts.centroidMM
+        #expect(errors(p, [dwelling(400)]).contains { $0.contains("327.67") })
+        #expect(errors(p, [dwelling(0.005)]).contains { $0.contains("0.01") })
+        #expect(errors(p, [dwelling(3), dwelling(327.67)]).isEmpty)
+        #expect(errors(BuiltInPosts.avidMach4Inch, [dwelling(400)]).isEmpty)
+    }
+
+    @Test func aDuplicateKeepsItsCoolantRule() {
+        var p = BuiltInPosts.carbideMotionMM
+        p.id = "carbide-motion-mm-custom-3"
+        #expect(errors(p, [path("Pocket", coolant: .mist)]).count == 1)
+    }
+
     /// Two cutters that differ only in tip diameter or in shape are different tools: one T number for both is an error.
     @Test func toolsDifferingInTipOrShapeMayNotShareANumber() {
         let base = PostFixtures.vBit

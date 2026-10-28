@@ -67,7 +67,8 @@ import Testing
         #expect(split.compatible.map(\.id) == [BuiltInPosts.avidMach4Inch.id, BuiltInPosts.avidMach4MM.id])
         #expect(split.other.map(\.id) == ["generic-grbl-mm", "generic-grbl-inch", "linuxcnc-inch", "linuxcnc-mm", "othermill-inch",
                                            "othermill-mm", "onefinity-bb-inch", "onefinity-bb-mm", "carbide-motion-inch",
-                                           "carbide-motion-mm"])
+                                           "carbide-motion-mm", "masso-g3-inch", "masso-g3-mm", "uccnc-inch", "uccnc-mm",
+                                           "centroid-inch", "centroid-mm"])
         #expect(MachineResolver.orderedPosts(BuiltInPosts.all, machine: nil).compatible.count == BuiltInPosts.all.count)
     }
 

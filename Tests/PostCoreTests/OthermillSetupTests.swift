@@ -108,7 +108,9 @@ import Testing
         var edited = BuiltInPosts.othermillInch
         edited.footer.append("(edited)")
         let copy = try! PostProfile.fromJSON(BuiltInPosts.othermillInch.toJSON())
-        for p in [BuiltInMachines.othermillPro.applied(to: BuiltInPosts.othermillInch), copy, edited] {
+        var duplicate = BuiltInPosts.othermillInch
+        duplicate.id = "othermill-inch-custom-1"
+        for p in [BuiltInMachines.othermillPro.applied(to: BuiltInPosts.othermillInch), copy, edited, duplicate] {
             #expect(!errors(issues(j, profile: p)).isEmpty, "\(p.id)")
         }
     }

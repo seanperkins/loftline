@@ -66,6 +66,8 @@ private let othermillPreamble = ["G90", "G94", "G17", "G55"]
 private let bbPreamble = ["G90", "G91.1", "G17", "G49", "G94"]
 private let carbidePreamble = ["G90", "G17", "G40", "G49", "G54"]
 private let carbideChange = ["M5", "; Change to Tool: 1/4\" End Mill [2 flute]", "T1 M6"]
+private let massoPreamble = ["G90", "G17", "G40", "G80", "G94"]
+private let uccncPreamble = ["G90", "G17", "G40", "G49", "G80", "G94"]
 
 private let newPosts = [
     NewPost(id: "generic-grbl-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: grblPreamble,
@@ -86,6 +88,18 @@ private let newPosts = [
             toolChange: carbideChange, footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M2"]),
     NewPost(id: "carbide-motion-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: carbidePreamble,
             toolChange: carbideChange, footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M2"]),
+    NewPost(id: "masso-g3-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: massoPreamble,
+            toolChange: ["M5", "(\(endMillChange))", "T1 M6"], footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M30"]),
+    NewPost(id: "masso-g3-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: massoPreamble,
+            toolChange: ["M5", "(\(endMillChange))", "T1 M6"], footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M30"]),
+    NewPost(id: "uccnc-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: uccncPreamble,
+            toolChange: ["M5", "(\(endMillChange))", "M0"], footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M30"]),
+    NewPost(id: "uccnc-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: uccncPreamble,
+            toolChange: ["M5", "(\(endMillChange))", "M0"], footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M30"]),
+    NewPost(id: "centroid-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: uccncPreamble,
+            toolChange: carbideChange, footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M30"]),
+    NewPost(id: "centroid-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: uccncPreamble,
+            toolChange: carbideChange, footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M30"]),
 ]
 
 private func contains(_ lines: [String], run: [String]) -> Bool {
@@ -137,7 +151,51 @@ private let newPostNumbers = [
                 arcTolerance: 0.0005),
     PostNumbers(id: "carbide-motion-mm", name: "Carbide Motion (mm)", ext: "nc", units: .millimeter, decimals: 3, feedDecimals: 0,
                 x: 623, y: 623, z: 155, spoilboard: 1.0, rapid: 8000, feed: 8000, minRPM: 0, maxRPM: 30000, arcTolerance: 0.01),
-]
+] + genericController("masso-g3", "MASSO G3", mmFeedDecimals: 1) + genericController("uccnc", "UCCNC", mmFeedDecimals: 0)
+  + genericController("centroid", "Centroid CNC12", mmFeedDecimals: 0)
+
+/// MASSO, UCCNC and Centroid run on many machines: the posts carry the LinuxCNC posts' generic envelope, which a machine replaces.
+private func genericController(_ id: String, _ name: String, mmFeedDecimals: Int) -> [PostNumbers] {
+    [PostNumbers(id: "\(id)-inch", name: "\(name) (inch)", ext: "nc", units: .inch, decimals: 4, feedDecimals: 1, x: 48, y: 48,
+                 z: 6, spoilboard: 0.05, rapid: 200, feed: 200, minRPM: 0, maxRPM: 24000, arcTolerance: 0.0005),
+     PostNumbers(id: "\(id)-mm", name: "\(name) (mm)", ext: "nc", units: .millimeter, decimals: 3, feedDecimals: mmFeedDecimals,
+                 x: 1219.2, y: 1219.2, z: 152.4, spoilboard: 1.27, rapid: 5080, feed: 5080, minRPM: 0, maxRPM: 24000,
+                 arcTolerance: 0.01)]
+}
+
+/// Codes each controller must never receive (#107, #108, #103), on parsed words (`G20` is not `G2`), in both Z-zero modes, on
+/// a job with an arc, an optional-stop pause, the spin-up dwell and a tool name with parentheses.
+@Test(arguments: ["masso-g3-inch", "masso-g3-mm", "uccnc-inch", "uccnc-mm", "centroid-inch", "centroid-mm"])
+func massoUCCNCCentroidWriteOnlyTheirCodes(_ id: String) throws {
+    let p = try #require(BuiltInPosts.profile(id: id))
+    let forbidden: [(Character, Double)]
+    switch id {
+    case _ where id.hasPrefix("masso"): forbidden = [("G", 91.1), ("G", 49), ("G", 43), ("M", 1)]
+    case _ where id.hasPrefix("uccnc"): forbidden = [("G", 91.1), ("M", 6), ("G", 2), ("G", 3), ("M", 1)]
+    default: forbidden = [("G", 91.1), ("G", 2), ("G", 3), ("M", 1)]
+    }
+    for mode in [ZZeroMode.materialTop, .spoilboard] {
+        var job = PostFixtures.postJob(zZero: mode)
+        job.toolpaths[0].pauseAfter = PauseStep(message: "Flip (side)", isOptionalStop: true)
+        let text = try TemplatePostProcessor(profile: p).post(job)
+        let blocks = GCodeParser.parse(text).blocks
+        for (letter, value) in forbidden {
+            #expect(!blocks.contains { $0.has(letter, value) }, "\(id) \(mode) writes \(letter)\(value)")
+        }
+        #expect(blocks.contains { $0.has("M", 0) }, "\(id): the optional stop writes M0")
+        let dwell = id.hasPrefix("centroid") ? "\nG4 P3\n" : "\nG4 P3000\n"
+        #expect(text.contains(dwell), "\(id) \(mode)")
+        if id.hasPrefix("uccnc") { #expect(!blocks.contains { $0.value("T") != nil }, "\(id) writes a T word") }
+        if id.hasPrefix("centroid") {
+            #expect(!text.contains("("), "\(id) writes a parenthesis")
+            #expect(!blocks.contains { $0.values("M").count > 1 }, "\(id) writes two M words on a line")
+        }
+        if id.hasPrefix("masso") {
+            let preamble = text.split(separator: "\n").drop { !$0.hasPrefix("G2") }.dropFirst().prefix(5)
+            #expect(preamble.allSatisfy { !$0.contains(" ") }, "\(id): one word per preamble line")
+        }
+    }
+}
 
 /// What each new controller must never receive (#104, #105), in both Z-zero modes; Carbide Motion has no `(` at all.
 @Test(arguments: ["onefinity-bb-inch", "onefinity-bb-mm", "carbide-motion-inch", "carbide-motion-mm"])

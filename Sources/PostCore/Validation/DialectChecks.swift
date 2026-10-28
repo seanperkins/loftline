@@ -1,18 +1,56 @@
 import CAMCore
 import Foundation
 
-/// Built-in controllers' own limits, checked at export beside `ToolChangeZ` (#104, #105, #114): coolant on a controller that
-/// has none. Keyed by built-in id, which a project's copy keeps.
+/// Built-in controllers' own limits, checked at export beside `ToolChangeZ`, by built-in family (`BuiltInPosts.family(of:)`), so
+/// an edited or duplicated copy keeps them: coolant on a controller without it (#105, #114), MASSO's tool numbers and its lack
+/// of G43 (#107), UCCNC's profile units (#108) and Centroid's dwell range (#103).
 public enum DialectChecks {
+    public static let uccncUnitsWarningPrefix = "UCCNC takes units from its profile"
+    static let massoIDs: Set<String> = [BuiltInPosts.massoG3Inch.id, BuiltInPosts.massoG3MM.id]
+    static let uccncIDs: Set<String> = [BuiltInPosts.uccncInch.id, BuiltInPosts.uccncMM.id]
+    static let centroidIDs: Set<String> = [BuiltInPosts.centroidInch.id, BuiltInPosts.centroidMM.id]
+    /// CNC12's documented dwell range, seconds.
+    static let centroidDwell = 0.01...327.67
+
     public static func issues(toolpaths: [Toolpath], profile: PostProfile) -> [GCodeIssue] {
-        guard BuiltInPosts.noCoolantIDs.contains(profile.id) else { return [] }
-        var seen = Set<String>()
-        // Only toolpaths that post: one with no moves is left out of the program (`ProgramBuilder`), coolant and all.
-        let cooled = toolpaths.filter { $0.coolant != nil && !$0.moves.isEmpty }.map(\.name).filter { seen.insert($0).inserted }
-        guard !cooled.isEmpty else { return [] }
-        let reason = OthermillSetup.postIDs.contains(profile.id)
-            ? "The Othermill has no coolant, and its G-code reference lists M7, M8 and M9 as unsupported"
-            : "Carbide Motion ignores M7 and does not support M8"
-        return [GCodeIssue(severity: .error, message: "\(reason): turn coolant off for \(cooled.joined(separator: ", ")).")]
+        guard let family = BuiltInPosts.family(of: profile.id) else { return [] }
+        // Only toolpaths that post: one with no moves is left out of the program (`ProgramBuilder`).
+        let posting = toolpaths.filter { !$0.moves.isEmpty }
+        var out: [GCodeIssue] = []
+        func error(_ s: String) { out.append(GCodeIssue(severity: .error, message: s)) }
+        func unique(_ names: [String]) -> String {
+            var seen = Set<String>()
+            return names.filter { seen.insert($0).inserted }.joined(separator: ", ")
+        }
+
+        if let reason = BuiltInPosts.noCoolantReasons[family] {
+            let cooled = posting.filter { $0.coolant != nil }.map(\.name)
+            if !cooled.isEmpty { error("\(reason): turn coolant off for \(unique(cooled)).") }
+        }
+        if massoIDs.contains(family) {
+            // MASSO gives T0 to the dry-run laser and numbers past 100 to other heads.
+            let wrong = posting.map(\.tool.number).filter { !(1...100).contains($0) }
+            if !wrong.isEmpty {
+                error("MASSO selects the main spindle's tools with T1 to T100 (T0 is the laser, higher numbers other heads): "
+                      + "renumber \(unique(wrong.map { "T\($0)" })).")
+            }
+            if profile.useToolLengthOffset {
+                error("MASSO has no G43, and it skips a line with a word it does not know: turn Tool Length Offset off.")
+            }
+        }
+        if uccncIDs.contains(family) {
+            let units = profile.units == .inch ? "inches" : "millimetres"
+            out.append(GCodeIssue(severity: .warning, message: "\(uccncUnitsWarningPrefix) and may ignore G20/G21: set the profile to "
+                                                              + "\(units) before running this program."))
+        }
+        if centroidIDs.contains(family) {
+            let outside = posting.filter { tp in
+                tp.moves.contains { if case .dwell(let s) = $0 { return s > 0 && !centroidDwell.contains(s) }; return false }
+            }.map(\.name)
+            if !outside.isEmpty {
+                error("CNC12 documents dwells of 0.01 to 327.67 s: change the dwell of \(unique(outside)).")
+            }
+        }
+        return out
     }
 }

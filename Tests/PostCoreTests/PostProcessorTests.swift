@@ -229,6 +229,21 @@ private func body(_ program: String) -> [String] {
     }
 }
 
+/// A built-in family's dwell unit is its own template's, both ways, duplicates included (#107, #108, #103).
+@Test func aBuiltInFamilysDwellUnitIsKept() {
+    func with(_ p: PostProfile, _ dwell: String, id: String? = nil) -> PostProfile {
+        var q = p; q.dwell = dwell; if let id { q.id = id }; return q
+    }
+    let refused = [with(BuiltInPosts.massoG3MM, "G4 P{SECONDS}"), with(BuiltInPosts.uccncInch, "G4 P{SECONDS}"),
+                   with(BuiltInPosts.massoG3MM, "G4 P{SECONDS}", id: "masso-g3-mm-custom-1"),
+                   with(BuiltInPosts.centroidInch, "G4 P{MILLISECONDS}"), with(BuiltInPosts.avidMach4Inch, "G4 P{MILLISECONDS}"),
+                   with(BuiltInPosts.genericGRBLMM, "G4 P{MILLISECONDS}", id: "generic-grbl-mm-custom-2")]
+    for p in refused { #expect(p.dwellProblem != nil, "\(p.id) \(p.dwell)") }
+    #expect(with(BuiltInPosts.massoG3MM, "G4 P{SECONDS}").dwellProblem?.contains("milliseconds") == true)
+    #expect(BuiltInPosts.all.allSatisfy { $0.dwellProblem == nil })
+    #expect(with(BuiltInPosts.avidMach4Inch, "G4 P{MILLISECONDS}", id: "my-mach4-ms").dwellProblem == nil)
+}
+
 @Test func semicolonCommentsBracketParentheses() {
     var p = BuiltInPosts.genericGRBLMM
     p.commentStyle = .semicolon

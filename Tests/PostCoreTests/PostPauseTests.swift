@@ -85,15 +85,32 @@ import Testing
                                  profile: applied)
             #expect(lines.contains("M0") && !lines.contains("M1"), "\(builtIn.id)")
         }
-        // An edited dialect is no longer the built-in: it writes what its owner declared.
+        // An edited GRBL post keeps the GRBL id, and GRBL ignores M1 whatever the text: it writes M0 too.
         var edited = m.applied(to: BuiltInPosts.genericGRBLMM)
         edited.footer.append("(edited)")
-        #expect(edited.honoursOptionalStop)
+        #expect(!edited.honoursOptionalStop)
+    }
+
+    /// Only the posts known to honour M1 with a switch (Avid, LinuxCNC) write it; every other built-in family writes M0, as
+    /// built, edited or duplicated (`-custom-<n>`); a post declaring GRBL writes M0 whatever its id (#107, #108, #103).
+    @Test func onlyThePostsWithAnOptionalStopSwitchWriteM1() {
+        for builtIn in BuiltInPosts.all {
+            var edited = builtIn
+            edited.footer.append("(edited)")
+            var duplicate = builtIn
+            duplicate.id = builtIn.id + "-custom-1"
+            let expected = BuiltInPosts.optionalStopIDs.contains(builtIn.id)
+            for p in [builtIn, edited, duplicate] { #expect(p.honoursOptionalStop == expected, "\(p.id)") }
+        }
+        #expect(BuiltInPosts.optionalStopIDs == ["avid-pro6096-mach4-inch", "avid-pro6096-mach4-mm", "linuxcnc-inch", "linuxcnc-mm"])
+        var declared = BuiltInPosts.avidMach4Inch
+        declared.controller = .grbl
+        #expect(!declared.honoursOptionalStop)
     }
 
     @Test func optionalStopOnAnOthermillPostWritesM0() throws {
         // TinyG has no Optional Stop and treats M1 as M0 (#114): the post writes M0 and says the stop always happens. Judged by
-        // id, so an edited post that keeps the id still writes M0 (unlike an edited GRBL post, judged by value).
+        // id, so an edited post that keeps the id still writes M0.
         var m = BuiltInMachines.othermillPro
         m.maxRPM = 24000
         for builtIn in [BuiltInPosts.othermillInch, BuiltInPosts.othermillMM] {
