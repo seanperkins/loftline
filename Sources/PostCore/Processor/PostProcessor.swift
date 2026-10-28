@@ -10,6 +10,10 @@ public enum PostError: Error, Equatable, Sendable {
     case nonFiniteMove(toolpath: String)
     /// The park-and-probe tool change cannot be written; the message says why.
     case probe(String)
+    /// A dwell in the named toolpath is longer than `PostProfile.maxDwellSeconds`.
+    case dwellTooLong(toolpath: String, seconds: Double)
+    /// The post's dwell would be written in the wrong unit (`PostProfile.dwellProblem`); the message says why.
+    case invalidPost(String)
 }
 
 /// Everything needed to write one G-code file.

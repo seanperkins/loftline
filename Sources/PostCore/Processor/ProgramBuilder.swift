@@ -38,6 +38,12 @@ struct ProgramBuilder {
         for tp in active where !tp.moves.allSatisfy(Self.isFinite) {
             throw PostError.nonFiniteMove(toolpath: tp.name)
         }
+        if let problem = profile.dwellProblem { throw PostError.invalidPost(problem) }
+        for tp in active {
+            for case .dwell(let s) in tp.moves where s > PostProfile.maxDwellSeconds {
+                throw PostError.dwellTooLong(toolpath: tp.name, seconds: s)
+            }
+        }
         let probe = try probeForBuild(active)
 
         var w = GCodeWriter(profile: profile, safeZ: coords.safeZ)

@@ -141,7 +141,7 @@ struct GCodeWriter {
 
     mutating func dwell(seconds: Double) {
         guard seconds > 0 else { return }
-        code(TemplateRenderer(values: ["SECONDS": NumberFormat.compact(seconds)]).render(profile.dwell))
+        code(TemplateRenderer(values: profile.dwellValues(seconds: seconds)).render(profile.dwell))
     }
 
     // MARK: Word assembly

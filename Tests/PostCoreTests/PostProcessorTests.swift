@@ -159,6 +159,66 @@ private func body(_ program: String) -> [String] {
     #expect(l.filter { $0.hasPrefix("G4 ") } == ["G4 P0.5"])
 }
 
+/// A controller whose `G4 P` is milliseconds (MASSO, NcStudio, UCCNC by default; #99 item 1) gets `{MILLISECONDS}`.
+@Test func dwellInMilliseconds() throws {
+    var p = BuiltInPosts.avidMach4Inch
+    p.id = "ms"
+    p.dwell = "G4 P{MILLISECONDS}"
+    let tp = Toolpath(name: "d", kind: .drill, tool: PostFixtures.endMill, moves: [
+        .rapid(to: Vec3(1, 1, 0.2)), .linear(to: Vec3(1, 1, -0.2), feed: 20), .dwell(seconds: 0.5),
+        .rapid(to: Vec3(1, 1, 0.2)),
+    ])
+    let l = lines(try TemplatePostProcessor(profile: p).post(job([tp])))
+    let start = try #require(l.firstIndex { $0.hasPrefix("M3 ") })
+    #expect(l[start + 1] == "G4 P3000")
+    #expect(l.filter { $0.hasPrefix("G4 ") } == ["G4 P3000", "G4 P500"])
+    #expect(p.dwellValues(seconds: 0.125)["MILLISECONDS"] == "125")
+    #expect(p.dwellValues(seconds: 2.9996)["MILLISECONDS"] == "3000")
+    #expect(p.dwellValues(seconds: 0.0004)["MILLISECONDS"] == "0")
+    #expect(p.dwellValues(seconds: 3600)["MILLISECONDS"] == "3600000")
+    #expect(p.dwellValues(seconds: 3)["SECONDS"] == "3")
+}
+
+/// No dwell over an hour: `{MILLISECONDS}` of an absurd value would print `INF` (#99 review).
+@Test func dwellBounds() throws {
+    var p = BuiltInPosts.avidMach4Inch
+    p.spindleDwellSeconds = 3601
+    #expect(throws: SnapshotError.self) { try PostProfile.fromJSON(p.toJSON()) }
+    p.spindleDwellSeconds = 3600
+    #expect(throws: Never.self) { try PostProfile.fromJSON(p.toJSON()) }
+    let tp = Toolpath(name: "Long", kind: .drill, tool: PostFixtures.endMill, moves: [
+        .rapid(to: Vec3(1, 1, 0.2)), .linear(to: Vec3(1, 1, -0.2), feed: 20), .dwell(seconds: 3601),
+        .rapid(to: Vec3(1, 1, 0.2)),
+    ])
+    #expect(throws: PostError.dwellTooLong(toolpath: "Long", seconds: 3601)) {
+        try TemplatePostProcessor(profile: BuiltInPosts.avidMach4Inch).post(job([tp]))
+    }
+}
+
+/// The dwell rules hold when posting, not only in the editor: a post file or a project copy never passes the editor.
+@Test func dwellRulesAreEnforcedWhenPosting() throws {
+    var grbl = BuiltInPosts.avidMach4Inch
+    grbl.id = "shop-grbl"
+    grbl.controller = .grbl
+    grbl.dwell = "G4 P{MILLISECONDS}"
+    var othermill = BuiltInPosts.othermillInch
+    othermill.dwell = "G4 P{MILLISECONDS}"
+    var mixed = BuiltInPosts.avidMach4Inch
+    mixed.id = "mixed"
+    mixed.dwell = "G4 P{MILLISECONDS}"
+    mixed.pause = ["M5", "G4 P{SECONDS}", "M0"]
+    for p in [grbl, othermill, mixed] {
+        let problem = try #require(p.dwellProblem, "\(p.id)")
+        #expect(throws: PostError.invalidPost(problem)) {
+            try TemplatePostProcessor(profile: p).post(job(PostFixtures.toolpaths()))
+        }
+    }
+    var fine = mixed
+    fine.pause = nil
+    #expect(fine.dwellProblem == nil)
+    #expect(BuiltInPosts.all.allSatisfy { $0.dwellProblem == nil })
+}
+
 @Test func millimetreDocumentPostedInInches() throws {
     let tp = Toolpath(name: "x", kind: .profile, tool: PostFixtures.endMill.converted(to: .millimeter), moves: [
         .rapid(to: Vec3(25.4, 50.8, 5.08)),

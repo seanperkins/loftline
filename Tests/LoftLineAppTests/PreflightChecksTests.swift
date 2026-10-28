@@ -214,6 +214,26 @@ import Testing
         #expect(!split(one))
     }
 
+    @Test func aPostThatWouldDwellInTheWrongUnitIsRefusedWithItsReason() throws {
+        let doc = LoftLineDocument(project: project(thickness: 0.25), toolLibrary: AppTestSupport.library())
+        let op = profile(doc.project, depth: 0.1, tabs: false)
+        doc.perform("Add") { $0.operations.append(op) }
+        doc.calculateNow([op.id])
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
+        var post = BuiltInPosts.avidMach4Inch
+        post.id = "shop-grbl"
+        post.controller = .grbl
+        post.dwell = "G4 P{MILLISECONDS}"
+        let r = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: post, jobName: "T")
+        #expect(r.text == nil)
+        #expect(r.errorMessage?.contains("cannot be used") == true && r.errorMessage?.contains("seconds") == true)
+        var long = try #require(tps.first)
+        long.moves.append(.dwell(seconds: 4000))
+        let d = GCodeExporter.export(project: doc.project, toolpaths: [long], profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+        #expect(d.text == nil)
+        #expect(d.errorMessage?.contains("dwells 4000 s") == true)
+    }
+
     @Test func anOthermillSetupErrorStillWritesAProgramToSaveAnyway() throws {
         var p = project(thickness: 0.25)
         p.document.job.zZero = .spoilboard

@@ -3,7 +3,8 @@ import Foundation
 
 /// Data-driven post-processor definition (serialisable to JSON) so new machines can be added
 /// without code. Template placeholders:
-///   {T} tool number, {TOOL_NAME}, {S} spindle RPM, {SECONDS} dwell, {SAFE_Z}, {HOME_X}, {HOME_Y},
+///   {T} tool number, {TOOL_NAME}, {S} spindle RPM, {SECONDS} dwell (the dwell template may use {MILLISECONDS} instead),
+///   {SAFE_Z}, {HOME_X}, {HOME_Y},
 ///   {HOME_Z}, {JOB_NAME}, {POST_NAME}, {POST_VERSION}
 /// Numeric placeholders are formatted with `decimals`.
 public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
@@ -188,12 +189,41 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
 
     /// A post is data from anywhere (a project from someone else, a file in the posts folder): the number of decimals it
     /// asks for is what every coordinate is formatted with, so an absurd one would exhaust memory at export. 0 to 12 covers
-    /// every controller.
+    /// every controller. The spin-up dwell is bounded too, so `{MILLISECONDS}` always prints a number.
     func checkingBounds() throws -> PostProfile {
         for (name, value) in [("decimals", decimals), ("feedDecimals", feedDecimals)] where !(0...12).contains(value) {
             throw SnapshotError.malformed("\(name) must be 0 to 12 (found \(value))")
         }
+        guard (0...Self.maxDwellSeconds).contains(spindleDwellSeconds) else {
+            throw SnapshotError.malformed("the spindle dwell must be 0 to \(Int(Self.maxDwellSeconds)) s (found \(spindleDwellSeconds))")
+        }
         return self
+    }
+
+    /// The longest dwell a program may hold (spin-up or toolpath): an hour. Beyond it `{MILLISECONDS}` could print `INF`.
+    public static let maxDwellSeconds = 3600.0
+
+    /// The dwell template's values: `{SECONDS}` (3 s → `3`) and `{MILLISECONDS}` (3 s → `3000`; whole, `%.0f`), for a
+    /// controller whose `G4 P` is milliseconds (MASSO, NcStudio, UCCNC by default; #99 item 1).
+    public func dwellValues(seconds: Double) -> [String: String] {
+        ["SECONDS": NumberFormat.compact(seconds), "MILLISECONDS": NumberFormat.fixed(seconds * 1000, decimals: 0)]
+    }
+
+    /// Why this post's dwell would be written in the wrong unit, or nil. The editor lists it; the builder refuses to post with
+    /// it, since a post file or a project copy never passes the editor.
+    public var dwellProblem: String? {
+        if !(0...Self.maxDwellSeconds).contains(spindleDwellSeconds) {
+            return "The spindle dwell must be 0 to \(Int(Self.maxDwellSeconds)) s."
+        }
+        guard dwell.contains("{MILLISECONDS}") else { return nil }
+        let others = preamble + toolChange + [toolLengthOffset, spindleOn] + footer + pauseLines
+        if others.contains(where: { $0.contains("{SECONDS}") }) {
+            return "A post that dwells in milliseconds cannot also write {SECONDS}: a G4 P{SECONDS} elsewhere would dwell milliseconds."
+        }
+        if controller == .grbl || OthermillSetup.postIDs.contains(id) {
+            return "This controller reads G4 P in seconds: a dwell in milliseconds would wait a thousand times too long."
+        }
+        return nil
     }
 }
 
