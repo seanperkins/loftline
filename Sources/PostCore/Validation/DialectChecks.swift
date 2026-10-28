@@ -34,7 +34,7 @@ public enum DialectChecks {
                 error("MASSO selects the main spindle's tools with T1 to T100 (T0 is the laser, higher numbers other heads): "
                       + "renumber \(unique(wrong.map { "T\($0)" })).")
             }
-            if profile.useToolLengthOffset {
+            if profile.useToolLengthOffset, BuiltInPosts.noToolLengthOffsetIDs.contains(family) {
                 error("MASSO has no G43, and it skips a line with a word it does not know: turn Tool Length Offset off.")
             }
         }
@@ -47,8 +47,10 @@ public enum DialectChecks {
             let outside = posting.filter { tp in
                 tp.moves.contains { if case .dwell(let s) = $0 { return s > 0 && !centroidDwell.contains(s) }; return false }
             }.map(\.name)
-            if !outside.isEmpty {
-                error("CNC12 documents dwells of 0.01 to 327.67 s: change the dwell of \(unique(outside)).")
+            let spinUp = profile.spindleDwellSeconds
+            let names = outside + (spinUp > 0 && !centroidDwell.contains(spinUp) ? ["the spindle start (the post's dwell)"] : [])
+            if !names.isEmpty {
+                error("CNC12 documents dwells of 0.01 to 327.67 s: change the dwell of \(unique(names)).")
             }
         }
         return out

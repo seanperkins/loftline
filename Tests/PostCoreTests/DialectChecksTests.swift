@@ -80,6 +80,9 @@ import Testing
         #expect(errors(p, [dwelling(0.005)]).contains { $0.contains("0.01") })
         #expect(errors(p, [dwelling(3), dwelling(327.67)]).isEmpty)
         #expect(errors(BuiltInPosts.avidMach4Inch, [dwelling(400)]).isEmpty)
+        var slowSpinUp = p
+        slowSpinUp.spindleDwellSeconds = 400
+        #expect(errors(slowSpinUp, [tooled(1)]).contains { $0.contains("327.67") })
     }
 
     @Test func aDuplicateKeepsItsCoolantRule() {

@@ -26,6 +26,11 @@ struct ToolChangeZTests {
         var duplicate = BuiltInPosts.massoG3Inch
         duplicate.id = "masso-g3-inch-custom-1"
         #expect(ToolChangeZ.warning(toolpaths: twoTools, profile: duplicate) != nil)
+        // MASSO has no G43: a copy with Tool Length Offset on still resumes at the old Z, so it still warns.
+        var massoOffset = BuiltInPosts.massoG3MM
+        massoOffset.id = "masso-g3-mm-custom-2"
+        massoOffset.useToolLengthOffset = true
+        #expect(ToolChangeZ.warning(toolpaths: twoTools, profile: massoOffset) != nil)
         var centroid = BuiltInPosts.centroidInch
         centroid.useToolLengthOffset = true
         #expect(ToolChangeZ.warning(toolpaths: twoTools, profile: centroid) == nil)

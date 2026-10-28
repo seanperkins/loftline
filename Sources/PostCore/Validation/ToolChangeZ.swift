@@ -23,8 +23,10 @@ public enum ToolChangeZ {
 
     private static func setsZ(_ p: PostProfile) -> Bool {
         if case .on? = p.toolChangeProbe { return true }
-        if p.useToolLengthOffset { return true }
-        if let family = BuiltInPosts.family(of: p.id), BuiltInPosts.toolChangeKeepsZIDs.contains(family) { return false }
+        let family = BuiltInPosts.family(of: p.id)
+        // MASSO has no G43: its offset line is skipped, so it sets nothing (DialectChecks reports it).
+        if p.useToolLengthOffset, !(family.map { BuiltInPosts.noToolLengthOffsetIDs.contains($0) } ?? false) { return true }
+        if let family, BuiltInPosts.toolChangeKeepsZIDs.contains(family) { return false }
         return GCodeParser.parse(p.toolChange.joined(separator: "\n")).blocks.contains { $0.has("M", 6) }
     }
 }

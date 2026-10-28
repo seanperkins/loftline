@@ -323,8 +323,10 @@ private let newMachines = [
 
 /// None of the new posts declares a controller, so park-and-probe refuses them.
 @Test func parkAndProbeRefusesTheNewPosts() {
+    let avid = BuiltInMachines.avidPRO6096
     for (machine, post) in [(BuiltInMachines.machine(id: "onefinity-woodworker"), BuiltInPosts.onefinityBBInch),
-                            (BuiltInMachines.machine(id: "shapeoko-5-pro-2x2"), BuiltInPosts.carbideMotionMM)] {
+                            (BuiltInMachines.machine(id: "shapeoko-5-pro-2x2"), BuiltInPosts.carbideMotionMM),
+                            (avid, BuiltInPosts.massoG3Inch), (avid, BuiltInPosts.uccncMM), (avid, BuiltInPosts.centroidInch)] {
         guard var m = machine else { Issue.record("missing machine"); continue }
         m.toolChangeProbe = ToolChangeProbe.defaults(for: m)
         guard case .refused? = m.applied(to: post).toolChangeProbe else { Issue.record("\(post.id) probed"); continue }

@@ -237,6 +237,8 @@ public enum BuiltInPosts {
     /// Built-in families whose M6 changes the tool without applying its length (MASSO has no G43; Centroid's needs G43 H):
     /// a second tool resumes at the old Z, so `ToolChangeZ` does not count their M6.
     public static let toolChangeKeepsZIDs: Set<String> = [massoG3Inch.id, massoG3MM.id, centroidInch.id, centroidMM.id]
+    /// Built-in families whose controller has no G43 (MASSO), so a Tool Length Offset line is skipped, never applied.
+    public static let noToolLengthOffsetIDs: Set<String> = [massoG3Inch.id, massoG3MM.id]
     /// Built-in families whose controller has no coolant, with the reason export gives.
     public static let noCoolantReasons: [String: String] = {
         let othermill = "The Othermill has no coolant, and its G-code reference lists M7, M8 and M9 as unsupported"
