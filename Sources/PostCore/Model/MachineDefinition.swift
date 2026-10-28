@@ -47,15 +47,15 @@ public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
 
     public func supports(postID: String) -> Bool { postIDs.contains(postID) }
 
-    /// None of the listed posts installed (`available`, a user file replacing a built-in of its id) speaks a controller, so
-    /// probing on would refuse every export: the check export makes (`probeSetting`). A listed post that is not installed
-    /// cannot be posted with, so it is not counted; false when none is installed.
-    public func noListedPostCanProbe(available: [PostProfile]) -> Bool {
+    /// None of the listed posts installed (`available`, a user file replacing a built-in of its id) speaks `controller`, so
+    /// probing with it would refuse every export: the check export makes (`probeSetting`). A listed post that is not
+    /// installed cannot be posted with, so it is not counted; false when none is installed.
+    public func noListedPostProbes(with controller: ToolChangeProbe.Controller, available: [PostProfile]) -> Bool {
         let listed = postIDs.compactMap { id in available.first { $0.id == id } }
         return !listed.isEmpty && listed.allSatisfy { post in
             var base = post
             base.toolChangeProbe = nil
-            return BuiltInPosts.probeController(for: base) == nil
+            return BuiltInPosts.probeController(for: base) != controller
         }
     }
 

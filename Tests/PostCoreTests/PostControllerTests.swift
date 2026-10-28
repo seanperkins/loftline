@@ -63,15 +63,17 @@ import Testing
         var m = BuiltInMachines.avidPRO6096
         let installed = BuiltInPosts.all + [custom(.mach4)]
         m.postIDs = [BuiltInPosts.linuxCNCInch.id, BuiltInPosts.linuxCNCMM.id, "not-installed"]
-        #expect(m.noListedPostCanProbe(available: installed))
+        #expect(m.noListedPostProbes(with: .mach4, available: installed))
+        #expect(m.noListedPostProbes(with: .grbl, available: installed))
         m.postIDs.append(BuiltInPosts.genericGRBLInch.id)
-        #expect(!m.noListedPostCanProbe(available: installed))
+        #expect(!m.noListedPostProbes(with: .grbl, available: installed))
+        #expect(m.noListedPostProbes(with: .mach4, available: installed))   // export refuses a GRBL post on a Mach4 probe
         m.postIDs = [BuiltInPosts.linuxCNCInch.id, "shop"]   // a custom post that declares Mach4
-        #expect(!m.noListedPostCanProbe(available: installed))
+        #expect(!m.noListedPostProbes(with: .mach4, available: installed))
         m.postIDs = [BuiltInPosts.linuxCNCInch.id, custom(nil).id]
-        #expect(m.noListedPostCanProbe(available: BuiltInPosts.all + [custom(nil)]))
+        #expect(m.noListedPostProbes(with: .mach4, available: BuiltInPosts.all + [custom(nil)]))
         m.postIDs = ["not-installed"]
-        #expect(!m.noListedPostCanProbe(available: installed))
+        #expect(!m.noListedPostProbes(with: .mach4, available: installed))
     }
 
     @Test func aUserPostReplacingTheLinuxCNCIDCanProbe() {
@@ -80,7 +82,24 @@ import Testing
         mine.controller = .grbl
         var m = BuiltInMachines.avidPRO6096
         m.postIDs = [mine.id]
-        #expect(!m.noListedPostCanProbe(available: BuiltInPosts.all.filter { $0.id != mine.id } + [mine]))
+        let installed = BuiltInPosts.all.filter { $0.id != mine.id } + [mine]
+        #expect(!m.noListedPostProbes(with: .grbl, available: installed))
+        #expect(m.noListedPostProbes(with: .mach4, available: installed))
+    }
+
+    @Test func theWarningAgreesWithExport() {
+        // Wherever the warning shows, export of every installed listed post refuses; where it does not, one probes.
+        let installed = BuiltInPosts.all + [custom(.mach4), custom(.grbl).renamed("shop-grbl"), custom(nil).renamed("plain")]
+        for controller in ToolChangeProbe.Controller.allCases {
+            var m = BuiltInMachines.avidPRO6096
+            m.toolChangeProbe = ToolChangeProbe.defaults(controller: controller, units: m.units, limits: m.limits)
+            for post in installed {
+                m.postIDs = [post.id]
+                let probes: Bool
+                if case .on? = m.applied(to: post).toolChangeProbe { probes = true } else { probes = false }
+                #expect(m.noListedPostProbes(with: controller, available: installed) == !probes, "\(post.id) \(controller)")
+            }
+        }
     }
 
     @Test func builtInByValueUnchanged() {
@@ -128,4 +147,8 @@ import Testing
         #expect(grbl.controller == .grbl && grbl.topZ < 0 && grbl.mach4ZeroMacro == nil)
         #expect(grbl.problems(limits: BuiltInMachines.avidPRO6096.limits, units: .inch).isEmpty)
     }
+}
+
+private extension PostProfile {
+    func renamed(_ id: String) -> PostProfile { var p = self; p.id = id; return p }
 }
