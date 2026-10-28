@@ -127,10 +127,10 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// - GRBL has no switch and ignores M1 (gnea/grbl `gcode.c`: "Optional stop not supported. Ignore."), so a post that speaks
     ///   GRBL, built in or declared, writes M0 (#115). Judged by value, with the numbers a machine replaces
     ///   (`MachineDefinition.applied(to:)`) put back first, so the post export uses is still recognised as the built-in.
-    /// - TinyG (the Othermill, #114) has no switch and treats M1 as M0. Judged by id (`OthermillSetup.postIDs`), so an edited post
-    ///   that keeps the id still writes M0.
+    /// - The Othermill, Buildbotics and Carbide Motion have no usable switch (`BuiltInPosts.secondsNoOptionalStopIDs`). Judged by
+    ///   id, so an edited post that keeps the id still writes M0.
     public var honoursOptionalStop: Bool {
-        if OthermillSetup.postIDs.contains(id) { return false }
+        if BuiltInPosts.secondsNoOptionalStopIDs.contains(id) { return false }
         var base = self
         base.toolChangeProbe = nil
         if let builtIn = BuiltInPosts.profile(id: id) {
@@ -151,7 +151,8 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
             let clean = text.replacingOccurrences(of: "(", with: "[").replacingOccurrences(of: ")", with: "]")
             return "( \(clean) )"
         case .semicolon:
-            return "; \(text)"
+            // Brackets too: a parenthesis anywhere locks up some senders (Carbide Motion, #105).
+            return "; " + text.replacingOccurrences(of: "(", with: "[").replacingOccurrences(of: ")", with: "]")
         }
     }
 
@@ -243,7 +244,7 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         if others.contains(where: { $0.contains("{SECONDS}") }) {
             return "A post that dwells in milliseconds cannot also write {SECONDS}: a G4 P{SECONDS} elsewhere would dwell milliseconds."
         }
-        if controller == .grbl || OthermillSetup.postIDs.contains(id) {
+        if controller == .grbl || BuiltInPosts.secondsNoOptionalStopIDs.contains(id) || BuiltInPosts.grblIDs.contains(id) {
             return "This controller reads G4 P in seconds: a dwell in milliseconds would wait a thousand times too long."
         }
         return nil

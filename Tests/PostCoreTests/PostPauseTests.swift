@@ -109,6 +109,21 @@ import Testing
         }
     }
 
+    @Test func optionalStopOnBuildboticsAndCarbideMotionWritesM0() throws {
+        // BB resumes an "Optional pause" at once (its control is hidden); Carbide Motion's "Sleep" is undocumented (#104, #105).
+        for builtIn in [BuiltInPosts.onefinityBBInch, BuiltInPosts.onefinityBBMM, BuiltInPosts.carbideMotionInch,
+                        BuiltInPosts.carbideMotionMM] {
+            var edited = builtIn
+            edited.footer.append("M5")
+            for profile in [builtIn, BuiltInMachines.avidPRO6096.applied(to: builtIn), edited] {
+                #expect(!profile.honoursOptionalStop, "\(profile.id)")
+                let lines = try post([cut("A", pause: PauseStep(message: "Check", isOptionalStop: true)), cut("B", from: 4)],
+                                     profile: BuiltInMachines.avidPRO6096.applied(to: profile))
+                #expect(lines.contains("M0") && !lines.contains("M1"), "\(profile.id)")
+            }
+        }
+    }
+
     @Test func optionalStopKeepsM1WhereTheControllerHasTheSwitch() throws {
         for profile in [BuiltInPosts.avidMach4Inch, BuiltInPosts.linuxCNCInch] {
             #expect(profile.honoursOptionalStop, "\(profile.id)")

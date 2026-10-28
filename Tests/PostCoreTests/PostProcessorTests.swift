@@ -219,6 +219,22 @@ private func body(_ program: String) -> [String] {
     #expect(BuiltInPosts.all.allSatisfy { $0.dwellProblem == nil })
 }
 
+/// Every built-in controller that reads `G4 P` in seconds refuses a millisecond dwell, edited copies keeping the id included.
+@Test func secondsControllersRefuseMillisecondDwells() {
+    for builtIn in [BuiltInPosts.onefinityBBInch, BuiltInPosts.carbideMotionMM, BuiltInPosts.genericGRBLMM,
+                    BuiltInPosts.genericGRBLInch] {
+        var p = builtIn
+        p.dwell = "G4 P{MILLISECONDS}"
+        #expect(p.dwellProblem != nil, "\(p.id)")
+    }
+}
+
+@Test func semicolonCommentsBracketParentheses() {
+    var p = BuiltInPosts.genericGRBLMM
+    p.commentStyle = .semicolon
+    #expect(p.comment("a (b)") == "; a [b]")
+}
+
 @Test func millimetreDocumentPostedInInches() throws {
     let tp = Toolpath(name: "x", kind: .profile, tool: PostFixtures.endMill.converted(to: .millimeter), moves: [
         .rapid(to: Vec3(25.4, 50.8, 5.08)),

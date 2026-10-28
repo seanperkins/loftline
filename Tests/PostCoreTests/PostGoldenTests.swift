@@ -63,6 +63,9 @@ private let endMillChange = #"Change to Tool: 1/4" End Mill [2 flute]"#
 
 private let othermillIDs: Set<String> = ["othermill-inch", "othermill-mm"]
 private let othermillPreamble = ["G90", "G94", "G17", "G55"]
+private let bbPreamble = ["G90", "G91.1", "G17", "G49", "G94"]
+private let carbidePreamble = ["G90", "G17", "G40", "G49", "G54"]
+private let carbideChange = ["M5", "; Change to Tool: 1/4\" End Mill [2 flute]", "T1 M6"]
 
 private let newPosts = [
     NewPost(id: "generic-grbl-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: grblPreamble,
@@ -75,6 +78,14 @@ private let newPosts = [
             toolChange: ["M5", "(\(endMillChange))", "T1 M6"], footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M30"]),
     NewPost(id: "othermill-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: othermillPreamble,
             toolChange: ["M5", "(\(endMillChange))", "T1 M6"], footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M30"]),
+    NewPost(id: "onefinity-bb-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: bbPreamble,
+            toolChange: ["M5", "(MSG, \(endMillChange))", "M0"], footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M2"]),
+    NewPost(id: "onefinity-bb-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: bbPreamble,
+            toolChange: ["M5", "(MSG, \(endMillChange))", "M0"], footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M2"]),
+    NewPost(id: "carbide-motion-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: carbidePreamble,
+            toolChange: carbideChange, footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M2"]),
+    NewPost(id: "carbide-motion-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: carbidePreamble,
+            toolChange: carbideChange, footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M2"]),
 ]
 
 private func contains(_ lines: [String], run: [String]) -> Bool {
@@ -115,7 +126,36 @@ private let newPostNumbers = [
     PostNumbers(id: "othermill-mm", name: "Othermill (mm)", ext: "gcode", units: .millimeter, decimals: 3, feedDecimals: 0,
                 x: 139.7, y: 114.3, z: 34.29, spoilboard: 0.254, rapid: 2540, feed: 2540, minRPM: 7000, maxRPM: 26000,
                 arcTolerance: 0.01),
+    PostNumbers(id: "onefinity-bb-inch", name: "Onefinity Buildbotics (inch)", ext: "ngc", units: .inch, decimals: 4,
+                feedDecimals: 1, x: 32.125, y: 32.125, z: 5.25, spoilboard: 0.05, rapid: 400, feed: 400, minRPM: 10000,
+                maxRPM: 30000, arcTolerance: 0.0005),
+    PostNumbers(id: "onefinity-bb-mm", name: "Onefinity Buildbotics (mm)", ext: "ngc", units: .millimeter, decimals: 3,
+                feedDecimals: 0, x: 815.975, y: 815.975, z: 133.35, spoilboard: 1.27, rapid: 10160, feed: 10160, minRPM: 10000,
+                maxRPM: 30000, arcTolerance: 0.01),
+    PostNumbers(id: "carbide-motion-inch", name: "Carbide Motion (inch)", ext: "nc", units: .inch, decimals: 4, feedDecimals: 1,
+                x: 24.5, y: 24.5, z: 6.1, spoilboard: 0.039, rapid: 314.9, feed: 314.9, minRPM: 0, maxRPM: 30000,
+                arcTolerance: 0.0005),
+    PostNumbers(id: "carbide-motion-mm", name: "Carbide Motion (mm)", ext: "nc", units: .millimeter, decimals: 3, feedDecimals: 0,
+                x: 623, y: 623, z: 155, spoilboard: 1.0, rapid: 8000, feed: 8000, minRPM: 0, maxRPM: 30000, arcTolerance: 0.01),
 ]
+
+/// What each new controller must never receive (#104, #105), in both Z-zero modes; Carbide Motion has no `(` at all.
+@Test(arguments: ["onefinity-bb-inch", "onefinity-bb-mm", "carbide-motion-inch", "carbide-motion-mm"])
+func bbAndCarbideWriteOnlyTheirCodes(_ id: String) throws {
+    let p = try #require(BuiltInPosts.profile(id: id))
+    let forbidden: [(Character, Double)] = id.hasPrefix("onefinity")
+        ? [("G", 40), ("G", 80), ("M", 30), ("M", 1)]
+        : [("G", 94), ("G", 80), ("G", 91.1), ("M", 30), ("M", 1)]
+    for mode in [ZZeroMode.materialTop, .spoilboard] {
+        let text = try post(p, zZero: mode)
+        let blocks = GCodeParser.parse(text).blocks
+        for (letter, value) in forbidden {
+            #expect(!blocks.contains { $0.has(letter, value) }, "\(id) \(mode) writes \(letter)\(value)")
+        }
+        #expect(text.contains("\nG4 P3\n"), "\(id) \(mode)")
+        if id.hasPrefix("carbide") { #expect(!text.contains("("), "\(id) \(mode) writes a parenthesis") }
+    }
+}
 
 /// Codes the Othermill's software does not run (spec #114, facts 4, 6, 8 and the coolant row): a skipped line is silent there.
 @Test(arguments: ["othermill-inch", "othermill-mm"]) func othermillWritesNoForbiddenCode(_ id: String) throws {

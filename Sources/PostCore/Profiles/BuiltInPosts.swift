@@ -101,8 +101,68 @@ public enum BuiltInPosts {
         limits: MachineLimits(xTravel: 139.7, yTravel: 114.3, zTravel: 34.29, maxSpoilboardCut: 0.254),
         rapidRate: 2540, maxFeed: 2540)
 
+    /// Onefinity Original/Pro on the Buildbotics controller (#104): the CAMotics planner, a LinuxCNC subset. Only the preamble
+    /// words its source handles (no `G40`, `G80`); a tool change stops with M0, since owners cannot jog during BB's M6 pause;
+    /// `M2` ends the program (its M30 handling is a TODO). Limits are the Woodworker's.
+    static let bbPreamble = ["G90", "G91.1", "G17", "G49", "G94"]
+
+    public static let onefinityBBInch = PostProfile(
+        id: "onefinity-bb-inch", name: "Onefinity Buildbotics (inch)", version: "1.0",
+        fileExtension: "ngc", units: .inch, decimals: 4, feedDecimals: 1,
+        preamble: bbPreamble, toolChange: linuxCNCToolChange,
+        spindleDwellSeconds: 3, minRPM: 10000, maxRPM: 30000, arcOutput: .incrementalIJ, arcTolerance: 0.0005,
+        footer: m2Footer,
+        limits: MachineLimits(xTravel: 32.125, yTravel: 32.125, zTravel: 5.25, maxSpoilboardCut: 0.05),
+        rapidRate: 400, maxFeed: 400)
+
+    public static let onefinityBBMM = PostProfile(
+        id: "onefinity-bb-mm", name: "Onefinity Buildbotics (mm)", version: "1.0",
+        fileExtension: "ngc", units: .millimeter, decimals: 3, feedDecimals: 0,
+        preamble: bbPreamble, toolChange: linuxCNCToolChange,
+        spindleDwellSeconds: 3, minRPM: 10000, maxRPM: 30000, arcOutput: .incrementalIJ, arcTolerance: 0.01,
+        footer: m2Footer,
+        limits: MachineLimits(xTravel: 815.975, yTravel: 815.975, zTravel: 133.35, maxSpoilboardCut: 1.27),
+        rapidRate: 10160, maxFeed: 10160)
+
+    /// The Shapeoko through Carbide Motion (#105), which rewrites G-code on the fly, so its supported-codes page is the dialect:
+    /// `;` comments (parentheses lock up a Shapeoko 5 Pro under some senders), only listed preamble words, `T M6` (CM prompts
+    /// and, with a BitSetter, measures), `M2` (its M30 may return to the machine origin). Limits are the 5 Pro 2x2's; feeds and
+    /// spindle range are the GRBL posts' (Carbide publishes neither).
+    static let carbidePreamble = ["G90", "G17", "G40", "G49", "G54"]
+    static let carbideToolChange = ["M5", "; Change to Tool: {TOOL_NAME}", "T{T} M6"]
+
+    public static let carbideMotionInch = PostProfile(
+        id: "carbide-motion-inch", name: "Carbide Motion (inch)", version: "1.0",
+        fileExtension: "nc", units: .inch, commentStyle: .semicolon, decimals: 4, feedDecimals: 1,
+        preamble: carbidePreamble, toolChange: carbideToolChange,
+        spindleDwellSeconds: 3, minRPM: 0, maxRPM: 30000, arcOutput: .incrementalIJ, arcTolerance: 0.0005,
+        footer: m2Footer,
+        limits: MachineLimits(xTravel: 24.5, yTravel: 24.5, zTravel: 6.1, maxSpoilboardCut: 0.039),
+        rapidRate: 314.9, maxFeed: 314.9)
+
+    public static let carbideMotionMM = PostProfile(
+        id: "carbide-motion-mm", name: "Carbide Motion (mm)", version: "1.0",
+        fileExtension: "nc", units: .millimeter, commentStyle: .semicolon, decimals: 3, feedDecimals: 0,
+        preamble: carbidePreamble, toolChange: carbideToolChange,
+        spindleDwellSeconds: 3, minRPM: 0, maxRPM: 30000, arcOutput: .incrementalIJ, arcTolerance: 0.01,
+        footer: m2Footer,
+        limits: MachineLimits(xTravel: 623, yTravel: 623, zTravel: 155, maxSpoilboardCut: 1.0),
+        rapidRate: 8000, maxFeed: 8000)
+
     public static let all: [PostProfile] = [avidMach4Inch, avidMach4MM, genericGRBLMM,
-                                            genericGRBLInch, linuxCNCInch, linuxCNCMM, othermillInch, othermillMM]
+                                            genericGRBLInch, linuxCNCInch, linuxCNCMM, othermillInch, othermillMM,
+                                            onefinityBBInch, onefinityBBMM, carbideMotionInch, carbideMotionMM]
+
+    /// Built-in posts whose controller reads `G4 P` in seconds and has no usable Optional Stop: the Othermill (TinyG treats M1
+    /// as M0), Buildbotics (it resumes an "Optional pause" at once; the control that arms it is hidden) and Carbide Motion
+    /// (its M1 "Sleep" is undocumented). Judged by id, so an edited copy keeping the id keeps the rules: an optional stop
+    /// writes M0, and a dwell may not be in milliseconds. The GRBL posts are judged apart (#115: by value or a declared
+    /// controller) for the optional stop, and by id too for the dwell (`grblIDs`).
+    public static let secondsNoOptionalStopIDs: Set<String> = [othermillInch.id, othermillMM.id, onefinityBBInch.id,
+                                                               onefinityBBMM.id, carbideMotionInch.id, carbideMotionMM.id]
+    public static let grblIDs: Set<String> = [genericGRBLMM.id, genericGRBLInch.id]
+    /// Built-in posts whose controller has no coolant: the Othermill and Carbide Motion (which ignores M7 and lacks M8).
+    public static let noCoolantIDs: Set<String> = [othermillInch.id, othermillMM.id, carbideMotionInch.id, carbideMotionMM.id]
 
     public static func profile(id: String) -> PostProfile? { all.first { $0.id == id } }
 
