@@ -75,8 +75,34 @@ public enum BuiltInPosts {
         limits: MachineLimits(xTravel: 1219.2, yTravel: 1219.2, zTravel: 152.4, maxSpoilboardCut: 1.27),
         rapidRate: 5080, maxFeed: 5080)
 
+    /// The Othermill Pro and the original Othermill, through the Bantam Tools Milling Machine Software (formerly Otherplan)
+    /// on a TinyG board (#114; spec docs/specs/2026-10-28-othermill-post-design.md). Only codes the software runs: `G55` is its
+    /// one work offset, no `G40`/`G49`/`G91.1` (a line it cannot run is skipped silently), `T M6` makes it prompt for the swap
+    /// and touch the tool off, helices are written as lines, and the program ends with `M30`. Limits are the Pro's.
+    static let othermillPreamble = ["G90", "G94", "G17", "G55"]
+    static let othermillToolChange = ["M5", "(Change to Tool: {TOOL_NAME})", "T{T} M6"]
+    static let othermillFooter = ["G0 Z{HOME_Z}", "M5", "G0 X{HOME_X} Y{HOME_Y}", "M30"]
+
+    public static let othermillInch = PostProfile(
+        id: "othermill-inch", name: "Othermill (inch)", version: "1.0",
+        fileExtension: "gcode", units: .inch, decimals: 4, feedDecimals: 1,
+        preamble: othermillPreamble, toolChange: othermillToolChange,
+        spindleDwellSeconds: 4, minRPM: 7000, maxRPM: 26000, arcOutput: .incrementalIJ, arcTolerance: 0.0005,
+        helicalArcs: false, footer: othermillFooter,
+        limits: MachineLimits(xTravel: 5.5, yTravel: 4.5, zTravel: 1.35, maxSpoilboardCut: 0.01),
+        rapidRate: 100, maxFeed: 100)
+
+    public static let othermillMM = PostProfile(
+        id: "othermill-mm", name: "Othermill (mm)", version: "1.0",
+        fileExtension: "gcode", units: .millimeter, decimals: 3, feedDecimals: 0,
+        preamble: othermillPreamble, toolChange: othermillToolChange,
+        spindleDwellSeconds: 4, minRPM: 7000, maxRPM: 26000, arcOutput: .incrementalIJ, arcTolerance: 0.01,
+        helicalArcs: false, footer: othermillFooter,
+        limits: MachineLimits(xTravel: 139.7, yTravel: 114.3, zTravel: 34.29, maxSpoilboardCut: 0.254),
+        rapidRate: 2540, maxFeed: 2540)
+
     public static let all: [PostProfile] = [avidMach4Inch, avidMach4MM, genericGRBLMM,
-                                            genericGRBLInch, linuxCNCInch, linuxCNCMM]
+                                            genericGRBLInch, linuxCNCInch, linuxCNCMM, othermillInch, othermillMM]
 
     public static func profile(id: String) -> PostProfile? { all.first { $0.id == id } }
 

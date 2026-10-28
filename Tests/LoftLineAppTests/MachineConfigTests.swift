@@ -36,7 +36,8 @@ import Testing
     @Test func orderedPostsPutsMachinePostsFirst() {
         let split = MachineResolver.orderedPosts(BuiltInPosts.all, machine: BuiltInMachines.avidPRO6096)
         #expect(split.compatible.map(\.id) == [BuiltInPosts.avidMach4Inch.id, BuiltInPosts.avidMach4MM.id])
-        #expect(split.other.map(\.id) == ["generic-grbl-mm", "generic-grbl-inch", "linuxcnc-inch", "linuxcnc-mm"])
+        #expect(split.other.map(\.id) == ["generic-grbl-mm", "generic-grbl-inch", "linuxcnc-inch", "linuxcnc-mm", "othermill-inch",
+                                           "othermill-mm"])
         #expect(MachineResolver.orderedPosts(BuiltInPosts.all, machine: nil).compatible.count == BuiltInPosts.all.count)
     }
 

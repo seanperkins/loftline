@@ -140,8 +140,8 @@ public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
     public func snapshot() throws -> JSONValue { try JSONValue(encoding: self) }
 }
 
-/// Machines shipped with LoftLine. Their limits match the built-in posts, so jobs saved before
-/// machines existed validate exactly as before.
+/// Machines shipped with LoftLine. The Avid's and the GRBL router's limits match their built-in posts, so jobs saved before
+/// machines existed validate exactly as before; the original Othermill's are smaller than its posts' (which are the Pro's).
 public enum BuiltInMachines {
     /// Avid CNC PRO6096 running Mach4.
     public static let avidPRO6096 = MachineDefinition(
@@ -159,7 +159,25 @@ public enum BuiltInMachines {
         postIDs: [BuiltInPosts.genericGRBLMM.id],
         rapidRate: BuiltInPosts.genericGRBLMM.rapidRate, maxFeed: BuiltInPosts.genericGRBLMM.maxFeed)
 
-    public static let all: [MachineDefinition] = [avidPRO6096, genericGRBL]
+    /// The Othermill Pro (#114): travel with the spoilboard in, from a manufacturer-derived spec table (unverified against
+    /// Bantam); spindle and traverse speed from the retailer's listing.
+    public static let othermillPro = MachineDefinition(
+        id: "othermill-pro", name: "Othermill Pro", units: .inch,
+        limits: BuiltInPosts.othermillInch.limits,
+        postIDs: [BuiltInPosts.othermillInch.id, BuiltInPosts.othermillMM.id],
+        rapidRate: 100, maxFeed: 100, minRPM: 8500, maxRPM: 26000,
+        notes: "5.5 x 4.5 x 1.35 in, ER-11 collet; tool changes are prompted and touched off by the Bantam Tools software.")
+
+    /// The original Othermill: smaller Z, slower spindle and traverse (its Getting Started guide).
+    public static let othermill = MachineDefinition(
+        id: "othermill", name: "Othermill (original)", units: .inch,
+        limits: MachineLimits(xTravel: 5.5, yTravel: 4.5, zTravel: 1.25, maxSpoilboardCut: 0.01),
+        postIDs: [BuiltInPosts.othermillInch.id, BuiltInPosts.othermillMM.id],
+        rapidRate: 60, maxFeed: 60, minRPM: 7000, maxRPM: 16500,
+        notes: "5.5 x 4.5 x 1.25 in; tool changes are prompted and touched off by the Bantam Tools software.")
+
+    /// The Pro before the original: a project with no machine of its own takes the first machine that lists its post.
+    public static let all: [MachineDefinition] = [avidPRO6096, genericGRBL, othermillPro, othermill]
     public static let defaultID = avidPRO6096.id
 
     public static func machine(id: String) -> MachineDefinition? { all.first { $0.id == id } }

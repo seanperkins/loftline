@@ -41,7 +41,10 @@ private func expectSameLines(_ actual: String, _ expected: String) {
     for p in BuiltInPosts.all {
         for mode in [ZZeroMode.materialTop, .spoilboard] {
             let job = PostFixtures.job(zZero: mode)
-            let issues = GCodeValidator(profile: p, job: job, units: .inch).validate(gcode: try post(p, zZero: mode))
+            // The fixture is a 12 x 8 in job, larger than the Othermill's 5.5 x 4.5 in bed: its posts are checked here on a
+            // machine that holds it (as the post editor's sample widens limits), and on their own limits below.
+            let checked = othermillIDs.contains(p.id) ? BuiltInMachines.avidPRO6096.applied(to: p) : p
+            let issues = GCodeValidator(profile: checked, job: job, units: .inch).validate(gcode: try post(p, zZero: mode))
             #expect(issues.isEmpty, "\(p.id) \(mode): \(issues)")
         }
     }
@@ -58,6 +61,9 @@ private let grblPreamble = ["G90", "G17", "G94"]
 private let linuxCNCPreamble = ["G90", "G91.1", "G17", "G40", "G49", "G80", "G94"]
 private let endMillChange = #"Change to Tool: 1/4" End Mill [2 flute]"#
 
+private let othermillIDs: Set<String> = ["othermill-inch", "othermill-mm"]
+private let othermillPreamble = ["G90", "G94", "G17", "G55"]
+
 private let newPosts = [
     NewPost(id: "generic-grbl-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: grblPreamble,
             toolChange: ["M5", "(\(endMillChange))", "M0"], footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M2"]),
@@ -65,6 +71,10 @@ private let newPosts = [
             toolChange: ["M5", "(MSG, \(endMillChange))", "M0"], footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M2"]),
     NewPost(id: "linuxcnc-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: linuxCNCPreamble,
             toolChange: ["M5", "(MSG, \(endMillChange))", "M0"], footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M2"]),
+    NewPost(id: "othermill-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: othermillPreamble,
+            toolChange: ["M5", "(\(endMillChange))", "T1 M6"], footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M30"]),
+    NewPost(id: "othermill-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: othermillPreamble,
+            toolChange: ["M5", "(\(endMillChange))", "T1 M6"], footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M30"]),
 ]
 
 private func contains(_ lines: [String], run: [String]) -> Bool {
@@ -99,7 +109,93 @@ private let newPostNumbers = [
     PostNumbers(id: "linuxcnc-mm", name: "LinuxCNC (mm)", ext: "ngc", units: .millimeter, decimals: 3, feedDecimals: 0,
                 x: 1219.2, y: 1219.2, z: 152.4, spoilboard: 1.27, rapid: 5080, feed: 5080, minRPM: 0, maxRPM: 24000,
                 arcTolerance: 0.01),
+    PostNumbers(id: "othermill-inch", name: "Othermill (inch)", ext: "gcode", units: .inch, decimals: 4, feedDecimals: 1,
+                x: 5.5, y: 4.5, z: 1.35, spoilboard: 0.01, rapid: 100, feed: 100, minRPM: 7000, maxRPM: 26000,
+                arcTolerance: 0.0005),
+    PostNumbers(id: "othermill-mm", name: "Othermill (mm)", ext: "gcode", units: .millimeter, decimals: 3, feedDecimals: 0,
+                x: 139.7, y: 114.3, z: 34.29, spoilboard: 0.254, rapid: 2540, feed: 2540, minRPM: 7000, maxRPM: 26000,
+                arcTolerance: 0.01),
 ]
+
+/// Codes the Othermill's software does not run (spec #114, facts 4, 6, 8 and the coolant row): a skipped line is silent there.
+@Test(arguments: ["othermill-inch", "othermill-mm"]) func othermillWritesNoForbiddenCode(_ id: String) throws {
+    let p = try #require(BuiltInPosts.profile(id: id))
+    let text = try post(p)
+    let blocks = GCodeParser.parse(text).blocks
+    let forbidden: [(Character, Double)] = [("G", 40), ("G", 49), ("G", 91.1), ("G", 43), ("G", 53), ("G", 28),
+                                            ("M", 7), ("M", 8), ("M", 9), ("M", 4)]
+    for (letter, value) in forbidden {
+        #expect(!blocks.contains { $0.has(letter, value) }, "\(id) writes \(letter)\(value)")
+    }
+    #expect(text.contains("\nG4 P4\n"))
+}
+
+@Test(arguments: ["othermill-inch", "othermill-mm"]) func othermillLinearisesHelices(_ id: String) throws {
+    let p = try #require(BuiltInPosts.profile(id: id))
+    let mc = MachineCoordinates(job: PostFixtures.job(zZero: .materialTop))
+    let tp = Toolpath(name: "Helix", kind: .profile, tool: PostFixtures.endMill, moves: [
+        .rapid(to: Vec3(2, 1, mc.safeZ)),
+        .linear(to: Vec3(2, 1, 0), feed: 30),
+        .arcCW(to: Vec3(2, 3, -0.1), center: Vec2(2, 2), feed: 60),
+        .rapid(to: Vec3(2, 3, mc.safeZ)),
+    ])
+    let job = PostJob(name: "H", units: .inch, job: PostFixtures.job(zZero: .materialTop), toolpaths: [tp])
+    let blocks = GCodeParser.parse(try TemplatePostProcessor(profile: p).post(job)).blocks
+    #expect(!blocks.contains { $0.has("G", 2) || $0.has("G", 3) })
+}
+
+/// Every arc LoftLine writes comes from `ArcFitter`, whose sweep is at most 180°, the Othermill post's own limit.
+@Test(arguments: ["othermill-inch", "othermill-mm"]) func othermillSampleArcsSweepAtMost180(_ id: String) throws {
+    let folder = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        .deletingLastPathComponent().appendingPathComponent("samples/expected/\(id)")
+    let files = try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+    #expect(!files.isEmpty)
+    var arcs = 0
+    for file in files {
+        var at = Vec2(0, 0)
+        for b in GCodeParser.parse(try String(contentsOf: file, encoding: .utf8)).blocks {
+            let end = Vec2(b.value("X") ?? at.x, b.value("Y") ?? at.y)
+            if b.has("G", 2) || b.has("G", 3), let i = b.value("I"), let j = b.value("J") {
+                let sweep = ArcGeometry.sweep(from: at, to: end, center: Vec2(at.x + i, at.y + j), clockwise: b.has("G", 2))
+                #expect(abs(sweep) <= .pi + 1e-6, "\(file.lastPathComponent): sweep \(sweep)")
+                arcs += 1
+            }
+            at = end
+        }
+    }
+    #expect(arcs > 0)
+}
+
+/// The Othermill posts on their own limits: a job that fits the Pro's 5.5 x 4.5 x 1.35 in posts with no issue.
+@Test(arguments: ["othermill-inch", "othermill-mm"]) func othermillOwnLimitsPassTheValidator(_ id: String) throws {
+    let p = try #require(BuiltInPosts.profile(id: id))
+    var job = JobSetup(width: 4, height: 3, thickness: 0.25, safeZ: 0.2, homeZ: 0.5)
+    job.material = "MDF"
+    let mc = MachineCoordinates(job: job)
+    let d = mc.z(depth: 0.1)
+    let tp = Toolpath(name: "Small", kind: .profile, tool: PostFixtures.endMill, moves: [
+        .rapid(to: Vec3(1, 1, mc.safeZ)),
+        .linear(to: Vec3(1, 1, d), feed: 30),
+        .linear(to: Vec3(3, 1, d), feed: 60),
+        .linear(to: Vec3(3, 2, d), feed: 60),
+        .rapid(to: Vec3(3, 2, mc.safeZ)),
+    ])
+    let text = try TemplatePostProcessor(profile: p).post(PostJob(name: "S", units: .inch, job: job, toolpaths: [tp]))
+    let issues = GCodeValidator(profile: p, job: job, units: .inch).validate(gcode: text)
+    #expect(issues.isEmpty, "\(id): \(issues)")
+}
+
+@Test func othermillMachines() throws {
+    let pro = try #require(BuiltInMachines.machine(id: "othermill-pro"))
+    let original = try #require(BuiltInMachines.machine(id: "othermill"))
+    #expect(pro.units == .inch && pro.limits == MachineLimits(xTravel: 5.5, yTravel: 4.5, zTravel: 1.35, maxSpoilboardCut: 0.01))
+    #expect(pro.minRPM == 8500 && pro.maxRPM == 26000 && pro.rapidRate == 100 && pro.maxFeed == 100)
+    #expect(original.limits == MachineLimits(xTravel: 5.5, yTravel: 4.5, zTravel: 1.25, maxSpoilboardCut: 0.01))
+    #expect(original.minRPM == 7000 && original.maxRPM == 16500 && original.rapidRate == 60 && original.maxFeed == 60)
+    for m in [pro, original] { #expect(m.postIDs == ["othermill-inch", "othermill-mm"]) }
+    let ids = BuiltInMachines.all.map(\.id)
+    #expect(try #require(ids.firstIndex(of: "othermill-pro")) < #require(ids.firstIndex(of: "othermill")))
+}
 
 @Test(arguments: newPostNumbers) private func newPostsCarryTheirNumbers(_ n: PostNumbers) throws {
     let p = try #require(BuiltInPosts.profile(id: n.id))
