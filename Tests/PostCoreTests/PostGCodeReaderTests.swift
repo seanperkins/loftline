@@ -79,3 +79,40 @@ func postReaderReadsBackOurOwnProgram(mode: ZZeroMode) throws {
     #expect(r.warnings.contains { $0.contains("G28") })
     #expect(r.moveCount == 2)
 }
+
+/// The preview reads probed tool changes: the probe is not drawn, the zero sets Z, and a program with no M6 starts a
+/// tool segment at each T word.
+@Suite struct ProbedProgramReaderTests {
+    func targets(_ r: GCodeReader.Result) -> [Vec3] { r.segments.flatMap(\.moves).compactMap(\.target) }
+
+    @Test func grblZeroSetsZAndTheProbeIsNotDrawn() {
+        let text = "G21\nG90\nG0 X0 Y0 Z50\nG91\nG38.2 Z-10 F100\nG90\nG10 L20 P1 Z12\nG91\nG0 Z5\nG90\n"
+        let r = GCodeReader.read(text, units: .millimeter, startZ: 5)
+        #expect(targets(r) == [Vec3(0, 0, 50), Vec3(0, 0, 17)])
+        #expect(!r.warnings.contains { $0.contains("not previewed") })
+    }
+
+    @Test func mach4MacroSetsZ() {
+        let text = "G20\nG90\nG0 X0 Y0 Z2\nG91\nG31 Z-0.5 F5\nG90\nM199 P0.5\nG17 G40 G49 G80 G90 G94 G91.1 G20 G54\nG91\nG0 Z0.2\nG90\n"
+        let r = GCodeReader.read(text, units: .inch, startZ: 0.2)
+        #expect(targets(r).last.map { abs($0.z - 0.7) < 1e-9 } == true)
+    }
+
+    @Test func probedTwoToolProgramsHaveTwoSegmentsAndNoPhantomPlunge() throws {
+        let tps = [ProbeSequenceBuilderTests.cut("A"), ProbeSequenceBuilderTests.cut("B", tool: PostFixtures.vBit, at: 3)]
+        let text = try TemplatePostProcessor(profile: ProbeSequenceBuilderTests.profile(BuiltInPosts.avidMach4Inch))
+            .post(PostJob(name: "P", units: .inch, job: ProbeSequenceBuilderTests.job(), toolpaths: tps))
+        let r = GCodeReader.read(text, units: .inch, startZ: 0.2)
+        #expect(r.segments.map(\.toolNumber) == [1, 6])
+        #expect(targets(r).allSatisfy { $0.z >= -0.1 - 1e-9 }, "a move below the deepest cut")
+        #expect(!r.warnings.contains { $0.contains("not previewed") })
+    }
+
+    @Test func m6ProgramsKeepTodaysSegments() {
+        // A post that pre-stages the next tool: T2 is named while T1 still cuts.
+        let text = "G20\nG90\nT1 M6\nG0 X0 Y0 Z1\nT2\nG1 Z-0.1 F10\nT2 M6\nG1 X1 F10\n"
+        let r = GCodeReader.read(text, units: .inch, startZ: 1)
+        #expect(r.segments.map(\.toolNumber) == [1, 2])
+        #expect(r.segments.map(\.moves.count) == [2, 1])
+    }
+}

@@ -58,9 +58,21 @@ public enum GCodeReader {
         var cycleQ: Double?
 
         func emit(_ m: Move) { segments[segments.count - 1].moves.append(m) }
+        // A program with no M6 changes tools with a T word alone (the park-and-probe sequence); one with M6 may name the
+        // next tool early (pre-staging), so there only M6 starts a segment.
+        let changesAtM6 = parsed.blocks.contains { $0.has("M", 6) }
+        var currentTool: Int?
+        /// Set by a probe until the zero that follows it (G10 L20, or the Mach4 zero macro's P).
+        var probed = false
 
         for b in parsed.blocks {
             var nonModal = false
+            if probed, let p = b.value("P"), b.values("M").contains(where: { $0 >= 100 }) {
+                // The Mach4 zero macro: the plate's top is Z = P from here on.
+                pos = Vec3(pos?.x ?? 0, pos?.y ?? 0, p * f)
+                known.z = true
+                probed = false
+            }
             for g in b.values("G") {
                 switch g {
                 case 20: progUnits = .inch
@@ -81,7 +93,18 @@ public enum GCodeReader {
                     nonModal = true
                     let p = b.value("P") ?? 0
                     emit(.dwell(seconds: p > 100 ? p / 1000 : p)) // Mach treats P as seconds; >100 is likely ms
-                case 28, 30, 53, 10, 92:
+                case 31, 38.2:
+                    // A probe stops where it touches: not drawn, and the zero that follows sets Z.
+                    nonModal = true
+                    probed = true
+                case 53:
+                    nonModal = true   // a machine-coordinate move: the work position after it is not known
+                case 10 where b.value("L") == 20 && b.value("Z") != nil:
+                    nonModal = true
+                    pos = Vec3(pos?.x ?? 0, pos?.y ?? 0, (b.value("Z") ?? 0) * f)
+                    known.z = true
+                    probed = false
+                case 28, 30, 10, 92:
                     nonModal = true
                     warn(b.line, "G\(NumberFormat.compact(g, maxDecimals: 1)) is not previewed (machine/offset move)")
                 default: break
@@ -90,7 +113,10 @@ public enum GCodeReader {
             if let s = b.value("S") { rpm = s; segments[segments.count - 1].spindleRPM = max(segments[segments.count - 1].spindleRPM, s) }
             if let fw = b.value("F") { feed = fw * f }
             if let t = b.value("T") { pendingTool = Int(exactly: t.rounded()) }
-            if b.has("M", 6) {
+            if !changesAtM6, let t = b.value("T").flatMap({ Int(exactly: $0.rounded()) }), t != currentTool {
+                segments.append(Segment(toolNumber: t, toolComment: comments[b.line], spindleRPM: rpm, moves: []))
+                currentTool = t
+            } else if b.has("M", 6) {
                 let t = pendingTool
                 segments.append(Segment(toolNumber: t, toolComment: comments[b.line], spindleRPM: rpm, moves: []))
                 // Tool changes leave the position unknown in Z on many machines; keep XY.
