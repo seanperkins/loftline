@@ -212,7 +212,7 @@ import Testing
         let env = Env()
         func newer(_ v: JSONValue) throws -> Data {
             guard case .object(var o) = v else { return Data() }
-            o["schemaVersion"] = .number(2)
+            o["schemaVersion"] = .number(Double(PostProfile.currentSchemaVersion + 1))   // newer than any post or machine reader
             return try JSONEncoder().encode(JSONValue.object(o))
         }
         let postDir = env.posts.store.directory, machineDir = env.machines.store.directory

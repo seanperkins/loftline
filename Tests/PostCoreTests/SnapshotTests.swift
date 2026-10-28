@@ -25,9 +25,43 @@ import Testing
     }
 
     @Test func schemaVersionIsAlwaysWritten() throws {
-        #expect(object(try BuiltInPosts.avidMach4Inch.snapshot())["schemaVersion"] == .number(1))
+        for p in BuiltInPosts.all {
+            #expect(object(try p.snapshot())["schemaVersion"] == .number(1), "\(p.id)")
+            #expect(object(try JSONDecoder().decode(JSONValue.self, from: p.toJSON()))["schemaVersion"] == .number(1), "\(p.id)")
+        }
         #expect(object(try BuiltInMachines.all[0].snapshot())["schemaVersion"] == .number(1))
-        #expect(PostProfile.currentSchemaVersion == 1 && MachineDefinition.currentSchemaVersion == 1)
+        #expect(PostProfile.currentSchemaVersion == 2 && MachineDefinition.currentSchemaVersion == 1)
+    }
+
+    /// The written version is what the content needs (#99 item 1): an older LoftLine would print `{MILLISECONDS}` literally.
+    @Test func aMillisecondDwellIsWrittenAsVersionTwoAndOnlyThen() throws {
+        var ms = BuiltInPosts.avidMach4Inch
+        ms.id = "ms"
+        ms.dwell = "G4 P{MILLISECONDS}"
+        #expect(object(try ms.snapshot())["schemaVersion"] == .number(2))
+        #expect(object(try JSONDecoder().decode(JSONValue.self, from: ms.toJSON()))["schemaVersion"] == .number(2))
+        // Read back, it holds 1 in memory and equals what was written.
+        let back = try PostProfile(snapshot: ms.snapshot())
+        #expect(back == ms && back.schemaVersion == 1)
+        #expect(try PostProfile.fromJSON(ms.toJSON()) == ms)
+        // Switched back to seconds, it is written as 1 again.
+        var seconds = try PostProfile.fromJSON(ms.toJSON())
+        seconds.dwell = "G4 P{SECONDS}"
+        #expect(object(try seconds.snapshot())["schemaVersion"] == .number(1))
+        // A reader of version 1 refuses the millisecond post.
+        #expect(throws: SnapshotError.newerSchema(found: 2, supported: 1)) {
+            try SnapshotDecoding.decode(PostProfile.self, from: ms.snapshot(), supported: 1)
+        }
+    }
+
+    /// A stored version never reaches value equality: a GRBL copy saved by a newer LoftLine is still the built-in, and still
+    /// writes M0 for an optional stop (#115).
+    @Test func aDecodedVersionDoesNotDefeatBuiltInRecognition() throws {
+        var o = object(try BuiltInPosts.genericGRBLMM.snapshot())
+        o["schemaVersion"] = .number(2)
+        let copy = try PostProfile(snapshot: .object(o))
+        #expect(copy == BuiltInPosts.genericGRBLMM)
+        #expect(!copy.honoursOptionalStop)
     }
 
     @Test func schemaVersionAbsentDecodesAsOne() throws {
@@ -40,10 +74,12 @@ import Testing
     }
 
     @Test func newerSchemaThrows() throws {
-        var post = object(try BuiltInPosts.avidMach4Inch.snapshot()); post["schemaVersion"] = .number(2)
+        let future = PostProfile.currentSchemaVersion + 1
+        var post = object(try BuiltInPosts.avidMach4Inch.snapshot()); post["schemaVersion"] = .number(Double(future))
         post["aFieldFromTheFuture"] = .array([.string("x")])
-        #expect(throws: SnapshotError.newerSchema(found: 2, supported: 1)) { try PostProfile(snapshot: .object(post)) }
-        #expect(throws: SnapshotError.newerSchema(found: 2, supported: 1)) {
+        let refused = SnapshotError.newerSchema(found: future, supported: PostProfile.currentSchemaVersion)
+        #expect(throws: refused) { try PostProfile(snapshot: .object(post)) }
+        #expect(throws: refused) {
             try PostProfile.fromJSON(JSONEncoder().encode(JSONValue.object(post)))
         }
         var machine = object(try BuiltInMachines.all[0].snapshot()); machine["schemaVersion"] = .number(2)
@@ -55,8 +91,11 @@ import Testing
 
     @Test func newerSchemaWinsOverAnUndecodableField() throws {
         var post = object(try BuiltInPosts.avidMach4Inch.snapshot())
-        post["schemaVersion"] = .number(3); post["decimals"] = .string("not a number any more")
-        #expect(throws: SnapshotError.newerSchema(found: 3, supported: 1)) { try PostProfile(snapshot: .object(post)) }
+        let future = PostProfile.currentSchemaVersion + 1
+        post["schemaVersion"] = .number(Double(future)); post["decimals"] = .string("not a number any more")
+        #expect(throws: SnapshotError.newerSchema(found: future, supported: PostProfile.currentSchemaVersion)) {
+            try PostProfile(snapshot: .object(post))
+        }
     }
 
     @Test func undecodableSnapshotIsMalformed() {

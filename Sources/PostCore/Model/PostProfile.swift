@@ -69,11 +69,14 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// need it: the probe sequence is written in code for that controller. Built-in posts leave it nil and are recognised by
     /// value (`BuiltInPosts.probeController(for:)`), so their bytes do not change.
     public var controller: ToolChangeProbe.Controller?
-    /// The version of this post's JSON layout, 1 for every file written before the key existed. A project or file whose
-    /// copy has a higher version than `currentSchemaVersion` is refused, never read with fields dropped. Raise it when a
-    /// reader that drops a new field could post different G-code (`controller` does not: without it a post cannot probe).
-    public static let currentSchemaVersion = 1
-    @SchemaVersion public var schemaVersion: Int = PostProfile.currentSchemaVersion
+    /// The highest version of a post's JSON layout this LoftLine reads. A project or file whose copy has a higher version is
+    /// refused, never read with fields or placeholders dropped. Raise it when a reader that drops a new field or placeholder
+    /// could post different G-code (`controller` does not: without it a post cannot probe), and say in
+    /// `requiredSchemaVersion` which content needs it. 2: `{MILLISECONDS}` in the dwell template.
+    public static let currentSchemaVersion = 2
+    /// Always 1 in memory: a post is written with `requiredSchemaVersion` (`toJSON`, `snapshot`) and read back as 1, so the
+    /// version never takes part in value equality (`BuiltInPosts.probeController` recognises a built-in by value).
+    @SchemaVersion public var schemaVersion: Int = 1
     /// The machine's park-and-probe tool change, set by `MachineDefinition.applied(to:)` when the post is used. Never read
     /// from or written to a file, so a post file or a project copy cannot switch probing on.
     @NeverCoded public var toolChangeProbe: ProbeSetting? = nil
@@ -171,21 +174,41 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     public func toJSON() throws -> Data {
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return try enc.encode(self)
+        return try enc.encode(stamped)
+    }
+
+    /// The oldest layout version that can read this post without posting different G-code: 2 for a dwell in milliseconds
+    /// (an older LoftLine leaves `{MILLISECONDS}` in the text), else 1, which every LoftLine since `schemaVersion` reads.
+    public var requiredSchemaVersion: Int { dwell.contains("{MILLISECONDS}") ? 2 : 1 }
+
+    /// This post as it is written: its version is what its content needs, not what it was read with.
+    private var stamped: PostProfile {
+        var p = self
+        p.schemaVersion = requiredSchemaVersion
+        return p
+    }
+
+    /// A post as it is read: the version has done its job (refusing a newer file) and is reset, so it never takes part in
+    /// value equality.
+    private var unstamped: PostProfile {
+        var p = self
+        p.schemaVersion = 1
+        return p
     }
 
     /// Throws `SnapshotError.newerSchema` for a file from a newer LoftLine, so a store skips it instead of loading it
     /// with the fields this version does not know dropped.
     public static func fromJSON(_ data: Data) throws -> PostProfile {
-        try SnapshotDecoding.decode(PostProfile.self, from: data, supported: currentSchemaVersion).checkingBounds()
+        try SnapshotDecoding.decode(PostProfile.self, from: data, supported: currentSchemaVersion).checkingBounds().unstamped
     }
 
     /// A post read back from the copy a project carries (`snapshot()`); refused when newer or unreadable.
     public init(snapshot: JSONValue) throws {
         self = try SnapshotDecoding.decode(PostProfile.self, from: snapshot, supported: Self.currentSchemaVersion).checkingBounds()
+            .unstamped
     }
 
-    public func snapshot() throws -> JSONValue { try JSONValue(encoding: self) }
+    public func snapshot() throws -> JSONValue { try JSONValue(encoding: stamped) }
 
     /// A post is data from anywhere (a project from someone else, a file in the posts folder): the number of decimals it
     /// asks for is what every coordinate is formatted with, so an absurd one would exhaust memory at export. 0 to 12 covers

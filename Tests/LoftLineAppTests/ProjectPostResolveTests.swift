@@ -113,7 +113,7 @@ import Testing
 
     private func newer(_ v: JSONValue) -> JSONValue {
         guard case .object(var o) = v else { return v }
-        o["schemaVersion"] = .number(2)
+        o["schemaVersion"] = .number(Double(PostProfile.currentSchemaVersion + 1))   // newer than any post or machine reader
         return .object(o)
     }
 
