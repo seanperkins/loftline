@@ -932,3 +932,12 @@
   refused). The LinuxCNC posts have no probe sequence. Mist coolant's M7, which stock GRBL rejects, is out of scope: it already
   applies to the GRBL mm post, the coolant form and Help warn, and the editor report checks LoftLine's rules, not a controller's
   build options. A user post file that already has one of the new ids keeps overriding the built-in, by the existing rule.
+- **optional-stop-grbl — an optional stop on a GRBL post writes M0 (#115).** GRBL ignores M1 (`gnea/grbl` `gcode.c`: "Optional
+  stop not supported. Ignore.") and has no Optional Stop switch, so the pause a form promised never stopped the machine.
+  `PostProfile.honoursOptionalStop` is false for a post that speaks GRBL, by the rule probing already uses
+  (`BuiltInPosts.probeController`: a built-in GRBL post unchanged, or a custom post that declares GRBL), and
+  `stopCode(for:)` then writes M0. No new post field: a field an older LoftLine drops would post M1 again, which the schema
+  rule answers with a version bump that makes older copies refuse every project carrying a GRBL post. A custom GRBL post
+  that declares no controller still writes M1; its owner can declare GRBL or put M0 in its pause template. The program
+  header lists an M1 as "M1, stops only with Optional Stop on" instead of claiming the machine waits; the job sheet and the
+  pause form say what the post writes. LinuxCNC keeps M1 (it has the switch).

@@ -69,7 +69,7 @@ struct OperationEditor: View {
         }
         Divider()
         InspectorSection(title: "Pause") {
-            PauseStepForm(pause: setupBinding(\.pauseAfter), toolpathName: draft.setup.name)
+            PauseStepForm(pause: setupBinding(\.pauseAfter), toolpathName: draft.setup.name, profile: document.postProfile)
         }
     }
 

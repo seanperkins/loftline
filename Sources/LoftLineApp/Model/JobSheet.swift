@@ -99,6 +99,12 @@ struct JobSheet: Equatable {
         RulerTicks.label((v * 10000).rounded() / 10000) + " " + units.abbreviation
     }
 
+    /// What an optional stop does on this post: M1 where the controller has the switch, M0 on GRBL, which has none (#115).
+    static func stopNote(_ pause: PauseStep, profile: PostProfile) -> String {
+        guard pause.isOptionalStop else { return "" }
+        return profile.honoursOptionalStop ? " (optional stop, M1)" : " (stops, M0: GRBL has no optional stop)"
+    }
+
     /// - Parameters:
     ///   - sheets: one entry per piece of material; nil = one sheet with every visible shape.
     ///   - settings: the user's time-estimate settings, so the total is the sidebar's and the preview's, and each
@@ -130,7 +136,7 @@ struct JobSheet: Equatable {
                               maxDepth: depth.map { fmt(max(0, $0), u) } ?? "—",
                               time: ToolpathCalculator.formatDuration(settings.estimate([tp], rapidRate: rapidRate, units: u, toolChanges: false)),
                               notes: notes,
-                              pauseAfter: pause.map { $0.text(afterToolpath: tp.name) + ($0.isOptionalStop ? " (optional stop, M1)" : "") }))
+                              pauseAfter: pause.map { $0.text(afterToolpath: tp.name) + Self.stopNote($0, profile: profile) }))
             lastTool = tp.tool.id
             if let i = toolRows.firstIndex(where: { $0.number == t.number && $0.name == t.name }) {
                 if !toolRows[i].usedBy.contains(tp.name) { toolRows[i].usedBy.append(tp.name) }

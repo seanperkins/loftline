@@ -154,7 +154,7 @@ struct ProgramBuilder {
         if !stops.isEmpty {
             w.comment("Pauses - the machine waits for Cycle Start:")
             for (tp, pause) in stops {
-                w.comment("  after \(tp.name): \(pause.text(afterToolpath: tp.name)) [\(pause.stopCode)]")
+                w.comment("  after \(tp.name): \(pause.text(afterToolpath: tp.name)) [\(profile.stopSummary(for: pause))]")
             }
         }
         let seconds = PostTimeEstimator.estimate(toolpaths, rapidRate: profile.rapidRate,
@@ -176,7 +176,7 @@ struct ProgramBuilder {
         w.comment("Pause after toolpath: \(tp.name)")
         var values = baseValues()
         values["MESSAGE"] = TemplateRenderer.commentSafe(pause.text(afterToolpath: tp.name))
-        values["STOP"] = pause.stopCode
+        values["STOP"] = profile.stopCode(for: pause)
         for line in TemplateRenderer(values: values).render(profile.pauseLines) { w.code(line) }
     }
 

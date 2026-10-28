@@ -118,6 +118,14 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// The pause template in effect.
     public var pauseLines: [String] { pause ?? Self.defaultPause(for: commentStyle) }
 
+    /// Whether the controller can stop at M1 (an Optional Stop switch). GRBL has none and ignores M1 (gnea/grbl `gcode.c`:
+    /// "Optional stop not supported. Ignore."), so a post that speaks GRBL, built in or declared, writes M0 instead (#115).
+    public var honoursOptionalStop: Bool {
+        var base = self
+        base.toolChangeProbe = nil
+        return BuiltInPosts.probeController(for: base) != .grbl
+    }
+
     /// "G20" or "G21".
     public var unitsCode: String { units == .inch ? "G20" : "G21" }
 

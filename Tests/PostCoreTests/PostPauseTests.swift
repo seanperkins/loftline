@@ -59,6 +59,37 @@ import Testing
         #expect(!lines.contains("M0"))
     }
 
+    @Test func optionalStopOnAGRBLPostWritesM0() throws {
+        // GRBL ignores M1 (gnea/grbl gcode.c: "Optional stop not supported. Ignore."), so the stop would never happen (#115).
+        var declared = BuiltInPosts.avidMach4Inch
+        declared.id = "shop-grbl"
+        declared.controller = .grbl
+        for profile in [BuiltInPosts.genericGRBLMM, BuiltInPosts.genericGRBLInch, declared] {
+            let lines = try post([cut("A", pause: PauseStep(message: "Check", isOptionalStop: true)), cut("B", from: 4)],
+                                 profile: profile)
+            #expect(lines.contains("M0"), "\(profile.id)")
+            #expect(!lines.contains("M1"), "\(profile.id)")
+            #expect(lines.contains("(   after A: Check [M0] )"), "\(profile.id)")
+        }
+    }
+
+    @Test func optionalStopKeepsM1WhereTheControllerHasTheSwitch() throws {
+        for profile in [BuiltInPosts.avidMach4Inch, BuiltInPosts.linuxCNCInch] {
+            #expect(profile.honoursOptionalStop, "\(profile.id)")
+            let lines = try post([cut("A", pause: PauseStep(message: "Check", isOptionalStop: true)), cut("B", from: 4)],
+                                 profile: profile)
+            #expect(lines.contains("M1"), "\(profile.id)")
+            // The header does not promise a wait the switch may skip.
+            #expect(lines.contains("(   after A: Check [M1, stops only with Optional Stop on] )"), "\(profile.id)")
+        }
+        #expect(!BuiltInPosts.genericGRBLMM.honoursOptionalStop)
+    }
+
+    @Test func aPlainStopsHeaderIsUnchanged() throws {
+        let lines = try post([cut("A", pause: PauseStep(message: "Flip")), cut("B", from: 4)])
+        #expect(lines.contains("(   after A: Flip [M0] )"))
+    }
+
     @Test func noStopAfterTheLastToolpath() throws {
         let lines = try post([cut("A"), cut("B", from: 4, pause: PauseStep(message: "Last"))])
         #expect(!lines.contains("M0"))

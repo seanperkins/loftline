@@ -1,5 +1,6 @@
 import CADCore
 import CAMCore
+import PostCore
 import SwiftUI
 
 // Forms for the 2D toolpaths added in the VCarve-parity work (toolpaths-2d).
@@ -348,6 +349,8 @@ struct ArrayCopyForm: View {
 struct PauseStepForm: View {
     @Binding var pause: PauseStep?
     var toolpathName: String
+    /// The project's post: GRBL has no Optional Stop, so an optional stop there writes M0 (#115).
+    var profile: PostProfile
 
     var body: some View {
         Toggle("Pause the machine after this toolpath", isOn: Binding(get: { pause != nil }, set: { on in
@@ -360,7 +363,11 @@ struct PauseStepForm: View {
                 .help("Shown on the controller while the machine waits")
             Toggle("Optional stop (M1)", isOn: Binding(get: { pause?.isOptionalStop ?? false }, set: { pause?.isOptionalStop = $0 }))
                 .help("Stops only when Optional Stop is switched on at the controller; otherwise the program runs straight through")
-            Text("The program stops (\(p.stopCode)) between this toolpath and the next one, and the next toolpath restarts the spindle. Nothing is added after the last toolpath. No recalculation is needed.")
+            if p.isOptionalStop && !profile.honoursOptionalStop {
+                Text("GRBL has no Optional Stop and ignores M1, so this post writes M0: the machine always stops here.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Text("The program stops (\(profile.stopCode(for: p))) between this toolpath and the next one, and the next toolpath restarts the spindle. Nothing is added after the last toolpath. No recalculation is needed.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
     }

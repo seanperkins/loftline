@@ -94,6 +94,14 @@ import Testing
         #expect(sheet.steps[0].pauseAfter == "Paused after Profile 1 (optional stop, M1)")
     }
 
+    @Test func onAGRBLPostTheJobSheetSaysTheOptionalStopAlwaysStops() {
+        let (doc, _, ids) = makeDoc()
+        setPause(doc, ids[0], PauseStep(isOptionalStop: true))
+        let sheet = JobSheet.make(project: doc.project, results: doc.results, profile: BuiltInPosts.genericGRBLMM,
+                                  groupByTool: false, rapidRate: 600, settings: TimeEstimateSettings())
+        #expect(sheet.steps[0].pauseAfter == "Paused after Profile 1 (stops, M0: GRBL has no optional stop)")
+    }
+
     @Test func olderProjectsWithoutThePauseKeyStillLoad() throws {
         let (doc, _, ids) = makeDoc()
         setPause(doc, ids[0], PauseStep(message: "Flip"))
