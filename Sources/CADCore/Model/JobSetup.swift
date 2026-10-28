@@ -39,6 +39,9 @@ public struct JobSetup: Codable, Hashable, Sendable {
     /// Offset of the machine XY datum from the chosen corner/centre (material frame, document
     /// units). nil = no offset.
     public var datumOffset: Vec2?
+    /// Where the touch plate goes on the material when the machine re-zeroes Z on a plate at each tool change
+    /// (material frame, document units). nil = not set.
+    public var touchOffSpot: Vec2?
 
     public init(width: Double = 24, height: Double = 18, thickness: Double = 0.75,
                 xyOrigin: XYOrigin = .lowerLeft, zZero: ZZeroMode = .materialTop,
@@ -83,6 +86,7 @@ public struct JobSetup: Codable, Hashable, Sendable {
         j.width *= f; j.height *= f; j.thickness *= f; j.safeZ *= f; j.homeZ *= f; j.home = j.home * f
         j.plungeGap = plungeGap.map { $0 * f }
         j.datumOffset = datumOffset.map { $0 * f }
+        j.touchOffSpot = touchOffSpot.map { $0 * f }
         return j
     }
 }
