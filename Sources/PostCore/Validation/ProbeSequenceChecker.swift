@@ -60,6 +60,12 @@ struct ProbeSequenceChecker {
     private static func words(_ b: GCodeBlock) -> [GCodeBlock.Word] { b.words.filter { $0.letter != "N" } }
 
     private func near(_ a: Double?, _ b: Double) -> Bool { a.map { abs($0 - b) <= tol } ?? false }
+    /// A machine-coordinate value as the builder writes it: rounded toward zero, so a value the post's decimals cannot
+    /// represent is compared with the digits actually written, not within half a digit of the exact one.
+    private func written(_ a: Double?, _ b: Double) -> Bool {
+        guard let a, let w = Double(NumberFormat.towardZero(b, decimals: profile.decimals)) else { return false }
+        return abs(a - w) <= 1e-9
+    }
 
     /// Exactly these G codes and these other letters, nothing else.
     private static func shape(_ b: GCodeBlock, g: Set<Double>, letters: Set<Character>) -> Bool {
@@ -69,8 +75,8 @@ struct ProbeSequenceChecker {
             && w.filter { $0.letter != "G" }.count == letters.count
     }
 
-    private func isTopZ(_ b: GCodeBlock) -> Bool { Self.shape(b, g: [53, 0], letters: ["Z"]) && near(b.value("Z"), probe.topZ) }
-    private func isParkZ(_ b: GCodeBlock) -> Bool { Self.shape(b, g: [53, 0], letters: ["Z"]) && near(b.value("Z"), probe.parkZ) }
+    private func isTopZ(_ b: GCodeBlock) -> Bool { Self.shape(b, g: [53, 0], letters: ["Z"]) && written(b.value("Z"), probe.topZ) }
+    private func isParkZ(_ b: GCodeBlock) -> Bool { Self.shape(b, g: [53, 0], letters: ["Z"]) && written(b.value("Z"), probe.parkZ) }
     private static func isG53XY(_ b: GCodeBlock) -> Bool { b.has("G", 53) && (b.value("X") != nil || b.value("Y") != nil) }
     private func isProbeWord(_ b: GCodeBlock) -> Bool { b.has("G", 31) || b.values("G").contains { $0 >= 38 && $0 < 39 } }
     private static func only(_ b: GCodeBlock, _ g: Double) -> Bool { shape(b, g: [g], letters: []) }
@@ -107,7 +113,7 @@ struct ProbeSequenceChecker {
                           + "(G53 Z\(NumberFormat.compact(probe.topZ, maxDecimals: profile.decimals)))")
                     return Effect(consumed: 1, positionUnknown: true)
                 }
-                if Self.shape(b, g: [53, 0], letters: ["X", "Y"]), near(b.value("X"), probe.parkX), near(b.value("Y"), probe.parkY) {
+                if Self.shape(b, g: [53, 0], letters: ["X", "Y"]), written(b.value("X"), probe.parkX), written(b.value("Y"), probe.parkY) {
                     state = .parked
                 } else {
                     error("park", "The move to the park position is not the machine's park position")

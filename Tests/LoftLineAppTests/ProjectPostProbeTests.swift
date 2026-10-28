@@ -81,4 +81,15 @@ import Testing
         let r2 = ProjectPost.resolve(try project(copy: other), profiles: [inch], machines: [avid(probe: Self.probe)])
         #expect(r2.machineCopyDiffers != nil)
     }
+
+    /// A project's post copy that declares Mach4 (a custom post from another shop) can probe on a Mach4 machine set up here.
+    @Test func projectCopyDeclaringMach4Probes() throws {
+        var shop = inch
+        shop.id = "shop-avid"; shop.footer.append("(shop)"); shop.controller = .mach4
+        var p = LoftLineProject(document: Document(name: "T", units: .inch), postProfileID: shop.id, machineID: avid().id)
+        p.postSnapshot = try shop.snapshot()
+        p.machineSnapshot = try avid().snapshot()
+        let r = ProjectPost.resolve(p, profiles: [inch], machines: [avid(probe: Self.probe)])
+        #expect(probeOn(r) == Self.probe)
+    }
 }

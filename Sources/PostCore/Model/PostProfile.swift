@@ -64,9 +64,13 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// {MESSAGE} (the pause's text, comment-safe) and {STOP} (M0, or M1 for an optional stop).
     /// nil = `defaultPause`, which stops the spindle first. Optional so older saved posts still load.
     public var pause: [String]?
+    /// The controller this post's program runs on, declared by the post's owner (nil = not declared). Touch-plate tool changes
+    /// need it: the probe sequence is written in code for that controller. Built-in posts leave it nil and are recognised by
+    /// value (`BuiltInPosts.probeController(for:)`), so their bytes do not change.
+    public var controller: ToolChangeProbe.Controller?
     /// The version of this post's JSON layout, 1 for every file written before the key existed. A project or file whose
-    /// copy has a higher version than `currentSchemaVersion` is refused, never read with fields dropped. A later release
-    /// that adds a post field raises this number.
+    /// copy has a higher version than `currentSchemaVersion` is refused, never read with fields dropped. Raise it when a
+    /// reader that drops a new field could post different G-code (`controller` does not: without it a post cannot probe).
     public static let currentSchemaVersion = 1
     @SchemaVersion public var schemaVersion: Int = PostProfile.currentSchemaVersion
     /// The machine's park-and-probe tool change, set by `MachineDefinition.applied(to:)` when the post is used. Never read

@@ -233,4 +233,30 @@ import Testing
         let p = Program(text: leaving.joined(separator: "\n"), profile: m.profile, job: m.job, units: m.units)
         #expect(p.errors.contains { $0.message.contains("touch-off spot") }, "\(p.errors)")
     }
+
+    // MARK: Post editor (part 3)
+
+    /// The builder writes G53 values rounded toward zero; the checker must accept exactly what it writes. GRBL's top Z of
+    /// -1 mm is -0.03937 in, written -0.0393 by an inch post at 4 decimals.
+    @Test func g53ValuesWrittenTowardZeroPass() throws {
+        var post = BuiltInPosts.avidMach4Inch
+        post.id = "inch-grbl"; post.controller = .grbl
+        let probe = ToolChangeProbe.defaults(controller: .grbl, units: .inch, limits: post.limits)
+        post.toolChangeProbe = .on(probe)
+        let job = B.job()
+        let text = try TemplatePostProcessor(profile: post)
+            .post(PostJob(name: "P", units: .inch, job: job, toolpaths: [B.cut("A"), B.cut("B", tool: PostFixtures.vBit, at: 3)]))
+        #expect(text.contains("G53 G0 Z-0.0393"))
+        let p = Program(text: text, profile: post, job: job, units: .inch)
+        #expect(p.errors.isEmpty, "\(p.errors)")
+    }
+
+    @Test func unrepresentableParkValuePasses() throws {
+        var probe = B.mach4
+        probe.parkX = 1.00007   // 4 decimals write 1.0000
+        let post = B.profile(BuiltInPosts.avidMach4Inch, probe: probe)
+        let p = try Self.mach4(profile: post)
+        #expect(p.text.contains("G53 G0 X1.0000 Y-2.0000"))
+        #expect(p.errors.isEmpty, "\(p.errors)")
+    }
 }

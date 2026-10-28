@@ -62,16 +62,21 @@ public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
         return p
     }
 
-    /// The probe a post built from this machine and `raw` carries. Only a built-in post, unchanged, of the probe's own
-    /// controller can probe: a post has no field naming its dialect, and a machine's post list is editable.
+    /// The probe a post built from this machine and `raw` carries. Only a post that speaks the probe's controller can probe:
+    /// a built-in post unchanged, or a post whose owner declared the controller (`PostProfile.controller`). A machine's post
+    /// list is editable, so the list alone proves nothing.
     private func probeSetting(for raw: PostProfile, factor f: Double) -> ProbeSetting? {
         if let r = probeRefusal { return .refused(r) }
         guard let probe = toolChangeProbe else { return nil }
         var base = raw
         base.toolChangeProbe = nil
-        guard BuiltInPosts.probeController(for: base) == probe.controller else {
-            return .refused("The post \"\(raw.name)\" cannot probe tool changes on \(probe.controller.displayName): use the built-in "
-                            + "\(probe.controller.displayName) post, unchanged.")
+        guard let declared = BuiltInPosts.probeController(for: base) else {
+            return .refused("The post \"\(raw.name)\" declares no controller, so it cannot probe tool changes: declare \(probe.controller.displayName) "
+                            + "in Toolpaths > Post Processors, or use the built-in post.")
+        }
+        guard declared == probe.controller else {
+            return .refused("The post \"\(raw.name)\" declares \(declared.displayName); this machine probes with "
+                            + "\(probe.controller.displayName).")
         }
         return .on(probe.scaled(by: f))
     }

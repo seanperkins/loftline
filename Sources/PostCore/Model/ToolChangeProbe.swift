@@ -46,14 +46,20 @@ public struct ToolChangeProbe: Codable, Hashable, Sendable {
     /// Starting values for a machine that switches probing on: a common 1/2 in (12 mm) plate, a slow feed, the controller
     /// its posts speak (GRBL when it lists the GRBL post). The park position is the owner's to set.
     public static func defaults(for machine: MachineDefinition) -> ToolChangeProbe {
-        let grbl = machine.postIDs.contains(BuiltInPosts.genericGRBLMM.id)
-        let mm = LengthUnit.millimeter.factor(to: machine.units)
-        let inch = LengthUnit.inch.factor(to: machine.units)
-        let quarter = -machine.limits.zTravel / 4
+        defaults(controller: machine.postIDs.contains(BuiltInPosts.genericGRBLMM.id) ? .grbl : .mach4, units: machine.units,
+                 limits: machine.limits)
+    }
+
+    /// Starting values for `controller` on a machine of `limits` in `units` (the post editor's probe sample uses them too).
+    public static func defaults(controller: Controller, units: LengthUnit, limits: MachineLimits) -> ToolChangeProbe {
+        let grbl = controller == .grbl
+        let mm = LengthUnit.millimeter.factor(to: units)
+        let inch = LengthUnit.inch.factor(to: units)
+        let quarter = -limits.zTravel / 4
         let top = grbl ? -1 * mm : 0
         return ToolChangeProbe(parkX: 0, parkY: 0, parkZ: max(quarter, top - 0.5 * inch), topZ: top,
                                plateThickness: 0.5 * inch, plateSize: 3 * inch, probeFeed: 5 * inch, probeTravel: 0.5 * inch,
-                               controller: grbl ? .grbl : .mach4, mach4ZeroMacro: grbl ? nil : 199)
+                               controller: controller, mach4ZeroMacro: grbl ? nil : 199)
     }
 
     /// Lengths and the feed multiplied by `f` (a units change); the work offset and the macro number stay.

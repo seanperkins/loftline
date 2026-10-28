@@ -109,7 +109,7 @@ struct ProgramBuilder {
             "HOME_Z": fmt(coords.homeZ),
             "JOB_NAME": TemplateRenderer.commentSafe(job.name),
             "POST_NAME": TemplateRenderer.commentSafe(profile.name),
-            "POST_VERSION": profile.version,
+            "POST_VERSION": TemplateRenderer.commentSafe(profile.version),
             "SECONDS": NumberFormat.compact(profile.spindleDwellSeconds),
         ]
     }
