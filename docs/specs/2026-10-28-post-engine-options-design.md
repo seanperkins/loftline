@@ -1,11 +1,13 @@
 # Post engine: dwell in milliseconds (issue #99, item 1)
 
-Revision 3, 2026-10-28. Part of the dialect roadmap (#98), approved by Sean ("go", then "keep moving through post
+Revision 4, 2026-10-28 (final: rulings on round 3, the last review round). Part of the dialect roadmap (#98), approved by Sean ("go", then "keep moving through post
 processors", 2026-10-28). Revision 2 answers the first review (executor, auditor, skeptic, simplifier): every other option
 of revision 1 (a first-line prelude, CRLF line endings, G70/G71 or no units code, a forced-dot seconds placeholder) moves to
 the dialect issue that needs it. Each reached readers revision 1 did not cover (the post editor's checks, the deepest-cut
 readback, the preview, the probe recovery line), and none is confirmed needed by the next batch. Revision 3 answers round 2: the written version is computed from content and a
 decoded post keeps 1 in memory, dwells are bounded, and two editor rules stop a millisecond post from also writing seconds.
+Revision 4 rules on round 3: the dwell rules are enforced when posting, not only in the editor (a post file or a project copy
+never passes through the editor), with named errors the user can read.
 
 ## Goal
 
@@ -37,12 +39,19 @@ has not reached speed. This unblocks MASSO (#107), UCCNC (#108) and NcStudio (#1
    cannot cover: v0.2.0, the one release, predates `schemaVersion` and loads a millisecond post file from the posts folder,
    posting `G4 P{MILLISECONDS}` literally (projects are still refused there, by the project format version).
 4. **Bounds.** `{MILLISECONDS}` is the first placeholder that can print a non-number (`%.0f` of `s * 1000` is `INF` above
-   1.8e305 s). `spindleDwellSeconds` must be 0–3600 s (`checkingBounds` refuses a file outside it; the editor reports it), and
-   the builder refuses a toolpath dwell over 3600 s (`PostError.nonFiniteMove`'s check, extended, with its own message).
-5. **Editor rules.** A post whose dwell uses `{MILLISECONDS}` may not use `{SECONDS}` in any other template ("A post that
-   dwells in milliseconds cannot also write {SECONDS}: a G4 P{SECONDS} elsewhere would dwell milliseconds"), since
-   `baseValues` gives `{SECONDS}` in seconds to every template. A post that declares the GRBL controller may not use
-   `{MILLISECONDS}` (GRBL's P is seconds: `G4 P3000` is a 50-minute wait).
+   1.8e305 s). `spindleDwellSeconds` must satisfy `(0...3600).contains` (0 and 3600 accepted, NaN refused): `checkingBounds`
+   refuses a file outside it. The builder refuses a toolpath dwell over 3600 s with `PostError.dwellTooLong(toolpath:seconds:)`,
+   for every post (a 4,000 s drill dwell exported before; DECISIONS says the bound now covers every post).
+5. **Dwell rules, one check.** `PostProfile.dwellProblem: String?` returns the first of:
+   - `spindleDwellSeconds` outside 0–3600 s;
+   - the dwell uses `{MILLISECONDS}` and another template uses `{SECONDS}` ("A post that dwells in milliseconds cannot also
+     write {SECONDS}: a G4 P{SECONDS} elsewhere would dwell milliseconds"), since `baseValues` gives `{SECONDS}` in seconds to
+     every template;
+   - the dwell uses `{MILLISECONDS}` and the post declares the GRBL controller or is an Othermill post by id (both read `P` as
+     seconds: `G4 P3000` is a 50-minute wait).
+   The editor lists it as a problem; the builder refuses with `PostError.invalidPost(String)`, so a post file or project copy
+   that never passed the editor cannot post it. `GCodeExporter` turns both new errors into a refusal with the sentence (no
+   Save Anyway: no valid program can be written), like `PostError.probe`.
 6. **Preview.** `GCodeReader` keeps guessing a `G4 P` unit (`P > 100` is ms): right for a millisecond post's spin-up
    (`P3000` → 3 s) and wrong for a millisecond dwell of 100 ms or less (`P50` reads as 50 s). That is the preview of an
    arbitrary file, which cannot know the unit; DECISIONS records the gap.
@@ -65,7 +74,10 @@ MASSO, UCCNC and NcStudio need it in their own issues. Items 5, 8, 10–15 are a
   `G4 P{MILLISECONDS}0` fail with the new message; `placeholders[.dwell] == ["SECONDS", "MILLISECONDS"]` (the existing
   assertion in `PostDraftReportTests` changes); a millisecond post with `{SECONDS}` in its pause is a problem; a GRBL-declared
   post with `{MILLISECONDS}` is a problem; `spindleDwellSeconds` 3601 is a problem and a file with it is refused.
-- Builder: a toolpath dwell of 3601 s throws; `dwellValues` never prints a non-number for any value the bounds let through.
+- Builder: a toolpath dwell of 3601 s throws `dwellTooLong`; a GRBL-declared millisecond post and a millisecond post with
+  `{SECONDS}` in its pause, built directly (never through the editor), throw `invalidPost`; through `GCodeExporter.export`
+  each is refused with its sentence. `spindleDwellSeconds` 3600 is accepted and `dwellValues(seconds: 3600)` gives
+  `3600000`; an Othermill-id post with `{MILLISECONDS}` is refused.
 - Schema: a GRBL built-in's snapshot with `schemaVersion` set to 2 decodes equal to the built-in and writes M0 for an optional
   stop; a millisecond post round-trips equal through `snapshot()` and `toJSON()`;
   a post whose only change is the millisecond dwell encodes `schemaVersion` 2 through `toJSON()` and `snapshot()`;
@@ -79,5 +91,7 @@ MASSO, UCCNC and NcStudio need it in their own issues. Items 5, 8, 10–15 are a
 ## Docs
 
 DECISIONS (`dwell-ms`: the placeholder, the schema rule, what builds from `98858e5` on and v0.2.0 do, the bounds, the preview
-gap); the doc comments at `PostProfile.swift:6` and `:71-75`; PARITY `io-post-processors` (one line); Help (Post
+gap; it supersedes the write rule in `snapshot-schema`: content decides the written version, memory always holds 1); the
+#99 comment also carries round 1's rule for the moved options (an explicit default must equal nil, or built-ins recognised by
+value drift); the doc comments at `PostProfile.swift:6` and `:71-75`; PARITY `io-post-processors` (one line); Help (Post
 Processors: both dwell forms, and that `P` means milliseconds on some controllers); a comment on #99 answering every item.
