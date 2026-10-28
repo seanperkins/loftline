@@ -239,7 +239,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
 
             A toolpath shows as stale (faded) after its settings or the design change. Press **Calculate** or ⌘R to recalculate. Toolpaths are cut in sidebar order unless "Group by tool" is on in the export sheet. Untick "Include in export" to leave a toolpath out.
 
-            **Pause** (at the bottom of the inspector) stops the machine after a toolpath, to flip the part, add clamps or clear chips: the program lifts to safe Z, stops the spindle, shows your message on the controller and waits for Cycle Start; the next toolpath restarts the spindle. "Optional stop" writes M1, which stops only when Optional Stop is switched on at the controller; GRBL has no such switch and ignores M1, so a GRBL post writes M0 and always stops. Nothing is added after the last toolpath, and "Group by tool" never moves a toolpath across a pause.
+            **Pause** (at the bottom of the inspector) stops the machine after a toolpath, to flip the part, add clamps or clear chips: the program lifts to safe Z, stops the spindle, shows your message on the controller and waits for Cycle Start; the next toolpath restarts the spindle. "Optional stop" writes M1, which stops only when Optional Stop is switched on at the controller; on a controller with no such switch (GRBL, the Othermill) the post writes M0 and the machine always stops. Nothing is added after the last toolpath, and "Group by tool" never moves a toolpath across a pause.
             **Coolant** (each toolpath's form): Off, Mist (M7) or Air (M8). It comes on after the spindle starts and goes off (M9) before a tool change, a pause and the program's end. A stock GRBL controller has no M7: use Air there.
             """
         case .profile:

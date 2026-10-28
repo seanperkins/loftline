@@ -99,10 +99,10 @@ struct JobSheet: Equatable {
         RulerTicks.label((v * 10000).rounded() / 10000) + " " + units.abbreviation
     }
 
-    /// What an optional stop does on this post: M1 where the controller has the switch, M0 on GRBL, which has none (#115).
+    /// What an optional stop does on this post: M1 where the controller has the switch, else M0 (GRBL, the Othermill).
     static func stopNote(_ pause: PauseStep, profile: PostProfile) -> String {
         guard pause.isOptionalStop else { return "" }
-        return profile.honoursOptionalStop ? " (optional stop, M1)" : " (stops, M0: GRBL has no optional stop)"
+        return profile.honoursOptionalStop ? " (optional stop, M1)" : " (always stops, M0: no Optional Stop on this controller)"
     }
 
     /// - Parameters:

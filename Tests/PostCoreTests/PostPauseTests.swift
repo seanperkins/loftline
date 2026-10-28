@@ -91,6 +91,24 @@ import Testing
         #expect(edited.honoursOptionalStop)
     }
 
+    @Test func optionalStopOnAnOthermillPostWritesM0() throws {
+        // TinyG has no Optional Stop and treats M1 as M0 (#114): the post writes M0 and says the stop always happens. Judged by
+        // id, so an edited post that keeps the id still writes M0 (unlike an edited GRBL post, judged by value).
+        var m = BuiltInMachines.othermillPro
+        m.maxRPM = 24000
+        for builtIn in [BuiltInPosts.othermillInch, BuiltInPosts.othermillMM] {
+            var edited = builtIn
+            edited.footer.append("(edited)")
+            for profile in [builtIn, m.applied(to: builtIn), edited] {
+                #expect(!profile.honoursOptionalStop, "\(profile.id)")
+                let lines = try post([cut("A", pause: PauseStep(message: "Check", isOptionalStop: true)), cut("B", from: 4)],
+                                     profile: BuiltInMachines.avidPRO6096.applied(to: profile))
+                #expect(lines.contains("M0") && !lines.contains("M1"), "\(profile.id)")
+                #expect(lines.contains("(   after A: Check [M0] )"), "\(profile.id)")
+            }
+        }
+    }
+
     @Test func optionalStopKeepsM1WhereTheControllerHasTheSwitch() throws {
         for profile in [BuiltInPosts.avidMach4Inch, BuiltInPosts.linuxCNCInch] {
             #expect(profile.honoursOptionalStop, "\(profile.id)")

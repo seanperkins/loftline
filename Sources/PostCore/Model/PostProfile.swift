@@ -118,11 +118,15 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// The pause template in effect.
     public var pauseLines: [String] { pause ?? Self.defaultPause(for: commentStyle) }
 
-    /// Whether the controller can stop at M1 (an Optional Stop switch). GRBL has none and ignores M1 (gnea/grbl `gcode.c`:
-    /// "Optional stop not supported. Ignore."), so a post that speaks GRBL, built in or declared, writes M0 instead (#115).
-    /// Judged on the dialect: the numbers a machine replaces (`MachineDefinition.applied(to:)`) are put back first, so the
-    /// post export uses, with the machine's limits and rates, is still recognised as the built-in.
+    /// Whether the controller can stop at M1 (an Optional Stop switch); where it cannot, an optional stop writes M0 and is
+    /// described as a stop that always happens.
+    /// - GRBL has no switch and ignores M1 (gnea/grbl `gcode.c`: "Optional stop not supported. Ignore."), so a post that speaks
+    ///   GRBL, built in or declared, writes M0 (#115). Judged by value, with the numbers a machine replaces
+    ///   (`MachineDefinition.applied(to:)`) put back first, so the post export uses is still recognised as the built-in.
+    /// - TinyG (the Othermill, #114) has no switch and treats M1 as M0. Judged by id (`OthermillSetup.postIDs`), so an edited post
+    ///   that keeps the id still writes M0.
     public var honoursOptionalStop: Bool {
+        if OthermillSetup.postIDs.contains(id) { return false }
         var base = self
         base.toolChangeProbe = nil
         if let builtIn = BuiltInPosts.profile(id: id) {

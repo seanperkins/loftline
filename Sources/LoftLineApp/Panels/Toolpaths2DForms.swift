@@ -349,7 +349,7 @@ struct ArrayCopyForm: View {
 struct PauseStepForm: View {
     @Binding var pause: PauseStep?
     var toolpathName: String
-    /// The project's post: GRBL has no Optional Stop, so an optional stop there writes M0 (#115).
+    /// The project's post: a controller with no Optional Stop (GRBL, the Othermill's TinyG) gets M0 for an optional stop.
     var profile: PostProfile
 
     var body: some View {
@@ -362,10 +362,10 @@ struct PauseStepForm: View {
                       prompt: Text(PauseStep().text(afterToolpath: toolpathName)))
                 .help("Shown on the controller while the machine waits")
             let honoured = profile.honoursOptionalStop
-            Toggle(honoured ? "Optional stop (M1)" : "Optional stop (GRBL: always stops, M0)",
+            Toggle(honoured ? "Optional stop (M1)" : "Optional stop (always stops here, M0)",
                    isOn: Binding(get: { pause?.isOptionalStop ?? false }, set: { pause?.isOptionalStop = $0 }))
                 .help(honoured ? "Stops only when Optional Stop is switched on at the controller; otherwise the program runs straight through"
-                               : "GRBL has no Optional Stop and ignores M1, so this post writes M0: the machine always stops here")
+                               : "This controller has no Optional Stop, so this post writes M0: the machine always stops here")
             Text("The program stops (\(profile.stopCode(for: p))) between this toolpath and the next one, and the next toolpath restarts the spindle. Nothing is added after the last toolpath. No recalculation is needed.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
