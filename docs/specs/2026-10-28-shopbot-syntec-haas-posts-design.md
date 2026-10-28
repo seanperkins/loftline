@@ -1,6 +1,6 @@
 # ShopBot G-code, Syntec and Haas posts, with the engine options they need
 
-Status: draft, revision 2 (review round 1 answered: see "Rulings" at the end). Issues: #106 (ShopBot G-code), #110 (Syntec),
+Status: draft, revision 3 (review rounds 1 and 2 answered: see "Rulings" at the end). Issues: #106 (ShopBot G-code), #110 (Syntec),
 #111 (Haas / Fanuc-style); engine gaps #99 items 2, 3, 7, 9 and 12. Follows
 `2026-10-28-masso-uccnc-centroid-ncstudio-posts-design.md` (merged at 5258fb6). NcStudio (#109), RichAuto (#112) and OpenSBP
 (#113) are not in this batch.
@@ -39,6 +39,13 @@ Every post says in a DECISIONS entry what it assumes; each issue keeps its owner
   `dwellProblem`'s "`{SECONDS}` elsewhere" rule (E3).
 - The editor shows it as "Program start" above the preamble.
 
+### E1b. `{APPROACH_Z}`
+
+A new placeholder in every template that takes the base ones: the machine Z of the approach height (`ProgramBuilder.approachZ`,
+never below safe Z). The tool length line of the Syntec and Haas posts is `G0 G43 Z{APPROACH_Z} H{T}`, so the offset's first
+move goes no lower than the reentry that follows it (a `Z{SAFE_Z}` there would rapid down to safe Z at an unknown XY, under a
+clamp taller than safe Z).
+
 The parser already skips a `%` line, and an `O1000` block parses as an O word: the validator's plain-move rule treats it as not
 a plain move (it only drops the remembered hole) and nothing else fires. A test pins this.
 
@@ -67,17 +74,24 @@ a plain move (it only drops the remembered hole) and nothing else fires. A test 
   gain it.
 - The validator and the reader already treat a G4 line's axis words as no move (`GCodeValidator.swift:201`,
   `GCodeReader.swift:95`); a test pins that `G4 X3.000` is neither a move to X3 nor a coordinate the bounds check sees. The
-  reader's dwell value for `G4 X` is X seconds.
-- `dwellProblem` compares the **kind** of the dwell template (milliseconds, decimal seconds, seconds), not just "milliseconds or
-  not", with the family's built-in: a Syntec copy edited to `G4 P{SECONDS}` is refused ("This controller reads a whole P in its
-  smallest time unit: write the dwell as G4 X{DECIMAL_SECONDS}"). The "`{SECONDS}` elsewhere" rule covers any post whose dwell
-  is not `{SECONDS}`, and walks the prelude.
-- A dwell below 0.0005 s prints `0.000`: no wait, the same as `seconds > 0` in `GCodeWriter.dwell` already skipping a zero.
+  reader's dwell for `G4 X` is X seconds as written: not scaled by the units factor and not put through the P>100 guess.
+- `ProbeSequenceChecker` (line 231) clears its touch-off-spot gate on any block with an X or Y away from the spot. A G4
+  block's X is a time, so G4 blocks no longer touch the gate (otherwise a `G4 X3.000` after the zero would switch off
+  `spot-descent`).
+- `dwellProblem` compares a family's dwell **form** with its built-in's: the word letter and the placeholder (`P{SECONDS}`,
+  `P{MILLISECONDS}`, `X{DECIMAL_SECONDS}`), read from the template with spaces and leading zeros ignored, either order. A Syntec
+  copy with `G4 P{SECONDS}`, `G4 P{MILLISECONDS}` or `G4 P{DECIMAL_SECONDS}` is refused ("This controller reads a whole P in
+  its smallest time unit: write the dwell as G4 X{DECIMAL_SECONDS}"), including a copy read from a file, which never passes
+  the editor. Any post whose dwell uses `{DECIMAL_SECONDS}` after a word other than X is refused. The "`{SECONDS}` elsewhere"
+  rule covers any post whose dwell is not `{SECONDS}`, and walks the prelude.
+- **A dwell that prints as zero is not written** (`GCodeWriter.dwell`): below 0.0005 s for `{DECIMAL_SECONDS}` (Syntec's X
+  starts at 0.001 s) and `{MILLISECONDS}`. `{SECONDS}` prints any positive value. No existing golden or sample has such a
+  dwell.
 
 ### E4. Schema version 3
 
 `currentSchemaVersion = 3`. `requiredSchemaVersion` is 3 when `prelude` is non-empty, `unitsCodes` is set, or any template
-contains `{DECIMAL_SECONDS}`; else 2 for a `{MILLISECONDS}` dwell; else 1. A version 2 LoftLine refuses the file (and a
+contains `{DECIMAL_SECONDS}` or `{APPROACH_Z}`; else 2 for a `{MILLISECONDS}` dwell; else 1. A version 2 LoftLine refuses the file (and a
 project carrying it, `ProjectPost.swift:248`) instead of dropping the `%`, writing G21 to a Syntec, or leaving the placeholder
 text in the program. All new fields are optional, so every older file still reads. `SnapshotTests`' pinned version moves
 to 3.
@@ -133,7 +147,7 @@ none declares a controller (no touch-plate probing). No built-in machine is adde
 | unitsCodes | `.g70g71` |
 | preamble | `G17`, `G40`, `G49`, `G80`, `G90`, `G94`, `G54` |
 | toolChange | `M5`, `(Change to Tool: {TOOL_NAME})`, `T{T} M6` |
-| useToolLengthOffset | true, `G0 G43 Z{SAFE_Z} H{T}` |
+| useToolLengthOffset | true, `G0 G43 Z{APPROACH_Z} H{T}` |
 | spindleOn | `M3 S{S}` |
 | dwell | `G4 X{DECIMAL_SECONDS}` |
 | footer | `othermillFooter` + `%` |
@@ -148,15 +162,15 @@ none declares a controller (no touch-plate probing). No built-in machine is adde
 | prelude | `%`, `O01000` (five digits, as Autodesk's post) |
 | preamble | `G17`, `G40`, `G49`, `G80`, `G90`, `G94`, `G54` |
 | toolChange | `M5`, `(Change to Tool: {TOOL_NAME})`, `T{T} M6` |
-| useToolLengthOffset | true, `G0 G43 Z{SAFE_Z} H{T}` |
+| useToolLengthOffset | true, `G0 G43 Z{APPROACH_Z} H{T}` |
 | spindleOn | `M3 S{S}` |
 | dwell | `G4 P{MILLISECONDS}` (a P with no dot is milliseconds; Autodesk's Haas post writes the same) |
 | footer | `othermillFooter` + `%` |
 | RPM | 0 to 12,000 |
 | rapid / feed | 710 / 650 in/min (18,034 / 16,510 mm/min) |
 
-- **G43 with a Z:** whether a bare `G43 H` moves Z at once is a setting on Fanuc-style controls. `G0 G43 Z{SAFE_Z} H{T}` makes
-  the offset's first move a stated rapid to safe Z, which the reentry then raises to the approach height.
+- **G43 with a Z:** whether a bare `G43 H` moves Z at once is a setting on Fanuc-style controls. `G0 G43 Z{APPROACH_Z} H{T}`
+  makes the offset's first move a stated rapid to the approach height (E1b).
 - **Tool 0:** `G43 H0` applies no length offset and `T0` selects no tool. Export errors for the Syntec and Haas families on a
   toolpath whose tool is numbered 0 ("renumber T0").
 - **Coolant:** Air writes `M8`, which on Haas and Syntec is flood coolant; Mist writes `M7` (Haas's shower option). Help says
@@ -172,8 +186,12 @@ none declares a controller (no touch-plate probing). No built-in machine is adde
   post is `units-mismatch`) while a G20/G21 post still calls G70 unknown; `DeepestCut` of the inch Syntec program on a mm job
   equals that of the inch Haas program for the same job; the reader warns on G70.
 - **E3:** `{DECIMAL_SECONDS}` prints `3.000`, `0.250`, `3600.000`; `G4 X3.000` is not a move (validator, reader) and the reader's
-  dwell is 3 s; a Syntec copy with `G4 P{SECONDS}` or `G4 P{MILLISECONDS}` is refused, an Avid copy with
-  `G4 X{DECIMAL_SECONDS}` is refused.
+  dwell is 3 s, unscaled in a mm program; a Syntec copy with `G4 P{SECONDS}`, `G4 P{MILLISECONDS}` or `G4 P{DECIMAL_SECONDS}`
+  is refused, also when read with `fromJSON`; an Avid copy with `G4 X{DECIMAL_SECONDS}` is refused; a 0.0004 s dwell writes no
+  line in a Syntec or Haas program; `spot-descent` still fires after a `G4 X` block at the touch-off spot.
+- **E1b:** `{APPROACH_Z}` renders the approach height (above safe Z when the job's approach height is) and safe Z otherwise;
+  the Haas and Syntec tool length line never rapids below the approach height (a job with a 1.5 in approach height and 0.5 in
+  safe Z).
 - **E4:** `requiredSchemaVersion` is 3 for each new field or placeholder; a version 3 file is refused by a reader capped at 2;
   each built-in round-trips through `toJSON`/`fromJSON` equal to itself.
 - **Posts:** both Z-zero modes in inch and mm (inch only for ShopBot); the dwell line per post (3 s → `G4 P3` ShopBot,
@@ -181,6 +199,8 @@ none declares a controller (no touch-plate probing). No built-in machine is adde
   probing refused for a ShopBot copy with a controller; coolant refused on ShopBot; T0 refused on Syntec and Haas.
 - `goldenProgramsPassTheValidator` posts every built-in at 18,000 RPM: it posts each at `min(18000, maxRPM)` and allows
   `spindle-no-speed` for the `noSpindleSpeedIDs` family, as the editor's sample does.
+- `LoftLineCLITests.everySampleWithEveryBuiltInPostIsTheCommittedProgram` accepts the `spindle-no-speed` warning on stderr for
+  that family only, matched on its message.
 - `scripts/check-samples.sh --update` adds `samples/expected/<id>/` for the five posts only; the diff is read by eye.
 
 ## Docs
@@ -202,4 +222,6 @@ safety facts; #99 gets E5.
   fails long.
 - **Probing refusal for ShopBot kept** (simplifier called it optional): a copy with a controller would write `G90 G92.1 G54`,
   of which ShopBot runs only `G90`.
+- **`{APPROACH_Z}`, not `{SAFE_Z}`, in the G43 line** (skeptic, round 2): a tool change must not rapid below the approach
+  height before the reentry.
 - **The preview's P>100 heuristic** (auditor) stays, as ruled in the earlier batch: a file's dialect is unknown to the preview.
