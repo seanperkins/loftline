@@ -79,11 +79,7 @@ enum PreflightChecks {
         return out
     }
 
-    static func sameGeometry(_ a: Tool, _ b: Tool) -> Bool {
-        let tol = 1e-4
-        return a.kind == b.kind && abs(inches(a.diameter, a.units) - inches(b.diameter, b.units)) < tol
-            && abs((a.angle ?? 0) - (b.angle ?? 0)) < 1e-6
-    }
+    static func sameGeometry(_ a: Tool, _ b: Tool) -> Bool { a.hasSameGeometry(as: b) }
 
     private static func inches(_ v: Double, _ units: LengthUnit) -> Double { v * units.factor(to: .inch) }
 

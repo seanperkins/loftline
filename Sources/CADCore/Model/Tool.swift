@@ -158,3 +158,16 @@ public struct MaterialCuttingData: Codable, Hashable, Sendable {
         return d
     }
 }
+
+extension Tool {
+    /// The same cutter as `other` (kind, diameter, angle, tip diameter, shape), whatever the name, number or units: two
+    /// library entries that pass may share a T number (the validator warns); two that do not are different bits.
+    public func hasSameGeometry(as other: Tool) -> Bool {
+        func inches(_ v: Double, _ u: LengthUnit) -> Double { v * u.factor(to: .inch) }
+        let tol = 1e-4
+        return kind == other.kind && abs(inches(diameter, units) - inches(other.diameter, other.units)) < tol
+            && abs((angle ?? 0) - (other.angle ?? 0)) < 1e-6
+            && abs(inches(tipDiameter, units) - inches(other.tipDiameter, other.units)) < tol
+            && shape == other.shape
+    }
+}

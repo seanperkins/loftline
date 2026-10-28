@@ -49,7 +49,7 @@ public struct GCodeValidator: Sendable {
             byNumber[tp.tool.number, default: []].append(tp.tool)
         }
         for (number, tools) in byNumber where tools.count > 1 {
-            let sameGeometry = tools.allSatisfy { $0.kind == tools[0].kind && $0.diameter == tools[0].diameter && $0.angle == tools[0].angle }
+            let sameGeometry = tools.allSatisfy { $0.hasSameGeometry(as: tools[0]) }
             check.issues.add("tool-number-\(number)", sameGeometry ? .warning : .error, line: nil,
                              "T\(number) is used by \(tools.count) different tools (\(tools.map(\.name).joined(separator: ", ")))"
                                  + (sameGeometry ? "" : " with different geometry; give each tool its own number"))

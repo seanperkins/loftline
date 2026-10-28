@@ -87,14 +87,6 @@ import Testing
         #expect(errors(issues(job(.millimeter), units: .millimeter, toolpaths: [mm], profile: BuiltInPosts.othermillInch)).isEmpty)
     }
 
-    @Test func coolantIsOneErrorNamingEveryToolpath() {
-        let a = path([Vec3(1, 1, 0.2), Vec3(1, 1, -0.1)], name: "Pocket A", coolant: .mist)
-        let b = path([Vec3(2, 1, 0.2), Vec3(2, 1, -0.1)], name: "Pocket B", coolant: .air)
-        let found = errors(issues(job(), toolpaths: [a, b, inside()])).filter { $0.contains("coolant") }
-        #expect(found.count == 1)
-        #expect(found.first?.contains("Pocket A") == true && found.first?.contains("Pocket B") == true)
-    }
-
     @Test func theBottomSideIsCheckedWithItsOwnZZero() {
         var j = job()
         j.twoSided = TwoSidedSetup(bottomZZero: .spoilboard)

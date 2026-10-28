@@ -36,7 +36,7 @@ import Testing
 
     @Test func anOthermillSampleHasNoCoolant() throws {
         // The Othermill has no coolant (its G-code reference lists M7-M9 as unsupported), so its sample must not show one.
-        for p in [BuiltInPosts.othermillInch, BuiltInPosts.othermillMM] {
+        for p in BuiltInPosts.all where BuiltInPosts.noCoolantIDs.contains(p.id) {
             let program = try #require(PostDraftReport.make(p).program)
             let blocks = GCodeParser.parse(program).blocks
             #expect(!blocks.contains { $0.has("M", 7) || $0.has("M", 8) || $0.has("M", 9) }, "\(p.id)")

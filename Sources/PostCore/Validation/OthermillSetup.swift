@@ -3,7 +3,7 @@ import CAMCore
 import Foundation
 
 /// What the Bantam Tools software (Othermill, #114; spec docs/specs/2026-10-28-othermill-post-design.md) assumes of a program:
-/// file X0 Y0 Z0 at the stock's front-left top, no coolant, and a machine no bigger than the Othermill. The posts are recognised
+/// file X0 Y0 Z0 at the stock's front-left top, a machine no bigger than the Othermill. The posts are recognised
 /// by id, which a project's copy keeps, so a later change to the built-in's text cannot switch these checks off for saved
 /// projects. Errors keep Save Anyway: the Z-zero convention is the vendor's documented default, not confirmed for imported
 /// G-code, and an owner who set the software's offsets differently must still be able to post.
@@ -22,7 +22,7 @@ public enum OthermillSetup {
     ///   - job: the side being exported (a two-sided job's bottom has its own Z zero).
     ///   - units: the document's units; `job` and every move are in them.
     ///   - moves: every commanded move, in machine coordinates: the toolpaths after lift-overs, and the move home.
-    ///   - toolpaths: the program's toolpaths (their coolant).
+    ///   - toolpaths: the program's toolpaths (coolant is `DialectChecks`').
     ///   - profile: the post as it is posted (a machine's numbers applied).
     ///   - approachHeight: the raised approach height above the material top after a tool change, when a clamp needs one.
     public static func issues(job: JobSetup, units: LengthUnit, moves: [Toolpath], toolpaths: [Toolpath], profile: PostProfile,
@@ -60,14 +60,6 @@ public enum OthermillSetup {
                 error("A move reaches Y\(f(e.maxY)) \(u), beyond the Y travel \(f(yTravel)) \(u) measured from the stock's "
                       + "front-left corner.")
             }
-        }
-
-        let cooled = toolpaths.filter { $0.coolant != nil }.map(\.name)
-        if !cooled.isEmpty {
-            var seen = Set<String>()
-            let names = cooled.filter { seen.insert($0).inserted }.joined(separator: ", ")
-            error("The Othermill has no coolant, and its G-code reference lists M7, M8 and M9 as unsupported: turn coolant off "
-                  + "for \(names).")
         }
 
         let coords = MachineCoordinates(job: job)
