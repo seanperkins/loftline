@@ -203,8 +203,9 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
 machine defined for it in Preferences ▸ Machines:
 1. Post a job with more than one tool with Save All Toolpaths ▸ one file per tool.
 2. Before each file, load its tool and set Z zero 1–2 in above the surface, as in the air cut above.
-3. Air-cut each file with the spindle off. Check that it stops at the top with the tool's name (LinuxCNC shows the
-   `MSG` line), and that the spindle dwell after M3 lasts seconds, not milliseconds.
+3. Air-cut each file with the spindle off. Check that it stops at the top, and that the spindle dwell after M3 lasts
+   seconds, not milliseconds. LinuxCNC shows the tool's name in the `MSG` line; stock GRBL drops comments, so your sender
+   may not show it: check the loaded tool against the file's name.
 
 **Editing a post (Toolpaths ▸ Post Processors…):**
 1. Select the Avid inch post: the form is read-only and the sample program shows "Posts the sample job cleanly".
