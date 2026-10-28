@@ -52,6 +52,25 @@ import Testing
         #expect(wrong.contains("declares GRBL") && wrong.contains("Mach4"))
     }
 
+    @Test func builtInWithNoControllerSaysToTurnProbingOff() {
+        // The built-in LinuxCNC post is already "the built-in post", and declaring Mach4 would write G31 and a Mach4 macro.
+        guard case .refused(let why)? = applied(BuiltInPosts.linuxCNCInch) else { Issue.record("LinuxCNC probed"); return }
+        #expect(why.contains("LinuxCNC (inch)") && why.contains("turn"))
+        #expect(!why.contains("use the built-in post") && !why.contains("declare"))
+    }
+
+    @Test func aMachineOfOnlyLinuxCNCPostsCannotProbe() {
+        var m = BuiltInMachines.avidPRO6096
+        m.postIDs = [BuiltInPosts.linuxCNCInch.id, BuiltInPosts.linuxCNCMM.id]
+        #expect(m.noListedPostCanProbe)
+        m.postIDs.append(BuiltInPosts.genericGRBLInch.id)
+        #expect(!m.noListedPostCanProbe)
+        m.postIDs = [BuiltInPosts.linuxCNCInch.id, "shop"]   // a custom post may declare a controller
+        #expect(!m.noListedPostCanProbe)
+        m.postIDs = []
+        #expect(!m.noListedPostCanProbe)
+    }
+
     @Test func builtInByValueUnchanged() {
         #expect(BuiltInPosts.probeController(for: BuiltInPosts.avidMach4Inch) == .mach4)
         #expect(BuiltInPosts.probeController(for: BuiltInPosts.genericGRBLMM) == .grbl)

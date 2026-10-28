@@ -47,6 +47,14 @@ public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
 
     public func supports(postID: String) -> Bool { postIDs.contains(postID) }
 
+    /// Every listed post is a built-in with no probe sequence (LinuxCNC), so probing on would refuse every export. A custom
+    /// post may declare a controller, so a list with one is never this.
+    public var noListedPostCanProbe: Bool {
+        !postIDs.isEmpty && postIDs.allSatisfy { id in
+            BuiltInPosts.profile(id: id).map { BuiltInPosts.probeController(for: $0) == nil } ?? false
+        }
+    }
+
     /// `profile` with this machine's limits, rapid rate, max feed and RPM range converted into the
     /// profile's output units. Everything textual (the G-code dialect) stays the post's.
     public func applied(to profile: PostProfile) -> PostProfile {
@@ -71,6 +79,11 @@ public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
         var base = raw
         base.toolChangeProbe = nil
         guard let declared = BuiltInPosts.probeController(for: base) else {
+            if BuiltInPosts.profile(id: base.id) == base {
+                // A built-in with no probe sequence (LinuxCNC): declaring another controller would write its codes.
+                return .refused("The built-in post \"\(raw.name)\" cannot probe tool changes: turn off park and probe for this "
+                                + "machine in Preferences > Machines.")
+            }
             return .refused("The post \"\(raw.name)\" declares no controller, so it cannot probe tool changes: declare \(probe.controller.displayName) "
                             + "in Toolpaths > Post Processors, or use the built-in post.")
         }

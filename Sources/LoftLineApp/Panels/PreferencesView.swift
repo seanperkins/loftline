@@ -287,6 +287,11 @@ struct ToolChangeProbeSection: View {
                 LengthField("Plate size", value: value(\.plateSize, 0), units: u, help: "The plate's greatest extent: its diagonal, or a round plate's diameter")
                 NumberField("Probe feed", value: value(\.probeFeed, 0), unit: "\(u.abbreviation)/min", help: "At most 10 in/min (254 mm/min)")
                 LengthField("Probe travel", value: value(\.probeTravel, 0), units: u, help: "At most 1 in (25.4 mm) and no more than the plate thickness")
+                if machine.noListedPostCanProbe {
+                    Label("None of this machine's posts can probe tool changes (the LinuxCNC posts cannot): export refuses "
+                          + "while this is on.", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
+                }
                 ForEach(probe.problems(limits: machine.limits, units: u), id: \.self) { problem in
                     Label(problem, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
