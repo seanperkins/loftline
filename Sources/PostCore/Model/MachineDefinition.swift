@@ -76,6 +76,20 @@ public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
         return .on(probe.scaled(by: f))
     }
 
+    /// The machine in `new` units: every length and speed scaled, the probe's included (the Machines editor's switch).
+    public func switchingUnits(to new: LengthUnit) -> MachineDefinition {
+        guard new != units else { return self }
+        var m = self
+        let f = units.factor(to: new)
+        m.limits = MachineLimits(xTravel: limits.xTravel * f, yTravel: limits.yTravel * f, zTravel: limits.zTravel * f,
+                                 maxSpoilboardCut: limits.maxSpoilboardCut * f)
+        m.rapidRate = rapidRate.map { $0 * f }
+        m.maxFeed = maxFeed.map { $0 * f }
+        m.toolChangeProbe = toolChangeProbe?.scaled(by: f)
+        m.units = new
+        return m
+    }
+
     /// "60 x 96 x 8 in".
     public var envelopeDescription: String {
         func f(_ v: Double) -> String {

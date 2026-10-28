@@ -91,4 +91,29 @@ import Testing
         q.machineID = "avid-pro6096"
         #expect(try LoftLineProject.decode(from: q.encoded()).machineID == "avid-pro6096")
     }
+
+    /// The Machines editor's units switch scales the probe with the rest: limits are compared in the probe's own units.
+    @Test func unitsSwitchScalesTheProbe() {
+        var m = BuiltInMachines.avidPRO6096
+        m.toolChangeProbe = ToolChangeProbe(parkX: 2, parkY: -2, parkZ: -0.5, topZ: 0, plateThickness: 1, plateSize: 3,
+                                            probeFeed: 10, probeTravel: 1, controller: .mach4, mach4ZeroMacro: 199,
+                                            workOffset: 3)
+        let mm = m.switchingUnits(to: .millimeter)
+        let p = mm.toolChangeProbe!
+        #expect(abs(p.probeFeed - 254) < 1e-9 && abs(p.probeTravel - 25.4) < 1e-9 && abs(p.parkX - 50.8) < 1e-9)
+        #expect(p.workOffset == 3 && p.mach4ZeroMacro == 199)
+        #expect(p.problems(limits: mm.limits, units: .millimeter).isEmpty)
+        #expect(abs(mm.limits.zTravel - 8 * 25.4) < 1e-9)
+        let back = mm.switchingUnits(to: .inch).toolChangeProbe!
+        #expect(abs(back.probeFeed - 10) < 1e-9 && abs(back.plateThickness - 1) < 1e-9)
+    }
+
+    @Test func probeDefaultsHaveNoProblems() {
+        for m in BuiltInMachines.all {
+            let p = ToolChangeProbe.defaults(for: m)
+            #expect(p.problems(limits: m.limits, units: m.units).isEmpty, "\(m.name): \(p.problems(limits: m.limits, units: m.units))")
+        }
+        #expect(ToolChangeProbe.defaults(for: BuiltInMachines.genericGRBL).controller == .grbl)
+        #expect(ToolChangeProbe.defaults(for: BuiltInMachines.avidPRO6096).controller == .mach4)
+    }
 }

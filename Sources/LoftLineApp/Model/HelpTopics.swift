@@ -438,6 +438,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
 enum FieldHelp {
     static let texts: [String: String] = [
         "Start depth": "Depth below the material top where cutting starts",
+        "Spot X": "Where the touch plate goes on the material, from its lower-left corner",
+        "Spot Y": "Where the touch plate goes on the material, from its lower-left corner",
         "Coolant": "Mist (M7) or air (M8) while this toolpath cuts; off (M9) before a tool change or pause",
         "Cut depth": "Final depth below the material top",
         "Pass depth": "Maximum depth of each pass (off = the tool's stepdown)",
