@@ -43,7 +43,8 @@ public enum PostSampleJob {
             .linear(to: Vec3(3.5, 2.5, shallow), feed: f(60)),
             .rapid(to: Vec3(3.5, 2.5, safe)),
         ])
-        c.coolant = .mist
+        // The Othermill has no coolant (its G-code reference lists M7-M9 as unsupported): its sample shows none.
+        c.coolant = OthermillSetup.postIDs.contains(draft.id) ? nil : .mist
         return PostJob(name: "Sample", units: .inch, job: setup, toolpaths: [a, b, c])
     }
 

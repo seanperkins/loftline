@@ -34,6 +34,17 @@ import Testing
         }
     }
 
+    @Test func anOthermillSampleHasNoCoolant() throws {
+        // The Othermill has no coolant (its G-code reference lists M7-M9 as unsupported), so its sample must not show one.
+        for p in [BuiltInPosts.othermillInch, BuiltInPosts.othermillMM] {
+            let program = try #require(PostDraftReport.make(p).program)
+            let blocks = GCodeParser.parse(program).blocks
+            #expect(!blocks.contains { $0.has("M", 7) || $0.has("M", 8) || $0.has("M", 9) }, "\(p.id)")
+        }
+        let avid = try #require(PostDraftReport.make(BuiltInPosts.avidMach4Inch).program)
+        #expect(GCodeParser.parse(avid).blocks.contains { $0.has("M", 7) })   // other posts keep their coolant sample
+    }
+
     @Test func unchangedDuplicatesAreClean() {
         for p in BuiltInPosts.all {
             var d = p
