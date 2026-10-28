@@ -99,6 +99,32 @@ struct PostProfileStore {
         return "\(stem)-custom-\(n)"
     }
 
+    /// The id an imported post is saved under: its own when that is a plain file name no built-in and no file in the folder has
+    /// (case-folded, loaded or not), else the next free copy of it, or of "imported-post" when it is not a plain name.
+    func importID(for id: String) -> String {
+        let base = Self.isSafeID(id) ? id : "imported-post"
+        let taken = Set(jsonFiles().map { $0.deletingPathExtension().lastPathComponent.lowercased() }
+                        + BuiltInPosts.all.map { $0.id.lowercased() })
+        guard taken.contains(base.lowercased()) else { return base }
+        var n = 1
+        while taken.contains("\(base)-custom-\(n)".lowercased()) { n += 1 }
+        return "\(base)-custom-\(n)"
+    }
+
+    static let maxImportBytes = 1 << 20
+
+    struct TooLarge: LocalizedError {
+        var errorDescription: String? { "This file is too large to be a post (a post is a few kilobytes)." }
+    }
+
+    /// A post file to import: the size checked before reading, then decoded (a newer or malformed file is refused with its
+    /// reason) and normalised.
+    func read(_ url: URL) throws -> PostProfile {
+        let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+        guard size <= Self.maxImportBytes else { throw TooLarge() }
+        return try PostProfile.fromJSON(Data(contentsOf: url)).normalized
+    }
+
     struct UnsafeID: LocalizedError {
         var id: String
         var errorDescription: String? { "The post id \"\(id)\" is not a plain file name." }

@@ -476,10 +476,11 @@ final class LoftLineDocument: ReferenceFileDocument {
             + ToolSync.issues(for: project, library: toolLibrary.library)
     }
 
-    /// The project's own post when it is carried but not installed on this Mac, so a post picker can still list it.
+    /// The project's own post, as it carries it (not with the machine's limits applied), when this Mac does not have it: a post
+    /// picker lists it, and Post Processors can add it.
     var carriedPostNotInstalled: PostProfile? {
         let r = resolvedPost
-        return r.postSource == .projectCopy && !r.postInstalledHere ? r.post : nil
+        return r.postSource == .projectCopy && !r.postInstalledHere ? ProjectPost.postCopy(of: project) : nil
     }
 
     /// What Job Setup says about the project's copies.
