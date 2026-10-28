@@ -190,6 +190,29 @@ import Testing
                                   groupByTool: false, rapidRate: 600, settings: TimeEstimateSettings())
         #expect(sheet.warnings.contains { $0.contains("with tabs off") })
     }
+
+    @Test func aSecondToolOnAnM0PostWarnsToSplitTheFile() throws {
+        let doc = LoftLineDocument(project: project(), toolLibrary: AppTestSupport.library())
+        var op = profile(doc.project, depth: 0.25, tabs: false)
+        var s = op.editableSetup
+        s.shapeIDs = doc.document.shapes.map(\.id)
+        op.editableSetup = s
+        let o = op
+        doc.perform("Add") { $0.operations.append(o) }
+        doc.calculateNow([o.id])
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
+        var second = try #require(tps.first)
+        second.id = UUID()
+        second.tool = try #require(AppTestSupport.library().tools.first { $0.id != second.tool.id && $0.diameter == second.tool.diameter }
+                                   ?? AppTestSupport.library().tools.first { $0.id != second.tool.id })
+        let split = { (r: GCodeExportResult) in r.issues.contains { $0.severity == .warning && $0.message.contains("one file per tool") } }
+        let linux = GCodeExporter.export(project: doc.project, toolpaths: tps + [second], profile: BuiltInPosts.linuxCNCInch, jobName: "T")
+        #expect(split(linux))
+        let avid = GCodeExporter.export(project: doc.project, toolpaths: tps + [second], profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+        #expect(!split(avid))
+        let one = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.linuxCNCInch, jobName: "T")
+        #expect(!split(one))
+    }
 }
 
 /// A tool named by the library's own naming is never reported as a mismatch against its own diameter.

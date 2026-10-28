@@ -921,8 +921,10 @@
   `BuiltInPosts.all`, so defaults and pickers start as before. LinuxCNC stops for a tool with `M5`, a `(MSG, …)` line and `M0`,
   not `T{T} M6`: M6 completes at once on a config that loops `tool-change` back, and a T missing from the tool table aborts. M0
   stops everywhere but cannot re-zero Z (LinuxCNC cannot touch off while paused), the same as the GRBL post's M0; Help says to
-  save one file per tool and touch off before each. A single multi-tool file is still allowed for both; refusing it would need a
-  post field ("this tool change cannot re-zero Z") and is a follow-up. No Mach3 posts: they would write the Avid posts' G-code
+  save one file per tool and touch off before each. A single multi-tool file is still allowed for both, with a warning
+  (`ToolChangeZ`, added after the final review): a program that changes tools with a post whose tool change neither probes,
+  applies a tool length offset nor calls M6 says to save one file per tool. A warning, not a refusal: the GRBL mm post has posted
+  such files since it shipped, and a sender may handle the stop. No Mach3 posts: they would write the Avid posts' G-code
   byte for byte. A Mach3 owner can list the Avid posts in a machine of their own, with Mach3's tool change set to stop, `G4 P` in
   seconds and touch-plate tool changes off (the Mach4 probe sequence calls a Mach4 macro); nothing has run on Mach3, so this is
   here and not in Help. Probing: `generic-grbl-inch` probes as GRBL, and `ToolChangeProbe.defaults(for:)` now asks

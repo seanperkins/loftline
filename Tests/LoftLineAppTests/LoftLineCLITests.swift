@@ -294,7 +294,9 @@ import Testing
             for name in sampleNames {
                 let r = Self.run(["export", Self.samples.appendingPathComponent(name + ".loftline").path, "--post", post.id,
                                   "--builtin-only", "--out", "-"])
-                #expect(r.status == 0 && r.err.isEmpty, "\(name) with \(post.id): \(r.err)")
+                // The one expected message: a post that only stops for a tool change warns on a sample with two tools.
+                let other = r.err.split(separator: "\n").filter { !$0.hasPrefix("warning: This program changes tools") }
+                #expect(r.status == 0 && other.isEmpty, "\(name) with \(post.id): \(r.err)")
                 let file = expected.appendingPathComponent(post.id).appendingPathComponent(
                     GCodeExporter.suggestedFileName(jobName: name, operationName: nil, profile: post))
                 let committed = try String(contentsOf: file, encoding: .utf8)
