@@ -9,6 +9,9 @@ import Foundation
 /// Numeric placeholders are formatted with `decimals`.
 public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     public enum CommentStyle: String, Codable, Sendable { case parentheses, semicolon }
+    /// The units words a controller reads. nil is G20/G21; Syntec's 900M reads G70/G71 instead (#110). One case only, so no
+    /// file can spell out the default and a built-in recognised by value never drifts.
+    public enum UnitsCodes: String, Codable, Sendable { case g70g71 }
     public enum ArcOutput: String, Codable, Sendable {
         /// G2/G3 with I J relative to the arc start (Mach default, GRBL).
         case incrementalIJ
@@ -69,11 +72,17 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// need it: the probe sequence is written in code for that controller. Built-in posts leave it nil and are recognised by
     /// value (`BuiltInPosts.probeController(for:)`), so their bytes do not change.
     public var controller: ToolChangeProbe.Controller?
+    /// Lines written before anything else, never numbered: a program wrapper (`%`, an O number) that a Fanuc-style controller
+    /// wants first (#99 item 2). nil = none; an empty list is read as nil (`normalized`).
+    public var prelude: [String]?
+    /// The units words (nil = G20/G21).
+    public var unitsCodes: UnitsCodes?
     /// The highest version of a post's JSON layout this LoftLine reads. A project or file whose copy has a higher version is
     /// refused, never read with fields or placeholders dropped. Raise it when a reader that drops a new field or placeholder
     /// could post different G-code (`controller` does not: without it a post cannot probe), and say in
-    /// `requiredSchemaVersion` which content needs it. 2: `{MILLISECONDS}` in the dwell template.
-    public static let currentSchemaVersion = 2
+    /// `requiredSchemaVersion` which content needs it. 2: `{MILLISECONDS}` in the dwell template. 3: `prelude`, `unitsCodes`,
+    /// `{DECIMAL_SECONDS}` or `{APPROACH_Z}`.
+    public static let currentSchemaVersion = 3
     /// Always 1 in memory: a post is written with `requiredSchemaVersion` (`toJSON`, `snapshot`) and read back as 1, so the
     /// version never takes part in value equality (`BuiltInPosts.probeController` recognises a built-in by value).
     @SchemaVersion public var schemaVersion: Int = 1
@@ -116,6 +125,7 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     public var normalized: PostProfile {
         var p = self
         if p.pause?.isEmpty == true { p.pause = nil }
+        if p.prelude?.isEmpty == true { p.prelude = nil }
         return p
     }
 
@@ -133,7 +143,12 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     }
 
     /// "G20" or "G21".
-    public var unitsCode: String { units == .inch ? "G20" : "G21" }
+    public var unitsCode: String {
+        switch unitsCodes {
+        case .g70g71: return units == .inch ? "G70" : "G71"
+        case nil: return units == .inch ? "G20" : "G21"
+        }
+    }
 
     public func comment(_ text: String) -> String {
         let text = Self.asciiOnly(text)
@@ -170,9 +185,17 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         return try enc.encode(stamped)
     }
 
-    /// The oldest layout version that can read this post without posting different G-code: 2 for a dwell in milliseconds
-    /// (an older LoftLine leaves `{MILLISECONDS}` in the text), else 1, which every LoftLine since `schemaVersion` reads.
-    public var requiredSchemaVersion: Int { dwell.contains("{MILLISECONDS}") ? 2 : 1 }
+    /// The oldest layout version that can read this post without posting different G-code: 3 for a program wrapper, G70/G71,
+    /// `{DECIMAL_SECONDS}` or `{APPROACH_Z}` (an older LoftLine drops the field or prints the placeholder), 2 for a dwell in
+    /// milliseconds (it leaves `{MILLISECONDS}` in the text), else 1, which every LoftLine since `schemaVersion` reads.
+    public var requiredSchemaVersion: Int {
+        let templates = (prelude ?? []) + preamble + toolChange + [toolLengthOffset, spindleOn, dwell] + footer + (pause ?? [])
+        if prelude?.isEmpty == false || unitsCodes != nil
+            || templates.contains(where: { $0.contains("{DECIMAL_SECONDS}") || $0.contains("{APPROACH_Z}") }) {
+            return 3
+        }
+        return dwell.contains("{MILLISECONDS}") ? 2 : 1
+    }
 
     /// This post as it is written: its version is what its content needs, not what it was read with.
     private var stamped: PostProfile {
