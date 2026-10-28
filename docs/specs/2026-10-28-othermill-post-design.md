@@ -1,10 +1,12 @@
 # Othermill Pro posts (issue #114)
 
-Revision 3, 2026-10-28. Approved for work by Sean ("go", 2026-10-28) as the next item after #115.
+Revision 4, 2026-10-28 (final: rulings on round 3, the last review round). Approved for work by Sean ("go", 2026-10-28) as the next item after #115.
 Revision 2 answers the first review (executor, auditor, skeptic, simplifier): the setup rules are export errors, not a
 thrown refusal; the datum offset is checked; recognition is by id; the sample-check change is dropped; the evidence table
 now says what the vendor posts actually write. Revision 3 answers round 2 (auditor, skeptic): the material must fit the
 bed, the Z envelope counts the stock, the machine warning covers speed and feed, and one home for the ids and limits.
+Revision 4 rules on round 3 (auditor, skeptic): the XY and Z checks measure every commanded move (approach, lift-overs and
+the move home included); the golden validator loop checks the Othermill rows on a machine big enough for its fixture.
 
 ## Goal
 
@@ -58,31 +60,42 @@ from the operator) and no datum offset.
    - limits and rates (the Pro's; a machine replaces them): inch 5.5 × 4.5 × 1.35 in, spoilboard 0.01 in, rapid and max feed
      100 in/min; mm 139.7 × 114.3 × 34.29 mm, spoilboard 0.254 mm, 2540 mm/min; RPM 7,000–26,000 (spans both machines,
      each of which sets its own)
-2. **Setup checks at export (`OthermillSetup.issues(project:toolpaths:profile:)`).** Beside `ToolChangeZ.warning` in
+2. **Setup checks at export (`OthermillSetup.issues(job:units:moves:toolpaths:profile:)`, in PostCore beside `ToolChangeZ`,
+   where `PostProfile.honoursOptionalStop` can read its id list; `moves` are the exporter's `checked` toolpaths, which include
+   the raised approach, the lift-overs and the move home).** Beside `ToolChangeZ.warning` in
    `GCodeExporter.export` (the one path the app, the command line, batch, tiled export and the validation report all use),
    for a post whose id is in `OthermillSetup.postIDs` (the one list of the two ids; `honoursOptionalStop` reads it too). The
    Othermill's own numbers come from `BuiltInPosts.profile(id:)` of that id, converted to the document's units, so no
-   limit is written twice; comparisons use `LayoutChecks.materialFits`'s tolerance (0.0005 in / 0.01 mm).
+   limit is written twice. Tolerances: lengths 0.0005 in / 0.01 mm (`LayoutChecks.materialFits`'s), feeds the same per
+   minute, RPM exact.
    - **error** when the job's Z zero is not the material top, when its XY origin is not the lower left, or when its datum
      offset is non-zero (`(datumOffset ?? .zero) != .zero`, so a tiled export, which sets it to nil, passes), each saying what
      the Bantam software assumes and to set Job Setup to match;
-   - **error** when the material is wider or longer than the effective machine's X/Y travel (with the origin pinned to the
-     stock's corner, this bounds every position, which the span-only travel check does not; on a bigger machine the warning
-     below fires instead, as for every other travel check);
+   - **error** when any commanded move, the move home included, goes beyond the effective X or Y travel measured from the
+     stock's front-left corner (X0 Y0); the span-only travel check misses a short path far from the origin and a Home X past
+     the bed. Moves at negative X/Y (an outside profile, by the tool radius) are the operator's to place on the bed, and the
+     Bantam preview shows them; the owner list asks about it. An oversize job also gets the existing "material does not fit"
+     warning in Check Toolpaths; no second material message is added;
    - **error**, one issue naming every toolpath with coolant on ("the Othermill has no coolant; its G-code reference lists
      M7–M9 as unsupported");
-   - **warning** when the stock plus the highest Z the program asks for does not fit the Z travel:
-     `thickness + max(safeZ, homeZ) > zTravel` with the effective limits ("lower Home Z and Safe Z in Job Setup"); the
-     travel check measures only the program's own span, which leaves out the stock below Z0;
-   - **warning** when the effective machine exceeds the post's own numbers in any travel axis, the max feed or the rapid
-     rate, or its spindle range reaches outside 7,000–26,000 rpm, naming the machine (`project.machineSnapshot?.name`, else
-     "the project's machine"): the travel, feed and speed checks then used that machine's numbers. With no machine the
-     limits are the post's own, and no warning fires.
+   - **warning** when the stock plus the highest Z any commanded move reaches (material-top zero, so that Z is the height
+     above the stock) does not fit the Z travel: `thickness + maxZ > zTravel` with the effective limits ("lower Home Z and
+     Safe Z in Job Setup, and check clamp heights"); the travel check measures only the program's own span, which leaves out
+     the stock below Z0, and Safe Z and Home Z are not always the highest (a tall clamp raises the approach);
+   - **warning** when the effective numbers exceed the built-in post's in any travel axis, the max feed or the rapid rate,
+     or the spindle range reaches outside 7,000–26,000 rpm: "the travel, feed and speed checks used limits larger than the
+     Othermill's (X 24 in …); choose the Othermill machine in Job Setup". It names the numbers, not a machine (the project's
+     machine copy is not always the one applied), so it also covers a user file that reuses the id with bigger limits.
    Job-level issues repeat once per operation in Check Toolpaths, as `modelsDeeperThanStock` already does; accepted.
    Errors leave Save Anyway, as every validator error does: the Z-zero convention is the vendor's documented default but is
    not confirmed for imported G-code, and an owner who set the software's offsets differently must be able to post. Nothing
    in `PostCore`'s post processor changes, so the post editor's sample job (which turns Mist on) and the golden loops that
-   post every built-in in both Z-zero modes are untouched. A two-sided job exports one side at a time, so the bottom side's
+   post every built-in in both Z-zero modes are untouched as to refusals. Their travel is not: `goldenProgramsPassTheValidator`
+   validates `PostFixtures.postJob` (a 12 × 8 in job) against each post's own limits, which the Othermill's 5.5 × 4.5 in bed
+   fails (X span 6.0, Y span 5.0). Ruling: that loop validates the Othermill rows against `BuiltInMachines.avidPRO6096.applied(to:)`,
+   as the post editor's sample already widens limits (`PostSampleJob.widened`); the output bytes are the same, and a separate
+   fixture that fits 5.5 × 4.5 × 1.35 in checks the Othermill's own limits. The shared fixture stays, since shrinking it would
+   move every post's golden bytes. A two-sided job exports one side at a time, so the bottom side's
    own Z zero is what is checked.
 3. **Recognised by id.** The checks and Decision 4 key on the id, which a project's copy of the post keeps (`postSnapshot`),
    so a later change to the built-in's text cannot switch them off for saved projects. A user file that reuses the id gets the
@@ -121,12 +134,18 @@ from the operator) and no datum offset.
 - Golden (`NewPost` rows plus one loop): `G55`, the units code, `T{n} M6` after `M5`, `G4 P4`, `M30`; none of `G40`, `G49`,
   `G91.1`, `G43`, `G53`, `G28`, `M7`, `M8`, `M9`, `M4`. A fixture with a helical arc (start Z ≠ end Z) posts as `G1` lines
   only. No `G2`/`G3` in the posted samples sweeps more than 180°.
+- `goldenProgramsPassTheValidator`: the Othermill rows pass on the Avid-applied post; a fitting fixture passes the
+  Othermill's own limits with no issues.
 - `OthermillSetup`: spoilboard Z zero, each non-lower-left origin, a non-zero datum offset, material larger than the Pro's
-  bed and a coolant toolpath (one issue naming both of two toolpaths) each give an error, inch and mm; the plain setup gives
+  bed (X 6 on the Pro), a Home X of 6 with 5 in stock, and a coolant toolpath (one issue naming both of two toolpaths) each give
+an error, inch and mm; moves reaching exactly 5.5 × 4.5 give none, in an inch document with the mm post and a mm document with
+the inch post; the plain setup gives
   none; a nil datum offset and a tiled export pass; another post gives none; a machine-applied Othermill post, a project copy
   and an edited post keeping the id are still checked; the Avid machine gives the machine warning, the Pro and the original
   Othermill machines give none (equality boundary, both units), and a user machine sized like the Pro but with 30,000 rpm or
-  600 in/min gives it; 0.75 in stock with Home Z 0.8 gives the Z-envelope warning and 0.25 in with 0.5 does not; the bottom
+  600 in/min, a rapid of 200 in/min alone, or a minimum of 6,000 rpm alone gives it; 0.75 in stock with Home Z 0.8 gives the
+Z-envelope warning, 0.25 in with 0.5 does not, 0.75 + 0.6 = 1.35 exactly does not, a 0.6 in clamp raising the approach to
+0.7 in over 0.75 in stock with Safe Z 0.2 and Home Z 0.5 does (1.45 > 1.35), and the mm cases match; the bottom
   side of a two-sided job is checked with its own Z zero.
 - Through `GCodeExporter.export`: the errors appear as issues and a program is still produced (Save Anyway).
 - Optional stop on an Othermill post writes `M0`, as built, machine-applied and edited with the same id, inch and mm.
@@ -137,9 +156,11 @@ from the operator) and no datum offset.
 
 ## Docs
 
-DECISIONS (`othermill-post`, with the M6 dissent, the by-id recognition and its asymmetry with GRBL's by-value rule, the
+`BuiltInMachines`' doc comment ("their limits match the built-in posts") is corrected for the original Othermill. DECISIONS
+(`othermill-post`, with the M6 dissent, the by-id recognition and its asymmetry with GRBL's by-value rule, the
 older-LoftLine gap, the kept "Cycle Start" header, and that the Othermill sample programs are regression bytes); Help (Machines: the
-built-in list, what to enter in the Bantam software: Material Size X/Y/Z equal to Job Setup's, origin front-left top; that a
+built-in list; set Material Size and Home Z first in Job Setup, since the defaults (24 × 18 in, Home Z 0.8) do not fit; what
+to enter in the Bantam software: Material Size X/Y/Z equal to Job Setup's, origin front-left top; that a
 duplicated post loses the checks; Coolant: no coolant on the Othermill); TESTING (an Othermill owner check); PARITY
 `io-post-processors`; README's post list.
 
