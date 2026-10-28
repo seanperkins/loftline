@@ -10,6 +10,18 @@ public struct Mesh3D: Codable, Hashable, Sendable {
         self.vertices = vertices; self.indices = indices
     }
 
+    /// A project file is data from anywhere: an index past the vertices would trap every reader (#121), so it is refused here.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        vertices = try c.decode([Vec3].self, forKey: .vertices)
+        indices = try c.decode([UInt32].self, forKey: .indices)
+        guard indices.allSatisfy({ Int($0) < vertices.count }) else {
+            throw DecodingError.dataCorruptedError(forKey: .indices, in: c, debugDescription: "A mesh index is past its vertices")
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey { case vertices, indices }
+
     public var triangleCount: Int { indices.count / 3 }
 
     public var bounds: (min: Vec3, max: Vec3)? {

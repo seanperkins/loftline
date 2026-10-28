@@ -14,6 +14,14 @@ public struct PDFImporter: VectorImporter {
     public typealias EmbeddedImage = ImportedImage
 
     /// Vectors of page 1 plus its embedded images (in `ImportResult.images`).
+    /// Bytes an uncompressed image of these dimensions needs, or nil when the product overflows (a crafted /Width and /Height
+    /// near Int32.max would trap the multiplication before the size check, #121).
+    static func imageByteCount(width: Int, height: Int, components: Int) -> Int? {
+        let (wh, o1) = width.multipliedReportingOverflow(by: height)
+        let (n, o2) = wh.multipliedReportingOverflow(by: components)
+        return o1 || o2 ? nil : n
+    }
+
     public func importVectors(from data: Data, targetUnits: LengthUnit) throws -> ImportResult {
         let (r, images) = try importPage(from: data, targetUnits: targetUnits, includeImages: true)
         var result = r
@@ -240,7 +248,8 @@ enum PDFImageDecoder {
             default: comps = 3
             }
         }
-        guard data.count >= w * h * comps else { return nil }
+        guard let needed = PDFImporter.imageByteCount(width: Int(w), height: Int(h), components: comps),
+              data.count >= needed else { return nil }
         let space: CGColorSpace = comps == 1 ? CGColorSpaceCreateDeviceGray()
             : comps == 4 ? CGColorSpaceCreateDeviceCMYK() : CGColorSpaceCreateDeviceRGB()
         guard let provider = CGDataProvider(data: data as CFData),

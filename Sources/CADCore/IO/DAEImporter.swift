@@ -8,6 +8,10 @@ public struct DAEImporter: MeshImporter {
     public static let fileExtensions = ["dae"]
     public init() {}
 
+    /// Total node visits and triangles one import may produce, so self-referencing instances stay bounded.
+    static let maxNodeVisits = 100_000
+    static let maxTriangles = 20_000_000
+
     public func importMesh(from data: Data, targetUnits: LengthUnit) throws -> Mesh3D {
         let tris = try parts(from: data, targetUnits: targetUnits, split: false).flatMap(\.triangles)
         guard !tris.isEmpty else { throw LoftLineIOError.malformed("the COLLADA file contains no triangles") }
@@ -61,8 +65,11 @@ public struct DAEImporter: MeshImporter {
         }
 
         var depth = 0
+        // The depth guard bounds nesting, not work: a node instancing itself twice is 2^32 visits (#121).
+        var visits = 0
         func visit(_ node: XMLTree, _ parent: Matrix4, into tris: inout [(Vec3, Vec3, Vec3)]) {
-            guard depth < 32 else { return }
+            guard depth < 32, visits < Self.maxNodeVisits, tris.count < Self.maxTriangles else { return }
+            visits += 1
             depth += 1
             defer { depth -= 1 }
             let m = local(node, parent)
@@ -157,8 +164,11 @@ public struct DAEImporter: MeshImporter {
             let inputs = prim.children.filter { $0.name == "input" }
             guard let vin = inputs.first(where: { $0.attributes["semantic"] == "VERTEX" }) else { continue }
             let pts = positions(vin.attributes["source"])
+            let offsets = inputs.compactMap { $0.attributes["offset"].flatMap(Int.init) }
+            // A negative or absurd offset indexed outside the list or overflowed the width (#121): skip the primitive.
+            guard offsets.allSatisfy({ (0...255).contains($0) }) else { continue }
             let vOffset = vin.attributes["offset"].flatMap(Int.init) ?? 0
-            let width = (inputs.compactMap { $0.attributes["offset"].flatMap(Int.init) }.max() ?? 0) + 1
+            let width = (offsets.max() ?? 0) + 1
             func polygon(_ idx: ArraySlice<Int>) {
                 let verts = idx.compactMap { $0 >= 0 && $0 < pts.count ? pts[$0] : nil }
                 guard verts.count >= 3 else { return }

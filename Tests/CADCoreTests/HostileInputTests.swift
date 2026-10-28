@@ -7,6 +7,82 @@ import Testing
 /// trap an integer conversion, index outside an array or abort inside Clipper. Each case here
 /// crashed the process before the guard it exercises existed.
 @Suite struct HostileInputTests {
+    // MARK: Crafted files from the 2026-10-28 review (#121): each hung or trapped before its guard.
+
+    static func dae(_ body: String, scene: String) -> Data {
+        Data("""
+        <?xml version="1.0" encoding="utf-8"?>
+        <COLLADA xmlns="http://www.collada.org/2005/11/COLLADASchema" version="1.4.1">
+          <asset><unit name="inch" meter="0.0254"/><up_axis>Z_UP</up_axis></asset>
+          <library_geometries>
+            <geometry id="trig"><mesh>
+              <source id="trip"><float_array id="tripa" count="9">0 0 0 1 0 0 0 1 0</float_array>
+                <technique_common><accessor source="#tripa" count="3" stride="3"/></technique_common></source>
+              <vertices id="triv"><input semantic="POSITION" source="#trip"/></vertices>
+              \(body)
+            </mesh></geometry>
+          </library_geometries>
+          <library_nodes>\(scene)</library_nodes>
+          <library_visual_scenes><visual_scene id="scene"><node><instance_node url="#a"/></node></visual_scene></library_visual_scenes>
+          <scene><instance_visual_scene url="#scene"/></scene>
+        </COLLADA>
+        """.utf8)
+    }
+
+    @Test(.timeLimit(.minutes(1))) func dxfEllipseWithAHugeStartAngleImports() throws {
+        let dxf = "0\nSECTION\n2\nENTITIES\n0\nELLIPSE\n8\n0\n10\n0\n20\n0\n30\n0\n11\n1\n21\n0\n31\n0\n40\n0.5\n41\n1e20\n42\n0\n0\nENDSEC\n0\nEOF\n"
+        _ = try? DXFImporter().importVectors(from: Data(dxf.utf8), targetUnits: .inch)
+    }
+
+    @Test func svgCubicWithAstronomicalControlPointsDoesNotTrap() throws {
+        _ = try? SVGImporter().importVectors(from: Data(#"<svg><path d="M0 0 C1e50 0 0 0 1 0"/></svg>"#.utf8), targetUnits: .inch)
+        var pts: [Vec2] = []
+        Flattening.append(segment: .cubic(to: Vec2(1, 0), control1: Vec2(1e50, 0), control2: Vec2(0, 0)),
+                          from: Vec2(0, 0), tolerance: 0.001, to: &pts)
+        #expect(!pts.isEmpty && pts.count <= 1000)
+    }
+
+    @Test(.timeLimit(.minutes(1))) func svgSelfReferencingUseIsBounded() throws {
+        let svg = """
+        <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="10in" height="10in">
+          <defs><g id="a"><rect width="1" height="1"/><use href="#a"/><use href="#a"/><use href="#a"/><use href="#a"/></g></defs>
+          <use href="#a"/>
+        </svg>
+        """
+        _ = try? SVGImporter().importVectors(from: Data(svg.utf8), targetUnits: .inch)
+    }
+
+    @Test func pdfImageSizeOverflowIsRejected() {
+        #expect(PDFImporter.imageByteCount(width: 2_147_483_647, height: 2_147_483_647, components: 4) == nil)
+        #expect(PDFImporter.imageByteCount(width: Int.max, height: 2, components: 1) == nil)
+        #expect(PDFImporter.imageByteCount(width: 4, height: 3, components: 3) == 36)
+    }
+
+    @Test func colladaNegativeOrHugeOffsetsAreSkipped() throws {
+        for offset in ["-1", "9223372036854775807"] {
+            let tri = """
+            <triangles count="1"><input semantic="VERTEX" source="#triv" offset="\(offset)"/>\
+            <input semantic="NORMAL" source="#n" offset="0"/><p>0 0 1 0 2 0</p></triangles>
+            """
+            _ = try? DAEImporter().importMesh(from: Self.dae(tri, scene: ##"<node id="a"><instance_geometry url="#trig"/></node>"##),
+                                              targetUnits: .inch)
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1))) func colladaSelfReferencingNodesAreBounded() throws {
+        let tri = ##"<triangles count="1"><input semantic="VERTEX" source="#triv" offset="0"/><p>0 1 2</p></triangles>"##
+        let scene = ##"<node id="a"><instance_geometry url="#trig"/><instance_node url="#a"/><instance_node url="#a"/></node>"##
+        _ = try? DAEImporter().importMesh(from: Self.dae(tri, scene: scene), targetUnits: .inch)
+    }
+
+    @Test func meshIndicesOutOfRangeAreRefusedOnDecode() throws {
+        let v = #"[{"x":0,"y":0,"z":0},{"x":1,"y":0,"z":0},{"x":0,"y":1,"z":0}]"#
+        let json = #"{"vertices":"# + v + #","indices":[0,1,4294967295]}"#
+        #expect(throws: (any Error).self) { try JSONDecoder().decode(Mesh3D.self, from: Data(json.utf8)) }
+        let good = #"{"vertices":"# + v + #","indices":[0,1,2]}"#
+        #expect(try JSONDecoder().decode(Mesh3D.self, from: Data(good.utf8)).triangleCount == 1)
+    }
+
     @Test func kernelDropsPathsClipperCannotRepresent() {
         let bad: [Vec2] = [Vec2(0, 0), Vec2(.infinity, 0), Vec2(10, 10)]
         let huge: [Vec2] = [Vec2(0, 0), Vec2(5e12, 0), Vec2(5e12, 5e12)]

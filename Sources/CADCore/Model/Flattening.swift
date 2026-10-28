@@ -26,7 +26,8 @@ public enum Flattening {
             // Uniform subdivision count from the control polygon's second differences.
             let d = max((start - c1 * 2 + c2).length, (c1 - c2 * 2 + to).length)
             guard d.isFinite else { pts.append(to); return }   // corrupt control points: a line
-            let n = max(1, min(1000, Int(ceil(sqrt(0.75 * d / tol)))))
+            // Clamp as a Double first: a finite but astronomical `d` overflows `Int` before `min` can cap it (#121).
+            let n = max(1, Int(min(1000, ceil(sqrt(0.75 * d / tol)))))
             for i in 1..<n {
                 pts.append(cubicPoint(start, c1, c2, to, Double(i) / Double(n)))
             }

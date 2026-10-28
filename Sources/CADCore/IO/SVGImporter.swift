@@ -178,6 +178,8 @@ public struct SVGImporter: VectorImporter {
         var ids: [String: SVGNode] = [:]
         private var warned: Set<String> = []
         private var useDepth = 0
+        /// `<use>` expansions so far: the depth guard bounds nesting, not work (a group using itself four times, #121).
+        private var useCount = 0
 
         init(units: LengthUnit) { self.units = units }
 
@@ -218,6 +220,8 @@ public struct SVGImporter: VectorImporter {
                 guard let ref, let target = ids[ref], useDepth < 16 else {
                     warnOnce("Ignored <use> with a missing reference."); return
                 }
+                guard useCount < 10_000 else { warnOnce("Ignored <use> references past the first 10,000."); return }
+                useCount += 1
                 let off = Transform2D.translation(Vec2(length(n, "x") ?? 0, length(n, "y") ?? 0))
                 useDepth += 1
                 if target.name == "symbol" {

@@ -102,8 +102,10 @@ enum DXFGeometry {
         // Minor axis = extrusion × major: flips when the extrusion points down.
         let minor = major.perpendicular * (e.isMirroredOCS ? -ratio : ratio)
         let t0 = e.double(41) ?? 0, t1 = e.double(42) ?? 2 * .pi
-        var sweep = t1 - t0
-        while sweep <= 1e-9 { sweep += 2 * .pi }
+        // A remainder, not a loop: at 1e20 adding 2π changes nothing and the loop never ended (#121).
+        var sweep = (t1 - t0).truncatingRemainder(dividingBy: 2 * .pi)
+        if !sweep.isFinite { sweep = 2 * .pi }
+        if sweep <= 1e-9 { sweep += 2 * .pi }
         let full = sweep >= 2 * .pi - 1e-9
         if full { sweep = 2 * .pi }
         func map(_ u: Vec2) -> Vec2 { c + major * u.x + minor * u.y }
