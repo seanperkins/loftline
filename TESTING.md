@@ -199,6 +199,42 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
 5. If everything looks right, re-zero Z on the real surface (material top or spoilboard, matching
    Job Setup), turn the spindle on and cut. Run the first real cut at reduced feed override.
 
+**Air-probe check (before the first job with park-and-probe on):** Preferences ▸ Machines, the
+machine's "Tool change: park and probe" settings. Do every step with the spindle off and a hand on the E-stop.
+1. **Dry run to the park.** Home the machine. Post a one-tool job and run only to the first stop. The gantry must lift to the
+   traverse height near the top of travel without touching the limit switch, travel to the park in the right direction (the
+   `G53` signs), and the longest bit you use must clear the tallest stock and every clamp along the whole path from the park to
+   the touch-off spot.
+2. **Held plate.** Run on: at the spot, clip the lead and touch the plate to the bit (the probe light comes on), hold the plate
+   under the bit, jog Z only to about half the probe travel above it, continue. The probe must stop on contact.
+3. **No contact.** Over scrap, with the plate NOT under the bit, continue past the placement stop. GRBL must alarm; on Mach4 your
+   zero macro must stop the program. The bit must not go further than the probe travel.
+4. **Probe already touching.** Start the probe with the plate already touching the bit (the light on). The program must stop (GRBL
+   is expected to raise "probe fail"; Mach4's behaviour depends on your macro).
+5. **The zero.** After a normal probe, remove the plate, jog to work Z 0 over bare stock: the bit must just touch the material top
+   (a paper check). Do this in both Z-zero modes and with every post the machine lists (inch and mm: the macro's `P` is in the
+   program's units), and check that the zero landed in the work offset the machine is set to (G54 for 1).
+6. **Coolant.** A toolpath set to Mist or Air turns it on after the spindle start and off at the next tool change, pause and the end.
+
+Reference Mach4 zero macro (`m199.mcs`, Lua). It is an UNVERIFIED sketch: the API calls and `#5070` were written from memory
+of Mach4's Lua API, not run on a controller. Adapt it to your set-up and prove it with steps 3 to 5 before relying on it:
+
+```lua
+function m199(hParam)
+    local inst = mc.mcGetInstance()
+    local plateZ = mc.mcCntlGetLocalVar(inst, hParam, mc.SV_P)
+    local hit = mc.mcSignalGetState(mc.mcSignalGetHandle(inst, mc.ISIG_PROBE))
+    -- #5070 is 1 when the last G31 made contact on many set-ups; check yours.
+    if mc.mcCntlGetPoundVar(inst, 5070) ~= 1 and hit ~= 1 then
+        mc.mcCntlEStop(inst)
+        mc.mcCntlSetLastError(inst, "Probe made no contact: program stopped")
+        return
+    end
+    mc.mcAxisSetPos(inst, mc.Z_AXIS, plateZ)   -- the current Z reads the plate's top in the active offset
+end
+if (mc.mcInEditor() == 1) then m199() end
+```
+
 ## 5. Known limitations and stubs
 
 - The app is ad-hoc signed and not notarised (Gatekeeper warns on first launch).
