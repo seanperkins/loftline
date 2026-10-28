@@ -120,9 +120,15 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
 
     /// Whether the controller can stop at M1 (an Optional Stop switch). GRBL has none and ignores M1 (gnea/grbl `gcode.c`:
     /// "Optional stop not supported. Ignore."), so a post that speaks GRBL, built in or declared, writes M0 instead (#115).
+    /// Judged on the dialect: the numbers a machine replaces (`MachineDefinition.applied(to:)`) are put back first, so the
+    /// post export uses, with the machine's limits and rates, is still recognised as the built-in.
     public var honoursOptionalStop: Bool {
         var base = self
         base.toolChangeProbe = nil
+        if let builtIn = BuiltInPosts.profile(id: id) {
+            base.limits = builtIn.limits; base.rapidRate = builtIn.rapidRate; base.maxFeed = builtIn.maxFeed
+            base.minRPM = builtIn.minRPM; base.maxRPM = builtIn.maxRPM
+        }
         return BuiltInPosts.probeController(for: base) != .grbl
     }
 

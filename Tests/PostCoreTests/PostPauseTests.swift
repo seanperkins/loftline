@@ -73,6 +73,24 @@ import Testing
         }
     }
 
+    @Test func aMachineAdjustedGRBLPostStillWritesM0() throws {
+        // Export posts with the machine's limits, rates and RPM range applied, so the post no longer equals the built-in.
+        var m = BuiltInMachines.avidPRO6096
+        m.rapidRate = 123; m.maxFeed = 456; m.minRPM = 5000; m.maxRPM = 20000
+        for builtIn in [BuiltInPosts.genericGRBLMM, BuiltInPosts.genericGRBLInch] {
+            let applied = m.applied(to: builtIn)
+            #expect(applied != builtIn)
+            #expect(!applied.honoursOptionalStop, "\(builtIn.id)")
+            let lines = try post([cut("A", pause: PauseStep(message: "Check", isOptionalStop: true)), cut("B", from: 4)],
+                                 profile: applied)
+            #expect(lines.contains("M0") && !lines.contains("M1"), "\(builtIn.id)")
+        }
+        // An edited dialect is no longer the built-in: it writes what its owner declared.
+        var edited = m.applied(to: BuiltInPosts.genericGRBLMM)
+        edited.footer.append("(edited)")
+        #expect(edited.honoursOptionalStop)
+    }
+
     @Test func optionalStopKeepsM1WhereTheControllerHasTheSwitch() throws {
         for profile in [BuiltInPosts.avidMach4Inch, BuiltInPosts.linuxCNCInch] {
             #expect(profile.honoursOptionalStop, "\(profile.id)")

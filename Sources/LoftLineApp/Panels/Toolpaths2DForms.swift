@@ -361,12 +361,11 @@ struct PauseStepForm: View {
             TextField("Message", text: Binding(get: { pause?.message ?? "" }, set: { pause?.message = $0 }),
                       prompt: Text(PauseStep().text(afterToolpath: toolpathName)))
                 .help("Shown on the controller while the machine waits")
-            Toggle("Optional stop (M1)", isOn: Binding(get: { pause?.isOptionalStop ?? false }, set: { pause?.isOptionalStop = $0 }))
-                .help("Stops only when Optional Stop is switched on at the controller; otherwise the program runs straight through")
-            if p.isOptionalStop && !profile.honoursOptionalStop {
-                Text("GRBL has no Optional Stop and ignores M1, so this post writes M0: the machine always stops here.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            }
+            let honoured = profile.honoursOptionalStop
+            Toggle(honoured ? "Optional stop (M1)" : "Optional stop (GRBL: always stops, M0)",
+                   isOn: Binding(get: { pause?.isOptionalStop ?? false }, set: { pause?.isOptionalStop = $0 }))
+                .help(honoured ? "Stops only when Optional Stop is switched on at the controller; otherwise the program runs straight through"
+                               : "GRBL has no Optional Stop and ignores M1, so this post writes M0: the machine always stops here")
             Text("The program stops (\(profile.stopCode(for: p))) between this toolpath and the next one, and the next toolpath restarts the spindle. Nothing is added after the last toolpath. No recalculation is needed.")
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
