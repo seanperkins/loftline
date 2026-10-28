@@ -1060,6 +1060,11 @@ final class PostProfileCatalog: ObservableObject {
     @Published private(set) var profiles: [PostProfile]
     /// Post files that did not load, with the reason (listed in Post Processors).
     @Published private(set) var skipped: [SkippedPost]
+    /// Ids of the custom posts that loaded from the folder (editable and deletable); a built-in whose id a file that did not
+    /// load carries is not one of them.
+    var userIDs: Set<String> {
+        Set(profiles.map(\.id).filter { id in store.isUserPost(id) && !skipped.contains { $0.fileName == "\(id).json" } })
+    }
     let store: PostProfileStore
 
     init(store: PostProfileStore = PostProfileStore()) {

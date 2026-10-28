@@ -97,4 +97,19 @@ import Testing
         _ = m.select(BuiltInPosts.avidMach4Inch.id)
         #expect(!m.canDelete)
     }
+
+    /// A file with a built-in's id that did not load leaves the built-in read-only: saving must not replace the file someone
+    /// may want to repair (or that a newer LoftLine wrote).
+    @Test func aSkippedFileWithABuiltInsIDStaysReadOnly() throws {
+        let (m, dir, _) = model()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Data("{ broken".utf8).write(to: dir.appendingPathComponent("avid-pro6096-mach4-inch.json"))
+        m.catalog.reload()
+        _ = m.select(BuiltInPosts.avidMach4Inch.id)
+        #expect(!m.isEditable && !m.canDelete)
+        m.draft?.name = "Overwrite"
+        #expect(throws: (any Error).self) { try m.save() }
+        #expect(String(decoding: try Data(contentsOf: dir.appendingPathComponent("avid-pro6096-mach4-inch.json")), as: UTF8.self)
+                == "{ broken")
+    }
 }

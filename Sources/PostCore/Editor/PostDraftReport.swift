@@ -128,7 +128,8 @@ public struct PostDraftReport: Sendable {
         var i = 0, open = 0, semicolon = false
         while i < chars.count {
             let c = chars[i]
-            if c == "(" { open += 1 } else if c == ")" { open = max(0, open - 1) } else if c == ";" { semicolon = true }
+            // A `;` starts a comment only outside parentheses (as the parser reads it).
+            if c == "(" { open += 1 } else if c == ")" { open = max(0, open - 1) } else if c == ";", open == 0 { semicolon = true }
             if c == "}" { out.append("\(label): a \"}\" that closes no placeholder in \"\(line)\"."); i += 1; continue }
             guard c == "{" else { i += 1; continue }
             var j = i + 1, name = ""
@@ -199,9 +200,11 @@ public struct PostDraftReport: Sendable {
         // first cut of a toolpath always carries it.
         func changeIsSafe(from start: Int, to end: Int, tool: Int) -> Bool {
             let window = parsed.blocks.filter { $0.line > start && $0.line < end }
-            if window.contains(where: { $0.values("T").contains { Int($0) != tool } }) { return false }
+            // Compared as numbers: a typed T word can be huge or fractional, which no Int conversion may see.
+            let n = Double(tool)
+            if window.contains(where: { $0.values("T").contains { $0 != n } }) { return false }
             if window.contains(where: { $0.has("M", 0) }) { return true }
-            guard let t = window.firstIndex(where: { $0.values("T").contains { Int($0) == tool } }) else { return false }
+            guard let t = window.firstIndex(where: { $0.values("T").contains { $0 == n } }) else { return false }
             return window[t...].contains { $0.has("M", 6) }
         }
         if !changeIsSafe(from: 0, to: aLine, tool: PostSampleJob.tool1.number) {

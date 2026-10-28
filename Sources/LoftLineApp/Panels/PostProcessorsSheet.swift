@@ -32,8 +32,9 @@ struct PostProcessorsSheet: View {
 
     private var postList: some View {
         let builtInIDs = Set(BuiltInPosts.all.map(\.id))
-        let custom = catalog.profiles.filter { catalog.store.isUserPost($0.id) }
-        let builtIn = catalog.profiles.filter { builtInIDs.contains($0.id) && !catalog.store.isUserPost($0.id) }
+        let userIDs = catalog.userIDs
+        let custom = catalog.profiles.filter { userIDs.contains($0.id) }
+        let builtIn = catalog.profiles.filter { builtInIDs.contains($0.id) && !userIDs.contains($0.id) }
         return List(selection: Binding(get: { model.selection }, set: { model.select($0) })) {
             Section("Built in") {
                 ForEach(builtIn) { Text($0.name).tag(Optional($0.id)) }

@@ -146,4 +146,16 @@ import Testing
         #expect(PostDraftReport.placeholders[.toolChange]?.contains("TOOL_NAME") == true)
         #expect(PostDraftReport.placeholders[.footer]?.contains("T") == false)
     }
+
+    // MARK: Final review
+
+    @Test func hugeOrFractionalToolNumbersAreRefusedWithoutACrash() {
+        refused({ $0.toolChange = ["M5", "T9999999999999999999 M6"] }, "a T number beyond Int")
+        refused({ $0.toolChange = ["M5", "T{T}.5 M6"] }, "a fractional tool number")
+    }
+
+    @Test func aSemicolonInsideParenthesesIsNotAComment() {
+        refused({ $0.version = "M3 S18000"; $0.preamble.append("(note;ignored) {POST_VERSION}") },
+                "user text after a semicolon that sits inside a closed comment")
+    }
 }

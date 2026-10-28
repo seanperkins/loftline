@@ -23,7 +23,7 @@ final class PostEditorModel: ObservableObject {
     var isDirty: Bool { isNew || draft != original }
     var store: PostProfileStore { catalog.store }
     /// A custom post that is saved (a built-in, or a new draft, has no file to delete).
-    var canDelete: Bool { !isNew && draft.map { store.isUserPost($0.id) } == true }
+    var canDelete: Bool { !isNew && draft.map { catalog.userIDs.contains($0.id) } == true }
     /// Built-in posts are read-only: only a duplicate or a custom post can be edited.
     var isEditable: Bool { isNew || canDelete }
 
@@ -61,6 +61,10 @@ final class PostEditorModel: ObservableObject {
     func save() throws {
         guard let d = draft else { return }
         guard report.canSave else { throw CannotSave(problems: report.problems) }
+        // Only a loaded custom post is saved over: a built-in is read-only, and a file that did not load is kept as it is.
+        guard isNew || catalog.userIDs.contains(d.id) else {
+            throw CannotSave(problems: ["Built-in posts are read-only. Duplicate the post to edit a copy."])
+        }
         let saved: PostProfile
         if isNew { saved = try store.saveNew(d) } else { try store.save(d); saved = d }
         catalog.reload()
