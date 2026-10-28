@@ -47,11 +47,15 @@ public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
 
     public func supports(postID: String) -> Bool { postIDs.contains(postID) }
 
-    /// Every listed post is a built-in with no probe sequence (LinuxCNC), so probing on would refuse every export. A custom
-    /// post may declare a controller, so a list with one is never this.
-    public var noListedPostCanProbe: Bool {
-        !postIDs.isEmpty && postIDs.allSatisfy { id in
-            BuiltInPosts.profile(id: id).map { BuiltInPosts.probeController(for: $0) == nil } ?? false
+    /// None of the listed posts installed (`available`, a user file replacing a built-in of its id) speaks a controller, so
+    /// probing on would refuse every export: the check export makes (`probeSetting`). A listed post that is not installed
+    /// cannot be posted with, so it is not counted; false when none is installed.
+    public func noListedPostCanProbe(available: [PostProfile]) -> Bool {
+        let listed = postIDs.compactMap { id in available.first { $0.id == id } }
+        return !listed.isEmpty && listed.allSatisfy { post in
+            var base = post
+            base.toolChangeProbe = nil
+            return BuiltInPosts.probeController(for: base) == nil
         }
     }
 

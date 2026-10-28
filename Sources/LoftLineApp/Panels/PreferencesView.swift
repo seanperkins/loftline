@@ -212,7 +212,7 @@ struct MachineEditor: View {
                 NumberField("Rapid rate", value: Binding(get: { machine.rapidRate ?? 0 },
                                                          set: { machine.rapidRate = $0 > 0 ? $0 : nil }),
                             unit: "\(u.abbreviation)/min", help: "Used for time estimates (0 = the post's value)")
-                ToolChangeProbeSection(machine: $machine)
+                ToolChangeProbeSection(machine: $machine, posts: posts)
                 Section("Post processors") {
                     ForEach(posts) { p in
                         Toggle(p.name, isOn: Binding(get: { machine.postIDs.contains(p.id) },
@@ -252,6 +252,8 @@ struct MachineEditor: View {
 /// Park, swap by hand and re-zero Z on a touch plate at every tool change (`MachineDefinition.toolChangeProbe`).
 struct ToolChangeProbeSection: View {
     @Binding var machine: MachineDefinition
+    /// The installed posts (a user file replaces the built-in of its id), for the "none can probe" warning.
+    var posts: [PostProfile]
 
     private func value<T>(_ kp: WritableKeyPath<ToolChangeProbe, T>, _ fallback: T) -> Binding<T> {
         Binding(get: { machine.toolChangeProbe?[keyPath: kp] ?? fallback }, set: { machine.toolChangeProbe?[keyPath: kp] = $0 })
@@ -287,9 +289,9 @@ struct ToolChangeProbeSection: View {
                 LengthField("Plate size", value: value(\.plateSize, 0), units: u, help: "The plate's greatest extent: its diagonal, or a round plate's diameter")
                 NumberField("Probe feed", value: value(\.probeFeed, 0), unit: "\(u.abbreviation)/min", help: "At most 10 in/min (254 mm/min)")
                 LengthField("Probe travel", value: value(\.probeTravel, 0), units: u, help: "At most 1 in (25.4 mm) and no more than the plate thickness")
-                if machine.noListedPostCanProbe {
-                    Label("None of this machine's posts can probe tool changes (the LinuxCNC posts cannot): export refuses "
-                          + "while this is on.", systemImage: "exclamationmark.triangle.fill")
+                if machine.noListedPostCanProbe(available: posts) {
+                    Label("None of this machine's posts can probe tool changes (the LinuxCNC posts cannot, nor a custom post "
+                          + "without a controller): export refuses while this is on.", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
                 }
                 ForEach(probe.problems(limits: machine.limits, units: u), id: \.self) { problem in

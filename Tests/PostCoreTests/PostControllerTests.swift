@@ -61,14 +61,26 @@ import Testing
 
     @Test func aMachineOfOnlyLinuxCNCPostsCannotProbe() {
         var m = BuiltInMachines.avidPRO6096
-        m.postIDs = [BuiltInPosts.linuxCNCInch.id, BuiltInPosts.linuxCNCMM.id]
-        #expect(m.noListedPostCanProbe)
+        let installed = BuiltInPosts.all + [custom(.mach4)]
+        m.postIDs = [BuiltInPosts.linuxCNCInch.id, BuiltInPosts.linuxCNCMM.id, "not-installed"]
+        #expect(m.noListedPostCanProbe(available: installed))
         m.postIDs.append(BuiltInPosts.genericGRBLInch.id)
-        #expect(!m.noListedPostCanProbe)
-        m.postIDs = [BuiltInPosts.linuxCNCInch.id, "shop"]   // a custom post may declare a controller
-        #expect(!m.noListedPostCanProbe)
-        m.postIDs = []
-        #expect(!m.noListedPostCanProbe)
+        #expect(!m.noListedPostCanProbe(available: installed))
+        m.postIDs = [BuiltInPosts.linuxCNCInch.id, "shop"]   // a custom post that declares Mach4
+        #expect(!m.noListedPostCanProbe(available: installed))
+        m.postIDs = [BuiltInPosts.linuxCNCInch.id, custom(nil).id]
+        #expect(m.noListedPostCanProbe(available: BuiltInPosts.all + [custom(nil)]))
+        m.postIDs = ["not-installed"]
+        #expect(!m.noListedPostCanProbe(available: installed))
+    }
+
+    @Test func aUserPostReplacingTheLinuxCNCIDCanProbe() {
+        // A user file with a built-in's id replaces that built-in (PostProfileStore.load), and export checks that file.
+        var mine = BuiltInPosts.linuxCNCInch
+        mine.controller = .grbl
+        var m = BuiltInMachines.avidPRO6096
+        m.postIDs = [mine.id]
+        #expect(!m.noListedPostCanProbe(available: BuiltInPosts.all.filter { $0.id != mine.id } + [mine]))
     }
 
     @Test func builtInByValueUnchanged() {
