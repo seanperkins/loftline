@@ -396,17 +396,16 @@ struct PlaybackTimeLabel: View {
     }
 }
 
-/// Shown while a simulation frame is being rendered. It always takes the same room and only fades in: in the wrapping
-/// playback bar a spinner that came and went with every frame reflowed the bar, the 3D view above it changed height, and
-/// the stock seemed to jump with the tool.
+/// Shown while a simulation frame is being rendered. It always takes the same room, busy or not: in the wrapping playback
+/// bar a spinner that came and went with every frame reflowed the bar, the 3D view above it changed height, and the stock
+/// seemed to jump with the tool. When idle the room is empty, so no hidden spinner keeps animating.
 struct BusyIndicator: View {
     var isBusy: Bool
 
     var body: some View {
-        ProgressView()
-            .controlSize(.small)
-            .frame(width: 16, height: 16)
-            .opacity(isBusy ? 1 : 0)
-            .accessibilityHidden(!isBusy)
+        ZStack {
+            if isBusy { ProgressView().controlSize(.small) }
+        }
+        .frame(width: 16, height: 16)
     }
 }
