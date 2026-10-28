@@ -91,6 +91,30 @@ private func warns(_ issues: [GCodeIssue], _ fragment: String) -> Bool {
     #expect(clean.isEmpty, "\(clean)")
 }
 
+/// A block-delete line runs when Block Delete is off (LinuxCNC, Mach), so it is checked like any other line (#120).
+@Test func blockDeleteLinesAreChecked() {
+    let issues = validate("G20\nG90\nG0 Z0.2\nM3 S18000\nG0 X1 Y1\n/G1 Z-1 F20\nG0 Z0.2\nM5\nM30\n")
+    #expect(issues.contains { $0.severity == .error && $0.message.contains("below the allowed depth") }, "\(issues)")
+    #expect(issues.contains { $0.severity == .warning && $0.line == 6 && $0.message.contains("Block Delete") })
+    #expect(GCodeParser.parse("/G1 Z-1").blocks.first?.value("Z") == -1)
+}
+
+/// An R arc is checked along its sweep, not only at its end (#120): the long way round from X0 to X10 with R-50 is ~100 in wide.
+@Test func rArcsAreCheckedAlongTheirPath() {
+    let long = validate("G20\nG90\nG0 Z0.2\nM3 S18000\nG0 X0 Y0\nG1 Z-0.1 F30\nG2 X10 Y0 R-50 F30\nG0 Z0.2\nM5\nM30\n")
+    #expect(long.contains { $0.severity == .error && $0.message.contains("travel") }, "\(long)")
+    let short = validate("G20\nG90\nG0 Z0.2\nM3 S18000\nG0 X0 Y0\nG1 Z-0.1 F30\nG2 X10 Y0 R50 F30\nG0 Z0.2\nM5\nM30\n")
+    #expect(!short.contains { $0.message.contains("travel") }, "\(short)")
+    let unreachable = validate("G20\nG90\nG0 Z0.2\nM3 S18000\nG0 X0 Y0\nG1 Z-0.1 F30\nG2 X10 Y0 R1 F30\nG0 Z0.2\nM5\nM30\n")
+    #expect(unreachable.contains { $0.severity == .error && $0.message.contains("R arc") })
+}
+
+/// Switching units mid-program keeps the travel seen so far (#120): 59 in, then 1000 mm the other way, spans ~98 in.
+@Test func aUnitsSwitchKeepsTheTravelSoFar() {
+    let issues = validate("G20\nG90\nG0 Z0.2\nM3 S18000\nG0 X0 Y0\nG0 X59 Y0\nG21\nG0 X-1000 Y0\nM5\nM30\n")
+    #expect(issues.contains { $0.severity == .error && $0.message.contains("X travel") }, "\(issues)")
+}
+
 @Test func twoToolsWithOneNumberAreReported() {
     var other = PostFixtures.vBit          // a different tool (id, geometry)...
     other.number = tool.number             // ...posting as the same T word

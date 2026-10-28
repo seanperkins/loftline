@@ -18,18 +18,22 @@ public struct GCodeBlock: Hashable, Sendable {
     }
 }
 
-/// Minimal RS-274 tokenizer: strips `( ... )` and `;` comments, `%` and block-delete lines,
-/// and splits address words (letter + signed decimal). Unparseable text is reported.
+/// Minimal RS-274 tokenizer: strips `( ... )` and `;` comments and `%` lines, and splits address words (letter + signed
+/// decimal). Unparseable text is reported. A block-delete line (`/…`) is parsed like any other, since the controller runs it
+/// whenever Block Delete is off (#120), and its line is listed in `blockDeleteLines`.
 public enum GCodeParser {
     public struct Result: Sendable {
         public var blocks: [GCodeBlock]
         /// (line, text) of fragments that are not valid words.
         public var garbage: [(line: Int, text: String)]
+        /// Lines that start with `/` (block delete): parsed as code, since they run when Block Delete is off.
+        public var blockDeleteLines: [Int] = []
     }
 
     public static func parse(_ text: String) -> Result {
         var blocks: [GCodeBlock] = []
         var garbage: [(Int, String)] = []
+        var blockDeleteLines: [Int] = []
         var lineNo = 0
         for raw in text.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\n" || $0 == "\r\n" }) {
             lineNo += 1
@@ -41,8 +45,12 @@ public enum GCodeParser {
                 if ch == ")" { depth = max(0, depth - 1); continue }
                 if depth == 0 { body.append(ch) }
             }
-            let trimmed = body.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty || trimmed == "%" || trimmed.hasPrefix("/") { continue }
+            var trimmed = body.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("/") {
+                blockDeleteLines.append(lineNo)
+                trimmed = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
+            }
+            if trimmed.isEmpty || trimmed == "%" { continue }
             var words: [GCodeBlock.Word] = []
             let chars = Array(trimmed.uppercased())
             var i = 0
@@ -67,6 +75,6 @@ public enum GCodeParser {
             }
             if !words.isEmpty { blocks.append(GCodeBlock(line: lineNo, words: words)) }
         }
-        return Result(blocks: blocks, garbage: garbage)
+        return Result(blocks: blocks, garbage: garbage, blockDeleteLines: blockDeleteLines)
     }
 }

@@ -125,6 +125,14 @@ struct MotionChecker {
         maxP = Vec3(max(maxP.x, p.x), max(maxP.y, p.y), max(maxP.z, p.z))
     }
 
+    /// Keeps the travel `other` has seen, scaled into this checker's units: a program that switches units mid-way is still
+    /// checked as one span (#120).
+    mutating func carryExtents(from other: MotionChecker, scale f: Double) {
+        guard other.minP.x.isFinite else { return }
+        minP = Vec3(other.minP.x * f, other.minP.y * f, other.minP.z * f)
+        maxP = Vec3(other.maxP.x * f, other.maxP.y * f, other.maxP.z * f)
+    }
+
     /// Travel-extent checks; call once after all moves.
     mutating func finish() {
         guard minP.x.isFinite else { return }

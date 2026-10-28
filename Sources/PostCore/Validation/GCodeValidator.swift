@@ -123,6 +123,10 @@ public struct GCodeValidator: Sendable {
         for g in parsed.garbage {
             carried.add("garbage", .warning, line: g.line, "Unrecognised text '\(g.text)'")
         }
+        for line in parsed.blockDeleteLines {
+            carried.add("block-delete-\(line)", .warning, line: line,
+                        "Line starts with '/' (block delete): the controller runs it whenever Block Delete is off, so it is checked as code")
+        }
         var absolute = true
         var sawAbsolute = false
         var motion: Int?
@@ -180,12 +184,13 @@ public struct GCodeValidator: Sendable {
                     }
                     if u != (gUnits ?? profile.units) {
                         // Restart the checker in the new units, keeping what it found so far.
-                        let old = check.issues
+                        let old = check
                         let f = (gUnits ?? profile.units).factor(to: u)
                         x = x.map { $0 * f }; y = y.map { $0 * f }; z = z.map { $0 * f }
                         feed = feed.map { $0 * f }
                         check = MotionChecker(profile: profile, job: job, jobUnits: units, units: u)
-                        check.issues = old
+                        check.issues = old.issues
+                        check.carryExtents(from: old, scale: f)
                     }
                     gUnits = u
                 case 90: absolute = true; sawAbsolute = true
@@ -283,7 +288,16 @@ public struct GCodeValidator: Sendable {
                         if let s = start, xyKnown {
                             let i = b.value("I"), j = b.value("J")
                             if i == nil && j == nil {
-                                if b.value("R") == nil {
+                                if let r = b.value("R") {
+                                    // An R arc is checked along its sweep, like an I/J one (#120).
+                                    if let c = GCodeReader.rArcCentre(from: s.xy, to: target.xy, radius: r, clockwise: m == 2) {
+                                        path = ArcGeometry.points(from: s, to: target, center: c, clockwise: m == 2,
+                                                                  tolerance: check.eps)
+                                    } else {
+                                        check.issues.add("arc-r-unreachable", .error, line: b.line,
+                                                         "R arc cannot reach its end point (R\(NumberFormat.compact(r, maxDecimals: 4)))")
+                                    }
+                                } else {
                                     check.issues.add("arc-no-centre", .error, line: b.line, "Arc without I/J or R")
                                 }
                             } else {
