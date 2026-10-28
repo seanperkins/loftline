@@ -69,6 +69,9 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// that adds a post field raises this number.
     public static let currentSchemaVersion = 1
     @SchemaVersion public var schemaVersion: Int = PostProfile.currentSchemaVersion
+    /// The machine's park-and-probe tool change, set by `MachineDefinition.applied(to:)` when the post is used. Never read
+    /// from or written to a file, so a post file or a project copy cannot switch probing on.
+    @NeverCoded public var toolChangeProbe: ProbeSetting? = nil
 
     public init(id: String, name: String, version: String = "1.0", fileExtension: String = "tap",
                 units: LengthUnit, commentStyle: CommentStyle = .parentheses, lineNumbers: Bool = false,
