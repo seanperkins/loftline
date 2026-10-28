@@ -47,6 +47,69 @@ private func expectSameLines(_ actual: String, _ expected: String) {
     }
 }
 
+// The posts added after the first three: their dialect lines, as literals (the whole output is pinned by samples/expected).
+private struct NewPost: Sendable, CustomStringConvertible {
+    let id, unitsCode, zWord: String
+    let preamble, toolChange, footerTail: [String]
+    var description: String { id }
+}
+
+private let grblPreamble = ["G90", "G17", "G94"]
+private let linuxCNCPreamble = ["G90", "G91.1", "G17", "G40", "G49", "G80", "G94"]
+private let endMillChange = #"Change to Tool: 1/4" End Mill [2 flute]"#
+
+private let newPosts = [
+    NewPost(id: "generic-grbl-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: grblPreamble,
+            toolChange: ["M5", "(\(endMillChange))", "M0"], footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M2"]),
+    NewPost(id: "linuxcnc-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: linuxCNCPreamble,
+            toolChange: ["M5", "(MSG, \(endMillChange))", "M0"], footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M2"]),
+    NewPost(id: "linuxcnc-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: linuxCNCPreamble,
+            toolChange: ["M5", "(MSG, \(endMillChange))", "M0"], footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M2"]),
+]
+
+private func contains(_ lines: [String], run: [String]) -> Bool {
+    guard run.count <= lines.count else { return false }
+    return (0...(lines.count - run.count)).contains { Array(lines[$0..<($0 + run.count)]) == run }
+}
+
+@Test(arguments: newPosts) private func newPostsWriteTheirDialect(_ row: NewPost) throws {
+    let profile = try #require(BuiltInPosts.profile(id: row.id))
+    let lines = try post(profile).split(separator: "\n").map(String.init)
+    let start = try #require(lines.firstIndex(of: row.unitsCode), "no \(row.unitsCode)")
+    #expect(Array(lines[(start + 1)...].prefix(row.preamble.count)) == row.preamble)
+    #expect(contains(lines, run: row.toolChange), "tool change \(row.toolChange)")
+    #expect(Array(lines.suffix(row.footerTail.count)) == row.footerTail)
+    #expect(lines.contains(row.zWord), "no \(row.zWord)")
+}
+
+private struct PostNumbers: Sendable, CustomStringConvertible {
+    let id, name, ext: String
+    let units: LengthUnit
+    let decimals, feedDecimals: Int
+    let x, y, z, spoilboard, rapid, feed, minRPM, maxRPM, arcTolerance: Double
+    var description: String { id }
+}
+
+private let newPostNumbers = [
+    PostNumbers(id: "generic-grbl-inch", name: "Generic GRBL (inch)", ext: "nc", units: .inch, decimals: 4, feedDecimals: 1,
+                x: 29.5, y: 29.5, z: 2.55, spoilboard: 0.039, rapid: 314.9, feed: 314.9, minRPM: 0, maxRPM: 30000,
+                arcTolerance: 0.0005),
+    PostNumbers(id: "linuxcnc-inch", name: "LinuxCNC (inch)", ext: "ngc", units: .inch, decimals: 4, feedDecimals: 1,
+                x: 48, y: 48, z: 6, spoilboard: 0.05, rapid: 200, feed: 200, minRPM: 0, maxRPM: 24000, arcTolerance: 0.0005),
+    PostNumbers(id: "linuxcnc-mm", name: "LinuxCNC (mm)", ext: "ngc", units: .millimeter, decimals: 3, feedDecimals: 0,
+                x: 1219.2, y: 1219.2, z: 152.4, spoilboard: 1.27, rapid: 5080, feed: 5080, minRPM: 0, maxRPM: 24000,
+                arcTolerance: 0.01),
+]
+
+@Test(arguments: newPostNumbers) private func newPostsCarryTheirNumbers(_ n: PostNumbers) throws {
+    let p = try #require(BuiltInPosts.profile(id: n.id))
+    #expect(p.name == n.name && p.fileExtension == n.ext && p.units == n.units)
+    #expect(p.decimals == n.decimals && p.feedDecimals == n.feedDecimals)
+    #expect(p.limits == MachineLimits(xTravel: n.x, yTravel: n.y, zTravel: n.z, maxSpoilboardCut: n.spoilboard))
+    #expect(p.rapidRate == n.rapid && p.maxFeed == n.feed && p.minRPM == n.minRPM && p.maxRPM == n.maxRPM)
+    #expect(p.arcTolerance == n.arcTolerance)
+}
+
 private let goldenAvidInch = #"""
 ( Job: Golden )
 ( Post: Avid PRO6096 Mach4 [inch] v1.0 )

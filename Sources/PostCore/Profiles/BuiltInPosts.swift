@@ -40,7 +40,43 @@ public enum BuiltInPosts {
         limits: MachineLimits(xTravel: 750, yTravel: 750, zTravel: 65, maxSpoilboardCut: 1.0),
         rapidRate: 8000, maxFeed: 8000)
 
-    public static let all: [PostProfile] = [avidMach4Inch, avidMach4MM, genericGRBLMM]
+    /// The standard footer ending with M2 (GRBL, LinuxCNC) instead of M30.
+    static let m2Footer = ["G0 Z{HOME_Z}", "M5", "G0 X{HOME_X} Y{HOME_Y}", "M2"]
+
+    /// The GRBL mm post in inches; its limits and rates are the mm post's, rounded down.
+    public static let genericGRBLInch = PostProfile(
+        id: "generic-grbl-inch", name: "Generic GRBL (inch)", version: "1.0",
+        fileExtension: "nc", units: .inch, decimals: 4, feedDecimals: 1,
+        preamble: ["G90", "G17", "G94"], toolChange: ["M5", "(Change to Tool: {TOOL_NAME})", "M0"],
+        spindleDwellSeconds: 3, minRPM: 0, maxRPM: 30000, arcOutput: .incrementalIJ, arcTolerance: 0.0005,
+        footer: m2Footer,
+        limits: MachineLimits(xTravel: 29.5, yTravel: 29.5, zTravel: 2.55, maxSpoilboardCut: 0.039),
+        rapidRate: 314.9, maxFeed: 314.9)
+
+    /// LinuxCNC stops for a tool with M0, which pauses on every configuration (M6 may complete at once, and a T missing from
+    /// the tool table aborts). Its screens show only `(MSG, …)` comments.
+    static let linuxCNCToolChange = ["M5", "(MSG, Change to Tool: {TOOL_NAME})", "M0"]
+
+    public static let linuxCNCInch = PostProfile(
+        id: "linuxcnc-inch", name: "LinuxCNC (inch)", version: "1.0",
+        fileExtension: "ngc", units: .inch, decimals: 4, feedDecimals: 1,
+        preamble: machPreamble, toolChange: linuxCNCToolChange,
+        spindleDwellSeconds: 3, minRPM: 0, maxRPM: 24000, arcOutput: .incrementalIJ, arcTolerance: 0.0005,
+        footer: m2Footer,
+        limits: MachineLimits(xTravel: 48, yTravel: 48, zTravel: 6, maxSpoilboardCut: 0.05),
+        rapidRate: 200, maxFeed: 200)
+
+    public static let linuxCNCMM = PostProfile(
+        id: "linuxcnc-mm", name: "LinuxCNC (mm)", version: "1.0",
+        fileExtension: "ngc", units: .millimeter, decimals: 3, feedDecimals: 0,
+        preamble: machPreamble, toolChange: linuxCNCToolChange,
+        spindleDwellSeconds: 3, minRPM: 0, maxRPM: 24000, arcOutput: .incrementalIJ, arcTolerance: 0.01,
+        footer: m2Footer,
+        limits: MachineLimits(xTravel: 1219.2, yTravel: 1219.2, zTravel: 152.4, maxSpoilboardCut: 1.27),
+        rapidRate: 5080, maxFeed: 5080)
+
+    public static let all: [PostProfile] = [avidMach4Inch, avidMach4MM, genericGRBLMM,
+                                            genericGRBLInch, linuxCNCInch, linuxCNCMM]
 
     public static func profile(id: String) -> PostProfile? { all.first { $0.id == id } }
 
