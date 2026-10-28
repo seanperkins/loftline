@@ -12,6 +12,8 @@ public struct PostDraftReport: Sendable {
     public var issues: [GCodeIssue] = []
     public var canSave: Bool { problems.isEmpty }
 
+    public init() {}
+
     /// The templates of a post and the placeholders each one is rendered with.
     public enum Template: String, CaseIterable, Sendable {
         case preamble, footer, toolChange, toolLengthOffset, spindleOn, pause, dwell

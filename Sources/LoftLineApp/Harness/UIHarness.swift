@@ -540,6 +540,7 @@ final class UIHarness {
         case "jobSetup": return .jobSetup
         case "exportGCode": return .exportGCode(.all)
         case "saveAllToolpaths": return .saveAllToolpaths
+        case "postProcessors": return .postProcessors
         case "validation": return .validation
         case "keepOutZones": return .keepOutZones
         case "nesting": return .nesting

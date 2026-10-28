@@ -1,0 +1,13 @@
+{
+  "name": "Post Processors: a duplicate of the Avid post, its form and sample program",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "sheet", "value": "postProcessors"},
+    {"op": "wait", "seconds": 0.5},
+    {"op": "press", "name": "Duplicate", "value": "AXButton"},
+    {"op": "wait", "seconds": 0.5},
+    {"op": "captureSheet", "name": "post-processors"},
+    {"op": "closeSheet"}
+  ]
+}

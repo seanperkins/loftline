@@ -42,7 +42,7 @@ struct HarnessScenario: Decodable {
         "delete": (51, "\u{7f}", false), "selectAll": (0, "a", true),
     ]
     static let sheets: Set<String> = [
-        "jobSetup", "exportGCode", "saveAllToolpaths", "validation", "keepOutZones", "nesting", "fixtures",
+        "jobSetup", "exportGCode", "saveAllToolpaths", "postProcessors", "validation", "keepOutZones", "nesting", "fixtures",
         "tiling", "partLabels", "variables", "productionPlates", "offset", "joinVectors", "inlayWizard",
     ]
 

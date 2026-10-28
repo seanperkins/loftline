@@ -34,6 +34,7 @@ enum DocumentSheet: Identifiable, Equatable {
     case inlayWizard
     case placeModel(ModelPlacementForm)
     case saveAllToolpaths
+    case postProcessors
     case validation
     case keepOutZones
     case nesting
@@ -55,6 +56,7 @@ enum DocumentSheet: Identifiable, Equatable {
         case .inlayWizard: return "inlay"
         case .placeModel(let f): return "place-\(f.modelID)"
         case .saveAllToolpaths: return "saveAll"
+        case .postProcessors: return "postProcessors"
         case .validation: return "validation"
         case .keepOutZones: return "keepOut"
         case .nesting: return "nesting"

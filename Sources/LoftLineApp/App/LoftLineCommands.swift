@@ -228,6 +228,8 @@ struct LoftLineCommands: Commands {
                 openWindow(id: ToolDatabaseView.windowID)
             }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
+            Button("Post Processors…") { document?.sheet = .postProcessors }
+                .disabled(document == nil)
             Button("Reload Post Profiles") { PostProfileCatalog.shared.reload() }
             Button("Open Post Profiles Folder") { openPostFolder() }
         }
