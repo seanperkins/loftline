@@ -3,6 +3,8 @@
 Part 3 of the post-processor work. Part 1 (projects carry their post) and part 2 (coolant, park-and-probe) are on main at
 `f186ee7`. Part 4 (share a post as a file) and part 5 (more built-in posts) are out of scope.
 
+Revision 2, after one review round (Executor, Auditor, Claude Skeptic, Claude Simplifier).
+
 ## Why
 
 A post is the G-code dialect. Today a custom post is a hand-written JSON file in `Application Support/LoftLine/posts`: no
@@ -14,25 +16,36 @@ speaks, and the skipped-file message.
 
 - Edit every field of a post in a form, starting from a duplicate, and see the G-code it writes for a sample job, with the
   validator's verdict, as you type.
-- A post that cannot post the sample job cleanly cannot be saved.
+- A post whose fields break the program, or that cannot post the sample job cleanly, cannot be saved.
 - A custom post can declare its controller, which lets it use touch-plate tool changes.
-- Posts that did not load are listed with the reason.
-- **Nothing changes until a user saves a post**: built-in posts, goldens and `samples/expected/` stay byte-identical.
+- Post files that did not load are listed with the reason, in the app and by the command line.
+- **Built-in posts, goldens and `samples/expected/` stay byte-identical.** One stated change: a post file whose name is not
+  `<id>.json`, whose id is not a safe name, or whose id another file already uses, no longer loads; it is listed with that
+  reason (renaming the file fixes it). Projects that carry its copy keep posting with the copy.
 
 ## Decisions
 
-1. **Built-in posts are read-only; edit a duplicate**, exactly as machines are (Preferences ▸ Machines). A duplicate gets a fresh
-   id `<base>-custom-<n>`; the id is the file name and is not editable. A user file that carries a built-in's id still overrides
-   it (today's rule), and the editor shows it as "Custom (replaces the built-in)".
-2. **Preferences ▸ Posts**, a fourth tab beside Machines, with the same shape: list on the left (Built in, Custom, and "Did not
-   load" with the reason), the editor on the right, Duplicate, Folder, Delete.
-3. **Delete moves the file to the Trash** (`FileManager.trashItem`), never removes it: a post is machine output.
-4. **Controller declaration.** `PostProfile.controller: ToolChangeProbe.Controller?` (Mach4 or GRBL; nil = not declared). Coded
-   only when set, so every existing post file and project copy keeps its bytes. Built-in posts stay nil and keep part 2's
-   by-value mapping. `BuiltInPosts.probeController(for:)` becomes: a built-in compared by value gives its controller; any other
-   post gives its declared `controller`. A post declaring a controller is the owner's statement that its program runs on that
-   controller; the probe sequence is written in code, not from the post's templates, so the declaration is all it needs.
-5. **Editing a post that projects carry.** Projects keep their copy (part 1). After a save, a project whose copy differs gets
+1. **Built-in posts are read-only; edit a duplicate.** **Duplicate** makes an unsaved draft; only **Save** writes a file. The
+   draft's id is `<base>-custom-<n>` (an existing `-custom-<n>` suffix on the base is dropped first) and is not editable. A
+   user file that carries a built-in's id still overrides it (today's rule); the list shows it as "Custom (replaces the
+   built-in)".
+2. **A sheet on the document window: Toolpaths ▸ Post Processors…** (beside Open Post Profiles Folder). The Settings window is
+   a fixed 640 × 480; this sheet is about 960 × 680 with the list, the form and the preview side by side, and the UI harness can
+   open it (`"postProcessors"` in its sheet list). While a draft has unsaved changes the list is locked: **Save** or **Cancel**.
+3. **Delete moves the file to the Trash**, never removes it: a post is machine output. The store takes the move as an injected
+   function (default `FileManager.trashItem`), so tests never touch the real Trash; TESTING.md checks the real one.
+4. **Controller declaration.** `PostProfile.controller: ToolChangeProbe.Controller?` (Mach4 or GRBL; nil = not declared), coded
+   only when set, so every existing file and project copy keeps its bytes. Built-in posts stay nil and keep part 2's by-value
+   mapping. `BuiltInPosts.probeController(for:)` becomes: a built-in compared by value gives its controller; any other post gives
+   its declared `controller`. The probe sequence is written in code, not from the post's templates, so the declaration is what
+   probing needs. Duplicate sets the copy's `controller` to the built-in's, so a tweaked Avid post keeps touch-plate tool
+   changes. A project's post copy that declares a controller can now probe (on a machine installed here that is set up to
+   probe), consistent with part 1's "the copy posts". Part 2's refusal message says what is wrong ("the post declares no
+   controller" / "declares GRBL; this machine probes with Mach4").
+5. **Schema stays 1.** None of parts 1–3 has shipped; v0.2.0 reads a user post file and ignores `controller`, and it has no
+   probing, so dropping the key changes no G-code. The comment on `currentSchemaVersion` becomes "raise it when a reader that
+   drops the field could post different G-code".
+6. **Editing a post that projects carry.** Projects keep their copy (part 1). After a save, a project whose copy differs gets
    part 1's warning and **Update This Project**. Nothing is pushed into projects.
 
 ## The editor
@@ -40,72 +53,109 @@ speaks, and the skipped-file message.
 Grouped like the file, every field of `PostProfile`:
 
 - **Post**: name, version, file extension, units, controller (None / Mach4 / GRBL).
-- **Numbers**: decimals, feed decimals (0–12, today's bound), modal output, line numbers, header comments, comment style.
+- **Numbers**: decimals, feed decimals, modal output, line numbers, header comments, comment style.
 - **Motion**: rapid, linear, arc CW, arc CCW codes; arc output (incremental IJ, absolute IJ, lines), arc tolerance, helical arcs.
-- **Spindle**: on (`M3 S{S}`), off, dwell template and seconds, min and max RPM.
+- **Spindle**: on, off ("also used by touch-plate tool changes"), dwell template and seconds, min and max RPM.
 - **Program**: preamble, tool change, tool length offset (and whether it is used), footer, pause lines (empty = the default
-  pause). Multi-line templates are text areas, one line per G-code line.
-- **Limits and speeds**: X, Y, Z travel, allowed spoilboard cut, rapid rate, max feed (the machine's values replace these when
-  a machine is picked; the form says so).
-- A **placeholder list** beside the templates: `{T}`, `{TOOL_NAME}`, `{S}`, `{SECONDS}`, `{SAFE_Z}`, `{HOME_X}`, `{HOME_Y}`,
-  `{HOME_Z}`, `{JOB_NAME}`, `{POST_NAME}`, `{POST_VERSION}`; in pause lines also `{MESSAGE}` and `{STOP}`.
+  pause). Multi-line templates are text areas, one line per G-code line, with automatic quote and dash substitution off.
+  Beside each template, the placeholders that template can use (the table below).
+- **Limits and speeds**: X, Y, Z travel, allowed spoilboard cut, rapid rate, max feed, min and max RPM, with the note that a
+  machine's values replace them when a machine is picked.
 
-Buttons: Save (disabled while there is a blocking problem), Revert (discard the draft), Delete (custom posts only).
+The list on the left: Built in, Custom, and Did not load (file name and reason). Buttons: Duplicate, Folder, Delete (custom
+posts), Save (disabled while there is a blocking problem), Cancel.
 
-## Checks (blocking)
+## The report
 
-`PostDraftCheck.problems(_ draft: PostProfile) -> [String]`, shown under the form; any problem disables Save:
+One function, synchronous (run on each edit; the sample is a few dozen moves):
 
-- Name empty; file extension empty or with a character other than letters and digits; decimals or feed decimals outside 0–12;
-  min RPM above max RPM; any travel, rapid rate or max feed not positive; arc tolerance not positive when arcs are linearised.
-- Rapid, linear, spindle-on or spindle-off empty.
-- An unknown placeholder in any template (`{X}` would be written as text and break the program), or `{MESSAGE}`/`{STOP}`
-  outside the pause lines.
-- A template line with a control character.
-- **The sample program**: the draft posts the sample job (below) without throwing, and `GCodeValidator` reports **no error** on
-  it. Warnings are shown, not blocking.
+`PostDraftReport.make(_ draft: PostProfile) -> PostDraftReport` with `problems: [String]` (blocking), `program: String?`,
+`issues: [GCodeIssue]` (shown). The static rules run first; the sample is posted only when none fails, so a typed value can
+never reach the builder (a huge `decimals` would exhaust memory).
 
-## The preview
+**Static rules (blocking):**
 
-`PostPreview.render(_ draft: PostProfile) -> PostPreview.Result` (text or a thrown error's message, and the validator's
-issues), run on every edit, debounced. The **sample job** is fixed and covers the output paths: an inch document, material-top
-zero, two tools, a profile with an arc, a pause after it, Mist coolant on the second tool. It is posted with the draft as is (no
-machine applied), so the preview shows what the post itself writes. The pane shows the program in a monospaced, read-only text
-view and the issues above it.
+- Name not empty after trimming; version, name, file extension and every template line printable ASCII (0x20–0x7E); file
+  extension letters and digits only.
+- Round trip: `PostProfile.fromJSON(draft.toJSON())` succeeds (the loader's own bounds, such as 0–12 decimals).
+- Decimals at least 3 for an inch post, 2 for mm (rounding of 0.0005 in / 0.005 mm); feed decimals 0–3.
+- Every number finite: travels, rapid rate and max feed above 0; allowed spoilboard cut, dwell seconds and min RPM at least 0;
+  min RPM at most max RPM.
+- Arc tolerance between half a digit (`0.5·10^-decimals`) and 0.01 in (0.25 mm), whatever the arc output (helices and tiny arcs
+  are linearised too).
+- **Motion codes are fixed**: rapid `G0` or `G00`, linear `G1`/`G01`, arc CW `G2`/`G02`, arc CCW `G3`/`G03`, nothing else on
+  the line. Spindle on starts with `M3` and contains `{S}`; spindle off is `M5`/`M05`; the dwell template starts with `G4`. (A
+  swapped or empty arc code, or `G0 F600`, would post a wrong path the validator cannot see.)
+- **Placeholders per template**: a `{` or `}` in a template is allowed only as an allowed `{NAME}` for that template:
 
-## Posts that did not load
+  | Template | Placeholders |
+  |---|---|
+  | preamble, footer | `SAFE_Z`, `HOME_X`, `HOME_Y`, `HOME_Z`, `JOB_NAME`, `POST_NAME`, `POST_VERSION`, `SECONDS` |
+  | tool change, tool length offset, spindle on | the above, `T`, `TOOL_NAME`, `S` |
+  | pause lines | the preamble's, `MESSAGE`, `STOP` |
+  | dwell | `SECONDS` |
+  | spindle off, motion codes | none |
 
-`PostProfileStore.load() -> (profiles: [PostProfile], skipped: [SkippedPost])`, `SkippedPost { fileName, reason }`, the reason
-from `SnapshotError` (newer LoftLine, malformed with its path) or the decode error. `PostProfileCatalog` publishes `skipped`; the
-Posts tab lists them under "Did not load". Machines do the same (`MachineStore.load()`, listed in the Machines tab).
+  The text placeholders (`JOB_NAME`, `POST_NAME`, `TOOL_NAME`, `MESSAGE`) are allowed only inside a comment on their line (after
+  an unclosed `(` or after `;`): a tool name like `1/4 Z-2` would otherwise write a `Z` word. `POST_VERSION` is rendered through
+  the same comment-safe function as the name (every built-in's version is `1.0`, so no bytes change).
+- A pause template that is not empty contains `{STOP}`, `M0` or `M1`.
+- A declared controller with the tool length offset in use (probing refuses it).
+
+**The sample (blocking when it fails):** a fixed job in PostCore beside `BuiltInPosts`, `PostSampleJob.job(for: draft)`: an inch
+document 4 × 3 × 0.5 in, material-top zero, two tools, a profile with a clockwise and a counter-clockwise arc, a pause after it,
+Mist coolant on the second tool. Its spindle speed is `clamp(18000, minRPM, maxRPM)`, its feeds `min(feed, maxFeed)`, and it is
+posted with the draft's limits widened to at least 100 × 100 × 10 in (limits and RPM are machine numbers a machine replaces;
+the sample must test the dialect, not the fallback numbers). It blocks when the builder throws, when `GCodeValidator` reports
+any error, or any of these warnings: garbage text, a stop or tool change with the spindle running, a stop below safe Z. When the
+draft declares a controller, the sample is also posted with a fixed sample probe for that controller and a touch-off spot (two
+tools, no pause), and the same rules apply, the probe state table included.
+
+The preview pane shows `program` read-only in a monospaced view, and the issues above it.
+
+## The store
+
+- `PostProfileStore.load() -> (profiles: [PostProfile], skipped: [SkippedPost])`, one scan of the folder, `SkippedPost {
+  fileName, reason }`. A file is skipped when it does not decode (the `SnapshotError` reason: newer LoftLine, malformed with its
+  path), when its id is not a safe name (`[A-Za-z0-9._-]`, not starting with `.`), when its name is not `<id>.json`
+  (case-insensitive, since the volume usually is), or when an earlier file has the same id. `allProfiles()` is `load().profiles`;
+  `userProfiles()` goes. `PostProfileCatalog` publishes `skipped`.
+- `newID(from:)` checks the folder's file names, case-folded (loaded, skipped and unreadable files alike), and the built-in ids.
+- `save` refuses an unsafe id; `delete(id:)` moves `<id>.json` to the Trash through the injected function.
+- `loftline-cli posts` and `export` print each skipped file and its reason to stderr.
 
 ## Tests
 
-1. Store: a malformed file and a newer-schema file are skipped with their reasons; a good file loads; `delete(id:)` moves the
-   file to the Trash (a test directory; the file is gone from the folder and present in the trash URL returned); `newID(from:)`
-   never clashes.
-2. Controller: a post with `controller` round-trips; a post without it encodes no key (every built-in's bytes unchanged); a
-   custom post declaring `.mach4` probes on a Mach4 machine, one declaring nothing is refused, one declaring `.grbl` is refused on
-   a `.mach4` probe; the built-in by-value rule is unchanged.
-3. Checks: one test per blocking rule, including an unknown placeholder, `{MESSAGE}` in the tool change, a control character,
-   and a draft whose sample program has a validator error (for example a rapid code `G1`).
-4. Preview: every built-in post previews with no error and no warning; the preview of a duplicate equals the original's.
-5. UI: a harness scenario or an offscreen render of the Posts tab with a custom post selected (the editor and the preview).
+1. Store: malformed, newer-schema, unsafe-id, name-mismatch and duplicate-id files are skipped with their reasons; a good file
+   loads; `newID` avoids a skipped file's name and a case-only clash, and drops an existing `-custom-<n>`; delete calls the
+   injected function with the file's URL; save refuses `../x`; the CLI prints skipped files.
+2. Controller: a post with `controller` round-trips; without it no key is written (every built-in's bytes unchanged); a decoder
+   that drops the key gets a post that cannot probe; a custom post declaring `.mach4` probes on a Mach4 machine, one declaring
+   nothing or `.grbl` is refused with the matching message; a project copy declaring `.mach4` probes; a duplicate of the Avid
+   post carries `.mach4`; the built-in by-value rule is unchanged.
+3. Report, one test per static rule, including: swapped arc codes, an empty arc code, `G0 F600`, `M4 S{S}`, `{T}` in the
+   footer, `{SAFE_Z}` in the dwell, `{S}` in spindle off, a lone `{`, `{TOOL_NAME}` outside a comment, a version with `)`, a
+   non-ASCII quote, decimals 2 on an inch post, an arc tolerance of 0.05 in, an infinite travel, a pause with no stop, a tool
+   change with `M5` removed, a controller with the tool length offset; and the sample: a 0–12000 RPM post and a 100 mm travel
+   post are accepted, a draft whose sample has a validator error is refused, a declared-controller draft runs the probe sample.
+4. Every built-in post's report is clean (no problem, no issue).
+5. UI: a harness scenario opens Post Processors with a custom post selected; the PNG and the accessibility tree are checked.
 6. Goldens, samples and `scripts/check-samples.sh` unchanged; the full suite green.
 
 ## Risks
 
-- A custom post is machine output the owner wrote. The editor blocks a post that cannot post the sample job cleanly, but the
-  sample cannot exercise everything (other arc planes, drilling cycles). The export still validates every real program.
+- A custom post is machine output the owner wrote. The rules and the sample cannot exercise everything (other arc planes,
+  drilling cycles); the export still validates every real program.
 - A declared controller that is wrong lets probing write a sequence the controller misreads. The air-probe check (TESTING.md)
   applies to custom posts too.
 
 ## Docs
 
-`docs/DECISIONS.md` (`post-editor`), `docs/PARITY.md` (post editor row), `TESTING.md` (editing a post), Help (Machines and
-Post Processors).
+`docs/DECISIONS.md` (`post-editor`), `docs/PARITY.md` (the `io-post-processors` row), `TESTING.md` (editing a post, the real
+Trash, the custom-post air-probe step), Help (Machines and Post Processors), and the comments the change makes stale
+(`BuiltInPosts` header and `probeController`, `MachineDefinition.applied(to:)`, `PostProfile` placeholder and schema comments).
 
 ## Order of work
 
-1. Store and catalog: `load()`, skipped files, Trash delete, `newID`. 2. `PostProfile.controller` and the probe rule.
-3. `PostDraftCheck` and `PostPreview`. 4. The Posts tab. 5. Docs.
+1. Store: `load()`, skipped files, safe ids, `newID`, Trash delete, CLI. 2. `PostProfile.controller`, the probe rule and its
+message, `POST_VERSION` comment-safe. 3. `PostSampleJob` and `PostDraftReport`. 4. The Post Processors sheet. 5. Docs.
