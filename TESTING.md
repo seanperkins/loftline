@@ -199,6 +199,13 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
 5. If everything looks right, re-zero Z on the real surface (material top or spoilboard, matching
    Job Setup), turn the spindle on and cut. Run the first real cut at reduced feed override.
 
+**Other controllers (GRBL, LinuxCNC):** these posts have not run on a machine yet. On your own machine, with a
+machine defined for it in Preferences ▸ Machines:
+1. Post a job with more than one tool with Save All Toolpaths ▸ one file per tool.
+2. Before each file, load its tool and set Z zero 1–2 in above the surface, as in the air cut above.
+3. Air-cut each file with the spindle off. Check that it stops at the top with the tool's name (LinuxCNC shows the
+   `MSG` line), and that the spindle dwell after M3 lasts seconds, not milliseconds.
+
 **Editing a post (Toolpaths ▸ Post Processors…):**
 1. Select the Avid inch post: the form is read-only and the sample program shows "Posts the sample job cleanly".
 2. Duplicate it, change the footer, Save. The posts folder (Folder button) holds `<id>.json`; the post is listed under Custom.

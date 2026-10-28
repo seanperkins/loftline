@@ -113,8 +113,8 @@ of machine time. Scrub it, step it one move at a time, or run to the next retrac
   a printable job sheet, material and bed checks, and tiled G-code for jobs
   larger than the bed (Design > Layout, File > Export Job Sheet…, Toolpaths > Save Tiled G-code…).
 - **Preview and output:** 2D overlay, 3D material-removal simulation and time estimates, and
-  printing of the 2D design. A
-  data-driven post (JSON profiles) ships with Avid Mach4 inch/mm and Generic GRBL (mm), and output
+  printing of the 2D design.
+  Data-driven posts (JSON profiles) ship for Mach4, GRBL and LinuxCNC, in inches and millimeters, and output
   goes through a built-in G-code validator. The 2D and 3D views can be shown side by side, and
   File > Recover Unsaved Work… restores autosaved work after a crash.
 

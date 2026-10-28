@@ -914,3 +914,19 @@
 - **carried-raw — the project's post is offered as it carries it.** `carriedPostNotInstalled` returned the post with the machine's limits applied; adding that would have installed the machine's envelope as the post's own limits and shown a false copy-differs warning at once. It returns `ProjectPost.postCopy(of:)` now; its pickers read only the id and the name.
 - **empty-pause — one rule on every read path (fix).** A post whose `pause` is `[]` posted no stop at all at a pause, while the same post with `pause` absent stopped. `PostProfile.normalized` reads `[]` as the default pause, and the posts folder, an import and a project's own copy all go through it, so a carried copy with an empty list now posts the default stop and equals the post Add installs. A new save that fails to write removes the file it created.
 
+- **more-posts — three more built-in posts, chosen so none needs a controller feature LoftLine has not proven.** Spec:
+  `docs/specs/2026-10-28-more-built-in-posts-design.md` (revision 4, after three review rounds). `generic-grbl-inch` (the GRBL mm
+  post in inches, limits and rates rounded down so it never allows more), `linuxcnc-inch` and `linuxcnc-mm` (the Mach dialect with
+  M2 and `.ngc`). Existing posts, goldens, samples and built-in machines keep their bytes; the new posts come after them in
+  `BuiltInPosts.all`, so defaults and pickers start as before. LinuxCNC stops for a tool with `M5`, a `(MSG, …)` line and `M0`,
+  not `T{T} M6`: M6 completes at once on a config that loops `tool-change` back, and a T missing from the tool table aborts. M0
+  stops everywhere but cannot re-zero Z (LinuxCNC cannot touch off while paused), the same as the GRBL post's M0; Help says to
+  save one file per tool and touch off before each. A single multi-tool file is still allowed for both; refusing it would need a
+  post field ("this tool change cannot re-zero Z") and is a follow-up. No Mach3 posts: they would write the Avid posts' G-code
+  byte for byte. A Mach3 owner can list the Avid posts in a machine of their own, with Mach3's tool change set to stop, `G4 P` in
+  seconds and touch-plate tool changes off (the Mach4 probe sequence calls a Mach4 macro); nothing has run on Mach3, so this is
+  here and not in Help. Probing: `generic-grbl-inch` probes as GRBL, and `ToolChangeProbe.defaults(for:)` now asks
+  `probeController` of every listed built-in, so a machine listing only the inch post starts with GRBL (it got Mach4 and was then
+  refused). The LinuxCNC posts have no probe sequence. Mist coolant's M7, which stock GRBL rejects, is out of scope: it already
+  applies to the GRBL mm post, the coolant form and Help warn, and the editor report checks LoftLine's rules, not a controller's
+  build options. A user post file that already has one of the new ids keeps overriding the built-in, by the existing rule.
