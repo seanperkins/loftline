@@ -14,7 +14,8 @@ which part 3 now makes possible but which a new user should not need for the com
 - **Nothing about the existing posts changes**: their bytes, goldens and `samples/expected/` files stay identical; the new posts
   add new goldens and new `samples/expected/<id>/` folders.
 - Each new post passes the post editor's report clean (part 3's rules and sample job) and the validator on every sample.
-- The posts say what they are: a post not proven on a machine says so in its notes (Help and the post's header line is unchanged).
+- The docs say what the posts are: Help and DECISIONS name the posts proven on a machine (the Avid Mach4 ones). `PostProfile` has
+  no notes field and gains none; the G-code header line is unchanged.
 
 ## The posts
 
