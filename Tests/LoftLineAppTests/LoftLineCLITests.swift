@@ -178,7 +178,7 @@ import Testing
         let folder = Self.folder()
         var override = BuiltInPosts.avidMach4Inch
         override.name = "A user's Avid"
-        try override.toJSON().write(to: folder.appendingPathComponent("avid.json"))
+        try override.toJSON().write(to: folder.appendingPathComponent("\(override.id).json"))   // a post file is named after its id
         var store = PostProfileStore(directory: folder)
         #expect(store.allProfiles().first { $0.id == override.id }?.name == "A user's Avid")
         store.readsUserFiles = false
