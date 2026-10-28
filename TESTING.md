@@ -199,6 +199,15 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
 5. If everything looks right, re-zero Z on the real surface (material top or spoilboard, matching
    Job Setup), turn the spindle on and cut. Run the first real cut at reduced feed override.
 
+**Editing a post (Toolpaths ▸ Post Processors…):**
+1. Select the Avid inch post: the form is read-only and the sample program shows "Posts the sample job cleanly".
+2. Duplicate it, change the footer, Save. The posts folder (Folder button) holds `<id>.json`; the post is listed under Custom.
+3. Type `G3` in Arc CW: Save is disabled with "Arc CW must be G2". Cancel puts it back.
+4. Delete the custom post: its file is in the Trash (put it back from there to restore it).
+5. Put a file named `wrong.json` holding another id in the posts folder and press Reload Post Profiles: it is listed under Did
+   not load with the reason.
+6. A custom post with a declared controller: run the air-probe check below with it before cutting.
+
 **Air-probe check (before the first job with park-and-probe on):** Preferences ▸ Machines, the
 machine's "Tool change: park and probe" settings. Do every step with the spindle off and a hand on the E-stop.
 1. **Dry run to the park.** Home the machine. Post a one-tool job and run only to the first stop. The gantry must lift to the
