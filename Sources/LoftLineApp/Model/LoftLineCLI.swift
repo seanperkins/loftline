@@ -169,10 +169,17 @@ enum LoftLineCLI {
             return 2
         }
         let options = Options(builtinOnly: !arguments.isEmpty)
-        for profile in stores(builtinOnly: options.builtinOnly).posts.allProfiles() {
+        let loaded = stores(builtinOnly: options.builtinOnly).posts.load()
+        for line in skippedMessages(loaded.skipped) { output.standardError(line) }
+        for profile in loaded.profiles {
             output.standardOutput("\(profile.id)\t\(profile.name)\n")
         }
         return 0
+    }
+
+    /// One warning line per post file that did not load.
+    static func skippedMessages(_ skipped: [SkippedPost]) -> [String] {
+        skipped.map { "warning: post file \($0.fileName) did not load: \($0.reason)\n" }
     }
 
     // MARK: post resolution
@@ -219,7 +226,9 @@ enum LoftLineCLI {
 
         // The post and the machine, as the document resolves them: the project's own copies first (`ProjectPost`).
         let stores = stores(builtinOnly: options.builtinOnly)
-        let profiles = stores.posts.allProfiles()
+        let loadedPosts = stores.posts.load()
+        for line in skippedMessages(loadedPosts.skipped) { output.standardError(line) }
+        let profiles = loadedPosts.profiles
         let machines = stores.machines.allMachines()
         let units = project.document.units
         guard let resolved = resolvePost(project: project, override: options.post, profiles: profiles, machines: machines) else {

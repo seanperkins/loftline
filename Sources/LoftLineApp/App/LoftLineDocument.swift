@@ -1056,14 +1056,16 @@ final class LoftLineDocument: ReferenceFileDocument {
 final class PostProfileCatalog: ObservableObject {
     static let shared = PostProfileCatalog()
     @Published private(set) var profiles: [PostProfile]
+    /// Post files that did not load, with the reason (listed in Post Processors).
+    @Published private(set) var skipped: [SkippedPost]
     let store: PostProfileStore
 
     init(store: PostProfileStore = PostProfileStore()) {
         self.store = store
-        profiles = store.allProfiles()
+        (profiles, skipped) = store.load()
     }
 
-    func reload() { profiles = store.allProfiles() }
+    func reload() { (profiles, skipped) = store.load() }
 
     func profile(id: String?) -> PostProfile {
         profiles.first { $0.id == id } ?? profiles.first { $0.id == PostProfileStore.defaultProfileID }
