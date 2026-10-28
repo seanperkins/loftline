@@ -213,6 +213,19 @@ import Testing
         let one = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.linuxCNCInch, jobName: "T")
         #expect(!split(one))
     }
+
+    @Test func anOthermillSetupErrorStillWritesAProgramToSaveAnyway() throws {
+        var p = project(thickness: 0.25)
+        p.document.job.zZero = .spoilboard
+        let doc = LoftLineDocument(project: p, toolLibrary: AppTestSupport.library())
+        let op = profile(doc.project, depth: 0.1, tabs: false)
+        doc.perform("Add") { $0.operations.append(op) }
+        doc.calculateNow([op.id])
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
+        let r = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.othermillInch, jobName: "T")
+        #expect(r.text != nil)
+        #expect(r.issues.contains { $0.severity == .error && $0.message.contains("material top") })
+    }
 }
 
 /// A tool named by the library's own naming is never reported as a mismatch against its own diameter.

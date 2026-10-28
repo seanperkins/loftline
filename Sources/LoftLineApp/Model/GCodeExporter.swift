@@ -181,6 +181,8 @@ enum GCodeExporter {
         issues += LayoutChecks.toolpaths(toolpaths, job: doc.job, units: doc.units)
         issues += PreflightChecks.issues(project: project, toolpaths: toolpaths, units: doc.units)
         issues += [ToolChangeZ.warning(toolpaths: toolpaths, profile: profile)].compactMap { $0 }
+        issues += OthermillSetup.issues(job: doc.job, units: doc.units, moves: checked, toolpaths: toolpaths, profile: profile,
+                                        approachHeight: approachHeight(document: doc))
         issues += LayoutChecks.keepOut(checked, zones: Fixtures.zones(in: doc), job: doc.job, units: doc.units).map { i in
             guard i.message.contains(homeMoveName) else { return i }
             var fixed = i

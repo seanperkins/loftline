@@ -294,8 +294,11 @@ import Testing
             for name in sampleNames {
                 let r = Self.run(["export", Self.samples.appendingPathComponent(name + ".loftline").path, "--post", post.id,
                                   "--builtin-only", "--out", "-"])
-                // The one expected message: a post that only stops for a tool change warns on a sample with two tools.
-                let other = r.err.split(separator: "\n").filter { !$0.hasPrefix("warning: This program changes tools") }
+                // The expected messages: a post that only stops for a tool change warns on a sample with two tools, and an
+                // Othermill post warns that the samples' machine (the Avid) is bigger than the Othermill.
+                let expectedPrefixes = ["warning: This program changes tools"]
+                    + (OthermillSetup.postIDs.contains(post.id) ? OthermillSetup.warningPrefixes.map { "warning: " + $0 } : [])
+                let other = r.err.split(separator: "\n").filter { line in !expectedPrefixes.contains { line.hasPrefix($0) } }
                 #expect(r.status == 0 && other.isEmpty, "\(name) with \(post.id): \(r.err)")
                 let file = expected.appendingPathComponent(post.id).appendingPathComponent(
                     GCodeExporter.suggestedFileName(jobName: name, operationName: nil, profile: post))
