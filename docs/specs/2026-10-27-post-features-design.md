@@ -42,7 +42,7 @@ cannot know where the material is in machine coordinates, so only a spot in job 
 
 ## Design
 
-Revision 8, after three review rounds and four verification passes (Executor, Auditor, Claude Skeptic, Claude Simplifier). **The builder writes the park-and-probe
+Revision 9, after three review rounds and five verification passes (Executor, Auditor, Claude Skeptic, Claude Simplifier). **The builder writes the park-and-probe
 sequence in code**, the validator recognises it by value, and every condition under which no valid program can be written is a
 **thrown `PostError`** (the export has no "Save Anyway" for it), not an overridable issue.
 
@@ -77,7 +77,8 @@ machine units, with `scaled(by:)` used by both `applied(to:)` and the Machines e
   a homed machine (Help, TESTING).
 - `topZ`: machine Z of the traverse height, `-zTravel/4 ≤ topZ ≤ 0`, default 0. **Every X/Y traverse of the sequence runs at
   `topZ`.** On GRBL, whose machine Z 0 after homing can be the limit switch's trigger point, `topZ` must be at or below −1 mm (−0.04 in)
-  after the toward-zero rounding it is written with (`problems`; Help says to use the pull-off distance). Software cannot prove that `topZ` clears the stock (it does not know where the stock top is in machine
+  after the toward-zero rounding it is written with (`problems`). GRBL sets the homed position from the pull-off (`$27`) so that
+  machine Z 0 is the trigger point whatever `$27` is; −1 mm therefore stays 1 mm below the switch, and the dry run confirms it. Software cannot prove that `topZ` clears the stock (it does not know where the stock top is in machine
   coordinates); the dry run in TESTING checks that the longest bit at `topZ` clears the tallest stock. `-zTravel/4 ≤ parkZ ≤ topZ`;
   `parkZ` is only how far the spindle comes down at the park for the swap.
 - `plateThickness`: positive. `plateSize`: the plate's greatest extent (its diagonal, or a round plate's diameter), positive.
@@ -86,7 +87,9 @@ machine units, with `scaled(by:)` used by both `applied(to:)` and the Machines e
 - `probeTravel`: positive, at most 1 in (25.4 mm, same tolerance rule), and **at most `plateThickness`**. The probe starts where the
   operator jogged the bit to, at or above the plate top (step 6, a gap of half the travel). Neither controller stops a probe that
   misses before its full travel (Mach4's `G31` never does; GRBL alarms only at the end), so the travel is what bounds a missed contact:
-  starting at or above the plate top, a travel no longer than the plate never takes the bit below the material top.
+  starting at or above the plate top, a travel no longer than the plate never takes the bit below the material top. (With no plate
+  under the bit at all, the bit can end up to `probeTravel − gap` below the material top; the placement stop's continuity check is
+  what guards that case.)
 - `controller`: `.grbl` (probe `G38.2`, which alarms when it ends without contact) or `.mach4` (probe `G31`).
 - `mach4ZeroMacro: Int?` (Mach4 only, 100 to 999): the number of the owner's own Mach4 macro, called right after the probe as
   `M{n} P{plateZ}`. Mach4's `G31` only records the contact position (`#5061`–`#5063`) and does not stop without contact, and Mach4's
@@ -112,8 +115,9 @@ export sheet is open changes `PostedInputs`, and the sheet re-posts and refuses 
 `probeRefusal` compares equal whatever it holds (it never reaches a sheet except through the profile). No
 post file or project copy can therefore carry or switch on probing; a post with "no machine" never probes. `ProgramBuilder` and
 `GCodeValidator` read it from the profile they are given. **The post must speak the probe's controller:** `PostProfile` has no dialect field, and a machine's
-post list is editable, so with probing on `applied(to:)` gives `.refused` unless the post is a built-in post of that controller (the
-Avid Mach4 posts for `.mach4`, the GRBL post for `.grbl`). A custom post cannot probe until part 3 lets a post declare its
+post list is editable, so with probing on `applied(to:)` gives `.refused` unless the raw post (before the machine's limits are applied) is
+**equal by value** to a built-in post of that controller (the Avid Mach4 posts for `.mach4`, the GRBL post for `.grbl`). An id is not
+enough: a user file or a project copy can carry a built-in's id with other text. A custom post cannot probe until part 3 lets a post declare its
 controller.
 
 **Probe settings always come from the machine installed here.** Part 1 posts with the project's copy of the machine. For probe
@@ -170,7 +174,8 @@ park on the envelope edge never lands a rounding digit beyond it. `G92` is never
 **Refused in the builder:** one `PostError.probe(String)` case carries every message, and `GCodeExporter.export` catches it once.
 Probing on with no touch-off spot; probing with `useToolLengthOffset`; `ToolChangeProbe.problems`; `plateThickness + safeZ` beyond Z
 travel; a Mach4 probe with no `mach4ZeroMacro`; a post that is not a built-in post of the probe's controller (`.refused`); a probe feed or travel that formats to zero;
-`plateZ` written more than 0.001 in (0.025 mm) away from its value (a post with too few `decimals`); a `.refused` probe setting (§2); a
+`plateZ` written more than 0.001 in (0.025 mm) away from its value (a post with too few `decimals`); a written `clearZ` less than
+1 mm (0.04 in) above the written `plateZ` (a tiny safe Z); a `.refused` probe setting (§2); a
 two-sided job with probing on (`job.isTwoSided` is on the `PostJob`, and a side export keeps it). **Tiled export** with probing on is
 refused in `TiledExport.files`: every tile's result carries the refusal as its error and no text (a tile is not marked on the
 `PostJob`). The spot's frame is not defined per tile or per side; a later part can add it. Help says where probing is switched off
@@ -276,17 +281,18 @@ the tool, so a two-tool probed program previews as two tools with no phantom plu
    restores it; changing coolant leaves a calculated toolpath fresh.
 2. Sequence: exact lines for one and two tools, GRBL and Mach4, inch and mm posts, an mm document with an inch post, `.center` origin
    with a datum offset, both Z-zero modes (`plateZ`, `clearZ`), plate thicker than safe Z (nothing below `clearZ` at the spot), probe
-   feed rounded down (`4.99` in/min → `F4.9`; inch machine, mm post `126.746` → `F126`), travel floored with the epsilon (1.13 in →
-   `Z-1.1300`; a 25.4 mm machine on an inch post → `Z-1.0000`), `toolChange` and `G43` absent, `G90 G54` (and `G55` with `workOffset`
+   feed rounded down (`4.99` in/min → `F4.9`; inch machine, mm post `126.746` → `F126`), travel floored with the epsilon (0.57 in →
+   `Z-0.5700`; a 25.4 mm travel with a 25.4 mm plate on an inch post → `Z-1.0000`), `toolChange` and `G43` absent, `G90 G54` (and `G55` with `workOffset`
    2) before the park, every `G53` X/Y move after a `G53 G0 Z{topZ}` (`topZ` 0 and −1 mm), the Mach4 `M{macro} P{plateZ}` followed by the fixed
    recovery line (with `G90.1` on an absolute-IJ Mach4 post, `G91.1` otherwise), GRBL `G10 L20 P{n} Z{plateZ}`, `G0` written on the move after the probe, `F` restated on
    the first feed move after the sequence, the spot rapid writing X and Y and no Z when the previous toolpath ended at the spot's X,
    the placement comment with the gap and its unit, the same lines with line numbers on.
 3. Refusals, each giving no text: no spot, `G43`, machine problems (`mach4ZeroMacro` outside 100–999; `topZ` above 0 or below
    `−zTravel/4`; `parkZ` above `topZ` or below `−zTravel/4`; `|parkX|` or `|parkY|` beyond travel; feed over 10 in/min; travel over
-   1 in or over the plate thickness; a GRBL `topZ` above −1 mm; `workOffset` 0 or 7; `plateThickness` or `plateSize` ≤ 0), plate + safe Z beyond travel, Mach4
+   1 in (with a plate thicker than 1 in) or over the plate thickness; a GRBL `topZ` above −1 mm; `workOffset` 0 or 7; `plateThickness` or `plateSize` ≤ 0), plate + safe Z beyond travel, Mach4
    with no zero macro, a post that is not a built-in post of the probe's controller (a GRBL post on the Mach4 machine, a custom post; in the export sheet
-   and the CLI), `plateZ` 0.4 on a post with 0 decimals, feed or travel that formats to zero (mm post with zero feed decimals), two-sided with probing (builder, also a
+   and the CLI), `plateZ` 0.4 on a post with 0 decimals, a 3 mm plate with safe Z 0.0004 mm, a project copy or a
+   user post file with a built-in's id but other text, feed or travel that formats to zero (mm post with zero feed decimals), two-sided with probing (builder, also a
    single side), tiled with probing (every tile's result), a project copy with probing for a machine not installed or installed
    without probing (also `--builtin-only`, and `--force` does not write past it); `sheetToolpaths` nil with probing; spot near an
    edge (disc of radius `plateSize`, a 3 × 3 in plate touched at a corner), in a keep-out zone, in a clamp, over a pocket in another
@@ -298,7 +304,7 @@ the tool, so a two-tool probed program previews as two tools with no phantom plu
    posts the installed values and gives the same G-code; a copy that differs only in its probe gives no copy-differs warning; a
    single-toolpath export whose sibling failed to calculate shows no missing-from-the-program error for the sibling.
 4. Validator: the builder's program, Mach4 (macro `M199`) and GRBL, with and without line numbers, with a custom footer and a
-   custom pause template that start `G53 G0 Z0`, a pause, and a custom preamble that writes `G54` while `workOffset` is 2, has no coordinate-shift, incremental,
+   custom pause template that start `G53 G0 Z{topZ}` (Mach4 `Z0`; GRBL its `topZ`), a pause, and a custom preamble that writes `G54` while `workOffset` is 2, has no coordinate-shift, incremental,
    unknown-G, unknown-M, garbage, unknown-Z, too-deep or spindle-off warnings and still catches a too-deep cut after the second tool;
    errors for: wrong `G10` value or `P`, a cut or the spot rapid in the wrong work offset, a `G53` X/Y move not after `topZ`, a `T`
    outside `parked`, `T2`, `G53 G0 Z0`, spot with no park or swap stop, no placement stop before the probe, no clear move or no
@@ -315,8 +321,8 @@ the tool, so a two-tool probed program previews as two tools with no phantom plu
 6. Preview: a probed two-tool program, GRBL and Mach4, gives two tool segments, no phantom plunge, Z = `plateZ` after `G10 L20` and
    after `M{macro} P…` and its recovery line; the Avid `T{T} M6` program and a
    program that pre-stages `T2` after `T1 M6` keep today's segments.
-7. Machines: a machine with a probe round-trips at schema 1; `probeFeed` 10 in/min and `probeTravel` 1 in survive the units switch
-   and post with an mm post; a 201 mm park on an inch post (7.913386 in) is written toward zero, `7.9133`, and passes; a probe edit in
+7. Machines: a machine with a probe round-trips at schema 1; `probeFeed` 10 in/min and `probeTravel` 1 in (plate 1 in) survive the
+   units switch and post with an mm post; a 201 mm park on an inch post (7.913386 in) is written toward zero, `7.9133`, and passes; a probe edit in
    Preferences while the export, Save All or Check Toolpaths sheet is open makes it re-post, and Save refuses the old program; a
    `sheetToolpaths` that lacks the exported toolpaths refuses.
 8. Goldens, samples and `scripts/check-samples.sh` unchanged; the full suite green.
