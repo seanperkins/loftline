@@ -42,7 +42,7 @@ cannot know where the material is in machine coordinates, so only a spot in job 
 
 ## Design
 
-Revision 9, after three review rounds and five verification passes (Executor, Auditor, Claude Skeptic, Claude Simplifier). **The builder writes the park-and-probe
+Revision 10, after three review rounds and six verification passes (Executor, Auditor, Claude Skeptic, Claude Simplifier). **The builder writes the park-and-probe
 sequence in code**, the validator recognises it by value, and every condition under which no valid program can be written is a
 **thrown `PostError`** (the export has no "Save Anyway" for it), not an overridable issue.
 
@@ -88,8 +88,8 @@ machine units, with `scaled(by:)` used by both `applied(to:)` and the Machines e
   operator jogged the bit to, at or above the plate top (step 6, a gap of half the travel). Neither controller stops a probe that
   misses before its full travel (Mach4's `G31` never does; GRBL alarms only at the end), so the travel is what bounds a missed contact:
   starting at or above the plate top, a travel no longer than the plate never takes the bit below the material top. (With no plate
-  under the bit at all, the bit can end up to `probeTravel − gap` below the material top; the placement stop's continuity check is
-  what guards that case.)
+  under the bit at all, the bit can end up to `probeTravel` below the material top, at most 1 in with the spindle off; the placement
+  stop's continuity check is what guards that case.)
 - `controller`: `.grbl` (probe `G38.2`, which alarms when it ends without contact) or `.mach4` (probe `G31`).
 - `mach4ZeroMacro: Int?` (Mach4 only, 100 to 999): the number of the owner's own Mach4 macro, called right after the probe as
   `M{n} P{plateZ}`. Mach4's `G31` only records the contact position (`#5061`–`#5063`) and does not stop without contact, and Mach4's
@@ -145,7 +145,8 @@ it marks toolpaths stale like any job edit (as `datumOffset` does). Nil means no
 With park-and-probe on, the sequence **replaces** the post's `toolChange` lines and the tool-length offset. Written before the first
 toolpath and at every tool change:
 
-1. Retract to safe Z (as today, when a tool was cutting); `M9` if coolant is on; `M5`; `G90 G{53+workOffset}`.
+1. Retract to safe Z (as today, when a tool was cutting); `M9` if coolant is on; `M5`; `G90 G92.1 G{53+workOffset}` (`G92.1` clears
+   any `G92` offset an earlier program left, which neither controller clears at program end and which would move the spot).
 2. `G53 G0 Z{topZ}`, `G53 G0 X{parkX} Y{parkY}`, then `G53 G0 Z{parkZ}` (down at the park only). The writer's modal state is reset
    after the first `G53` (it no longer knows where the tool is).
 3. `T{n}`, a comment "Load T{n}: {name}", `M0`.
@@ -173,7 +174,7 @@ park on the envelope edge never lands a rounding digit beyond it. `G92` is never
 
 **Refused in the builder:** one `PostError.probe(String)` case carries every message, and `GCodeExporter.export` catches it once.
 Probing on with no touch-off spot; probing with `useToolLengthOffset`; `ToolChangeProbe.problems`; `plateThickness + safeZ` beyond Z
-travel; a Mach4 probe with no `mach4ZeroMacro`; a post that is not a built-in post of the probe's controller (`.refused`); a probe feed or travel that formats to zero;
+travel; a Mach4 probe with no `mach4ZeroMacro`; a post that is not a built-in post of the probe's controller (`.refused`); on GRBL, a tool number above 255 (GRBL rejects it); a probe feed or travel that formats to zero;
 `plateZ` written more than 0.001 in (0.025 mm) away from its value (a post with too few `decimals`); a written `clearZ` less than
 1 mm (0.04 in) above the written `plateZ` (a tiny safe Z); a `.refused` probe setting (§2); a
 two-sided job with probing on (`job.isTwoSided` is on the `PostJob`, and a side export keeps it). **Tiled export** with probing on is
@@ -243,6 +244,7 @@ Compared blocks ignore their `N` word (the tokenizer keeps it as a word).
   probe. A `G53` move that is not `topZ` or the park keeps today's coordinate-shift warning. So a missing first sequence, a dropped
   park, swap stop, placement stop, clear move or removal stop each fail. A sequence deleted together with its `T` cannot be seen (there
   is no other sign a tool changed), and the tests do not expect it.
+- `G92.1` in step 1 gives no coordinate-shift warning.
 - `G53` moves whose targets equal `topZ` or the park values (tolerance, so rounding at `decimals` passes) give no coordinate-shift
   warning and are not counted in the travel extents; X, Y and Z become unknown.
 - **Work offset, modal.** The validator tracks the active `G54` to `G59`; it must equal `G{53+workOffset}` at the spot rapid, at the
@@ -281,9 +283,9 @@ the tool, so a two-tool probed program previews as two tools with no phantom plu
    restores it; changing coolant leaves a calculated toolpath fresh.
 2. Sequence: exact lines for one and two tools, GRBL and Mach4, inch and mm posts, an mm document with an inch post, `.center` origin
    with a datum offset, both Z-zero modes (`plateZ`, `clearZ`), plate thicker than safe Z (nothing below `clearZ` at the spot), probe
-   feed rounded down (`4.99` in/min → `F4.9`; inch machine, mm post `126.746` → `F126`), travel floored with the epsilon (0.57 in →
-   `Z-0.5700`; a 25.4 mm travel with a 25.4 mm plate on an inch post → `Z-1.0000`), `toolChange` and `G43` absent, `G90 G54` (and `G55` with `workOffset`
-   2) before the park, every `G53` X/Y move after a `G53 G0 Z{topZ}` (`topZ` 0 and −1 mm), the Mach4 `M{macro} P{plateZ}` followed by the fixed
+   feed rounded down (`4.99` in/min → `F4.9`; inch machine, mm post `126.746` → `F126`), travel floored with the epsilon (0.57 in with
+   a 0.57 in plate → `Z-0.5700`; a 25.4 mm travel with a 25.4 mm plate on an inch post → `Z-1.0000`), `toolChange` and `G43` absent, `G90 G54` (and `G55` with `workOffset`
+   2) before the park, every `G53` X/Y move after a `G53 G0 Z{topZ}` (`topZ` 0 on Mach4 and −1 mm on GRBL), `G92.1` in step 1, the Mach4 `M{macro} P{plateZ}` followed by the fixed
    recovery line (with `G90.1` on an absolute-IJ Mach4 post, `G91.1` otherwise), GRBL `G10 L20 P{n} Z{plateZ}`, `G0` written on the move after the probe, `F` restated on
    the first feed move after the sequence, the spot rapid writing X and Y and no Z when the previous toolpath ended at the spot's X,
    the placement comment with the gap and its unit, the same lines with line numbers on.
@@ -291,7 +293,7 @@ the tool, so a two-tool probed program previews as two tools with no phantom plu
    `−zTravel/4`; `parkZ` above `topZ` or below `−zTravel/4`; `|parkX|` or `|parkY|` beyond travel; feed over 10 in/min; travel over
    1 in (with a plate thicker than 1 in) or over the plate thickness; a GRBL `topZ` above −1 mm; `workOffset` 0 or 7; `plateThickness` or `plateSize` ≤ 0), plate + safe Z beyond travel, Mach4
    with no zero macro, a post that is not a built-in post of the probe's controller (a GRBL post on the Mach4 machine, a custom post; in the export sheet
-   and the CLI), `plateZ` 0.4 on a post with 0 decimals, a 3 mm plate with safe Z 0.0004 mm, a project copy or a
+   and the CLI), `plateZ` 0.4 on a post with 0 decimals, T300 on GRBL, a 3 mm plate with safe Z 0.0004 mm, a project copy or a
    user post file with a built-in's id but other text, feed or travel that formats to zero (mm post with zero feed decimals), two-sided with probing (builder, also a
    single side), tiled with probing (every tile's result), a project copy with probing for a machine not installed or installed
    without probing (also `--builtin-only`, and `--force` does not write past it); `sheetToolpaths` nil with probing; spot near an
@@ -304,7 +306,9 @@ the tool, so a two-tool probed program previews as two tools with no phantom plu
    posts the installed values and gives the same G-code; a copy that differs only in its probe gives no copy-differs warning; a
    single-toolpath export whose sibling failed to calculate shows no missing-from-the-program error for the sibling.
 4. Validator: the builder's program, Mach4 (macro `M199`) and GRBL, with and without line numbers, with a custom footer and a
-   custom pause template that start `G53 G0 Z{topZ}` (Mach4 `Z0`; GRBL its `topZ`), a pause, and a custom preamble that writes `G54` while `workOffset` is 2, has no coordinate-shift, incremental,
+   custom pause template that start `G53 G0 Z{topZ}` (Mach4 `Z0`; GRBL its `topZ`; a GRBL footer with `G53 G0 Z0` keeps today's
+   coordinate-shift warning), a pause, and line numbers given through a profile already set to `.on` (no built-in post numbers its
+   lines, so the product cannot reach that combination), and a custom preamble that writes `G54` while `workOffset` is 2, has no coordinate-shift, incremental,
    unknown-G, unknown-M, garbage, unknown-Z, too-deep or spindle-off warnings and still catches a too-deep cut after the second tool;
    errors for: wrong `G10` value or `P`, a cut or the spot rapid in the wrong work offset, a `G53` X/Y move not after `topZ`, a `T`
    outside `parked`, `T2`, `G53 G0 Z0`, spot with no park or swap stop, no placement stop before the probe, no clear move or no
@@ -338,9 +342,10 @@ the tool, so a two-tool probed program previews as two tools with no phantom plu
   confirms that `G53 Z{topZ}` is near the top of travel, clear of the limit switch, that the longest bit at `topZ` clears the tallest
   stock and every clamp and fixture along the whole path from the park to the spot, and the `G53` signs. The feature is off by
   default and a Mach4 probe cannot post without the zero macro. Help and docs give a reference Lua macro.
-- **A missed contact.** With the lead off or the plate not under the bit, the probe still runs its full travel with the spindle off.
-  The travel limit (§2) keeps it at or above the material top, and the placement stop's continuity check (the probe light) makes it
-  unlikely; on Mach4 the macro then stops the program.
+- **A missed contact.** With the lead off, the probe still runs its full travel with the spindle off; with the plate under the bit
+  the travel limit (§2) keeps the bit at or above the material top. With no plate under the bit it can end up to `probeTravel` (at
+  most 1 in) below the material top. The placement stop's continuity check (the probe light) guards both; on Mach4 the macro then
+  stops the program, on GRBL the alarm does.
 - **The operator jogs.** The jog at the placement stop is by hand; a jog too low is a jog into the plate, and a jog in X or Y moves
   the plate off the checked spot. The stop says "Jog Z only".
 - **`topZ` and tall stock.** Every traverse runs at `topZ`; software cannot check that it clears the stock (dry run above).
