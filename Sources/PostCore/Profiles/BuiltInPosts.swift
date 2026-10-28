@@ -43,4 +43,15 @@ public enum BuiltInPosts {
     public static let all: [PostProfile] = [avidMach4Inch, avidMach4MM, genericGRBLMM]
 
     public static func profile(id: String) -> PostProfile? { all.first { $0.id == id } }
+
+    /// The controller a built-in post speaks, when `raw` is that post unchanged (compared by value, not by id: a user
+    /// file or a project copy can carry a built-in's id with other text). nil for any other post.
+    public static func probeController(for raw: PostProfile) -> ToolChangeProbe.Controller? {
+        guard let builtIn = profile(id: raw.id), builtIn == raw else { return nil }
+        switch raw.id {
+        case avidMach4Inch.id, avidMach4MM.id: return .mach4
+        case genericGRBLMM.id: return .grbl
+        default: return nil
+        }
+    }
 }

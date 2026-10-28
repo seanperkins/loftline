@@ -64,6 +64,10 @@ struct OperationEditor: View {
             ArrayCopyForm(array: setupBinding(\.arrayCopy), units: units)
         }
         Divider()
+        InspectorSection(title: "Coolant") {
+            CoolantForm(coolant: setupBinding(\.coolant))
+        }
+        Divider()
         InspectorSection(title: "Pause") {
             PauseStepForm(pause: setupBinding(\.pauseAfter), toolpathName: draft.setup.name)
         }

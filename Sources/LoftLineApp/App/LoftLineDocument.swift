@@ -812,7 +812,7 @@ final class LoftLineDocument: ReferenceFileDocument {
     func isStale(_ id: UUID) -> Bool {
         guard let r = results[id], let op = operation(id) else { return true }
         // The pause is applied when the program is posted, so editing it leaves the result valid.
-        return r.operation.withoutPause != op.withoutPause || r.designRevision != designRevision
+        return r.operation.withoutPostSettings != op.withoutPostSettings || r.designRevision != designRevision
     }
 
     /// Generates toolpaths off the main thread; results arrive asynchronously. A request for an

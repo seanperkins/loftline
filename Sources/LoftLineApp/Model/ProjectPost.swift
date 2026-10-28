@@ -61,6 +61,30 @@ enum ProjectPost {
         return p.machineInferredFor == effectivePostID(p) ? m : nil
     }
 
+    static let probeRefusalMessage = "This project was set up to probe tool changes on a machine that is not set up for it here."
+
+    /// `copy` with the installed machine's probe settings, converted to the copy's units: they describe this shop's machine
+    /// today (its park position, its plate), so a project's copy never posts its own. A copy that probes on a machine that is
+    /// not installed here, or not set up to probe here, refuses instead.
+    static func withInstalledProbe(_ copy: MachineDefinition, installed: MachineDefinition?) -> MachineDefinition {
+        var m = copy
+        if let probe = installed?.toolChangeProbe, let installed {
+            m.toolChangeProbe = probe.scaled(by: installed.units.factor(to: copy.units))
+        } else {
+            m.toolChangeProbe = nil
+            if copy.toolChangeProbe != nil { m.probeRefusal = probeRefusalMessage }
+        }
+        return m
+    }
+
+    /// The copy-differs warning compares the rest of the machine: its probe settings never post from the copy.
+    private static func withoutProbe(_ m: MachineDefinition) -> MachineDefinition {
+        var m = m
+        m.toolChangeProbe = nil
+        m.probeRefusal = nil
+        return m
+    }
+
     static func resolve(_ p: LoftLineProject, profiles: [PostProfile], machines: [MachineDefinition]) -> Resolved {
         let id = effectivePostID(p)
         let installedPost = profiles.first { $0.id == id }
@@ -81,8 +105,9 @@ enum ProjectPost {
         let machineSource: Source?
         var machineDiff: (copy: MachineDefinition, installed: MachineDefinition)?
         if let copy = machineCopy(of: p) {
-            machine = copy; machineSource = .projectCopy
-            if let installed = machines.first(where: { $0.id == copy.id }), installed != copy { machineDiff = (copy, installed) }
+            let installed = machines.first(where: { $0.id == copy.id })
+            machine = withInstalledProbe(copy, installed: installed); machineSource = .projectCopy
+            if let installed, withoutProbe(installed) != withoutProbe(copy) { machineDiff = (copy, installed) }
         } else if machineNoneRecorded(p) {
             // The file says no machine was found for this post when it was set up: the post's own limits apply, whatever
             // machine this Mac has that lists the post (a travel check must not widen because of the Mac it is opened on).

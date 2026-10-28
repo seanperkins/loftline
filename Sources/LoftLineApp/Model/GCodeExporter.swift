@@ -32,11 +32,23 @@ enum GCodeExporter {
                           results: [UUID: ToolpathResult], groupByTool: Bool) -> [Toolpath] {
         switch scope {
         case .operation(let id):
-            return results[id]?.toolpaths ?? []
+            guard let op = operations.first(where: { $0.id == id }) else { return results[id]?.toolpaths ?? [] }
+            return operationToolpaths(op, results: results)
         case .all:
-            let tps = operations.filter(\.setup.isEnabled).flatMap { withPause($0.setup.pauseAfter, results[$0.id]?.toolpaths ?? []) }
+            let tps = operations.filter(\.setup.isEnabled).flatMap { withPause($0.setup.pauseAfter, operationToolpaths($0, results: results)) }
             return groupByTool ? ToolpathOrdering.groupedByTool(tps) : tps
         }
+    }
+
+    /// One operation's calculated toolpaths with its post-time settings that belong on every toolpath (coolant).
+    /// Every export path collects an operation's toolpaths through here; the pause is added only for whole programs.
+    static func operationToolpaths(_ op: AnyOperation, results: [UUID: ToolpathResult]) -> [Toolpath] {
+        withCoolant(op.setup.coolant, results[op.id]?.toolpaths ?? [])
+    }
+
+    /// `toolpaths` with `coolant` on every one (unlike a pause, which belongs only after the last).
+    static func withCoolant(_ coolant: Coolant?, _ toolpaths: [Toolpath]) -> [Toolpath] {
+        toolpaths.map { var t = $0; t.coolant = coolant; return t }
     }
 
     /// `toolpaths` (one operation's) with the operation's operator pause on the last one that cuts.
@@ -145,12 +157,17 @@ enum GCodeExporter {
         return "\(f(j.width)) x \(f(j.height)) x \(f(j.thickness)) \(doc.units.abbreviation)"
     }
 
+    /// `sheetToolpaths`: with a probing post, every toolpath of the posted sheet (`sheetToolpathsIfProbing`), which the
+    /// touch-off spot is checked against; nil with a probing post refuses, so a caller that forgets it fails closed.
     static func export(project: LoftLineProject, toolpaths: [Toolpath], profile: PostProfile,
-                       jobName: String) -> GCodeExportResult {
+                       jobName: String, sheetToolpaths: SheetToolpaths? = nil) -> GCodeExportResult {
         let doc = project.document
         guard !toolpaths.isEmpty else {
             return GCodeExportResult(text: nil, issues: [], errorMessage: "There are no calculated toolpaths to export.",
                                      toolpathCount: 0)
+        }
+        if let problem = spotProblem(project: project, exported: toolpaths, sheet: sheetToolpaths, profile: profile) {
+            return refused(problem, toolpathCount: toolpaths.count)
         }
         // Travel between toolpaths crosses lift-over zones at safe Z unless raised here: each
         // operation was re-routed on its own, so only the final order shows these moves.
@@ -181,6 +198,8 @@ enum GCodeExporter {
             return GCodeExportResult(text: nil, issues: issues,
                                      errorMessage: "\(what) is not available in this build yet.",
                                      toolpathCount: toolpaths.count)
+        } catch PostError.probe(let message) {
+            return GCodeExporter.refused(message, issues: issues, toolpathCount: toolpaths.count)
         } catch PostError.spindleSpeedOutOfRange(let rpm) {
             return GCodeExportResult(text: nil, issues: issues,
                                      errorMessage: String(format: "Spindle speed %.0f RPM is outside the machine's range (%.0f–%.0f).",
@@ -189,6 +208,11 @@ enum GCodeExporter {
         } catch {
             return GCodeExportResult(text: nil, issues: issues, errorMessage: "\(error)", toolpathCount: toolpaths.count)
         }
+    }
+
+    /// No program: a condition under which no valid program can be written (there is no Save Anyway for it).
+    static func refused(_ message: String, issues: [GCodeIssue] = [], toolpathCount: Int) -> GCodeExportResult {
+        GCodeExportResult(text: nil, issues: issues, errorMessage: message, toolpathCount: toolpathCount)
     }
 
     private static let fileNameCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_."))

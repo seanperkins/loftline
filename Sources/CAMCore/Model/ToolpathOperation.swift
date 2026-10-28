@@ -58,6 +58,8 @@ public struct OperationSetup: Codable, Hashable, Identifiable, Sendable {
     /// Stop the machine for the operator after this toolpath (nil = run straight on). Applied when
     /// the program is posted, so changing it never needs a recalculation.
     public var pauseAfter: PauseStep?
+    /// Coolant for every toolpath this operation makes (nil = Off). Applied when the program is posted.
+    public var coolant: Coolant?
 
     public init(id: UUID = UUID(), name: String, isEnabled: Bool = true, toolID: UUID, shapeIDs: [UUID] = []) {
         self.id = id; self.name = name; self.isEnabled = isEnabled; self.toolID = toolID; self.shapeIDs = shapeIDs

@@ -131,8 +131,37 @@ public struct GCodeValidator: Sendable {
         var spindleOn = false
         var sawSpeed = false
         var sawEnd = false
+        var probeCheck: ProbeSequenceChecker?
+        if case .on(let p)? = profile.toolChangeProbe {
+            probeCheck = ProbeSequenceChecker(probe: p, profile: profile, job: job, jobUnits: units)
+        }
+        /// After a probe the motion mode is unknown (GRBL's G38.2 is modal): the next axis block must name one.
+        var needMotionWord = false
 
-        for b in parsed.blocks {
+        var index = 0
+        while index < parsed.blocks.count {
+            let b = parsed.blocks[index]
+            index += 1
+            if var pc = probeCheck {
+                let effect = pc.step(b, next: parsed.blocks[index...], spindleOn: spindleOn, motion: motion, issues: &carried)
+                probeCheck = pc
+                if effect.consumed > 0 {
+                    index += effect.consumed - 1
+                    check.leaveHole()
+                    if effect.positionUnknown { x = nil; y = nil; z = nil }
+                    if let p = effect.xy { x = p.x; y = p.y }
+                    if let v = effect.z { z = v }
+                    if effect.afterProbe { motion = nil; absolute = true; needMotionWord = true }
+                    continue
+                }
+            }
+            if needMotionWord, b.value("X") != nil || b.value("Y") != nil || b.value("Z") != nil {
+                if !b.values("G").contains(where: { Self.motionG.contains($0) }) {
+                    carried.add("probe-no-motion", .error, line: b.line,
+                                "Axis words after a probe with no motion mode: the controller may still be probing")
+                }
+                needMotionWord = false
+            }
             var nonMotion = false
             if sawEnd, b.value("X") != nil || b.value("Y") != nil || b.value("Z") != nil {
                 carried.add("after-end", .warning, line: b.line, "Motion after the program end (M30/M2)")
@@ -165,6 +194,12 @@ public struct GCodeValidator: Sendable {
                     carried.add("incremental", .warning, line: b.line, "Incremental positioning (G91) in program")
                 case _ where Self.motionG.contains(g): motion = Int(g)
                 case 4, 28, 30: nonMotion = true
+                case 31, 38.2:
+                    // A probe: it stops where the probe touches, so its target is not a position.
+                    nonMotion = true
+                    motion = nil
+                case 92.1 where probeCheck != nil:
+                    break   // the probed tool change clears any G92 offset before the spot (spec §4 step 1)
                 case 10, 53, 92, 92.1, 92.2:
                     // The controller now interprets every later coordinate in a frame this
                     // validator cannot see, so the depth checks below say nothing about it.
@@ -303,7 +338,7 @@ public struct GCodeValidator: Sendable {
 
     /// G-codes the checker understands or knowingly ignores. Anything else is reported, because
     /// a word the validator does not model is a word it cannot vouch for.
-    static let knownG: Set<Double> = [0, 1, 2, 3, 4, 10, 17, 18, 19, 20, 21, 28, 30, 40, 41, 42, 43, 49, 53, 54, 55, 56,
+    static let knownG: Set<Double> = [0, 1, 2, 3, 4, 10, 17, 18, 19, 20, 21, 28, 30, 31, 38.2, 40, 41, 42, 43, 49, 53, 54, 55, 56,
                                       57, 58, 59, 61, 64, 80, 81, 82, 83, 90, 90.1, 91, 91.1, 92, 92.1, 92.2, 93, 94, 98, 99]
     static let knownM: Set<Double> = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 30]
     /// The motion modes: the only G words a block may carry and still be a plain move.

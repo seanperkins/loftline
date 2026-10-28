@@ -177,6 +177,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             - **Safe Z / Home**: rapid moves happen at Safe Z above the material. The program ends by going to the home position.
 
             LoftLine warns when the material is bigger than the selected machine's bed.
+
+            **Touch-off spot**: when the machine re-zeroes Z on a touch plate at each tool change (see Machines), Job Setup asks where the plate goes on the material. Every tool is probed there, the first one too. The plate must lie on solid stock: inside the material by at least the plate's size (so stock narrower than twice the plate's size cannot be probed), off clamps and keep-out zones, and clear of every toolpath on the sheet, switched on or off. Otherwise the export is refused. The check knows the current design only, not cuts from an earlier version of it or another project. Two-sided and tiled jobs cannot be posted with probing yet; switch it off in Preferences ▸ Machines to post them.
             """
         case .machines:
             return """
@@ -185,6 +187,8 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             Pick both in Job Setup (⇧⌘J). The status bar shows them, and clicking it opens Job Setup. Choosing a machine switches to one of its posts if the current one does not drive it. Validation and time estimates use the machine's limits.
 
             A project **carries its own copy** of its post, machine and tools, so it posts the same G-code on any Mac, even one that does not have them. Job Setup says "Using this project's copy" and, when the one installed here differs, shows a warning and an **Update This Project** button (⌘Z undoes it). Nothing changes until you use it.
+
+            **Park and probe.** A machine can park the gantry for a manual tool swap and re-zero Z on a touch plate lying on the material, at every tool change (Preferences ▸ Machines). The program: lifts to the traverse height, parks, stops for the swap, moves to the job's touch-off spot, stops so you clip the lead on the bit, check that the probe light comes on, put the plate under the bit and jog **Z only** down to about half the probe travel above it, then probes, sets Z, lifts clear and stops for you to remove the plate. Park and traverse positions are machine coordinates (G53, on a homed machine): machine Z 0 is the top of travel and Z is negative downward. The probe travel can be no more than the plate's thickness, so a probe that misses still stops above the material. **GRBL** probes with G38.2 (it alarms without contact) and sets Z with G10 L20; set the traverse height at least 1 mm below machine Z 0, which is the limit switch. **Mach4** probes with G31, which does not stop without contact, so it calls **your zero macro** as `M<n> P<plate Z>`: the macro must stop the program when the probe did not touch, otherwise set the active work offset so the current Z reads P (in the program's units), and do nothing else. A reference macro is in the manual (TESTING.md). Probing works with the built-in posts only, unchanged; the probe settings always come from the machine installed on this Mac, and turning probing on reaches every project at once. Run the air-probe check in the manual before cutting. Material-top Z zero is recommended with probing.
 
             Add your own machines in Preferences ▸ Machines: duplicate a built-in machine and edit it. Custom machines are JSON files in Application Support/LoftLine/machines; custom posts go in Application Support/LoftLine/posts (Toolpaths ▸ Open Post Profiles Folder).
             """
@@ -230,6 +234,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             A toolpath shows as stale (faded) after its settings or the design change. Press **Calculate** or ⌘R to recalculate. Toolpaths are cut in sidebar order unless "Group by tool" is on in the export sheet. Untick "Include in export" to leave a toolpath out.
 
             **Pause** (at the bottom of the inspector) stops the machine after a toolpath, to flip the part, add clamps or clear chips: the program lifts to safe Z, stops the spindle, shows your message on the controller and waits for Cycle Start; the next toolpath restarts the spindle. "Optional stop" writes M1, which stops only when Optional Stop is switched on at the controller. Nothing is added after the last toolpath, and "Group by tool" never moves a toolpath across a pause.
+            **Coolant** (each toolpath's form): Off, Mist (M7) or Air (M8). It comes on after the spindle starts and goes off (M9) before a tool change, a pause and the program's end. A stock GRBL controller has no M7: use Air there.
             """
         case .profile:
             return """
@@ -438,6 +443,9 @@ enum HelpTopic: String, CaseIterable, Identifiable {
 enum FieldHelp {
     static let texts: [String: String] = [
         "Start depth": "Depth below the material top where cutting starts",
+        "Spot X": "Where the touch plate goes on the material, from its lower-left corner",
+        "Spot Y": "Where the touch plate goes on the material, from its lower-left corner",
+        "Coolant": "Mist (M7) or air (M8) while this toolpath cuts; off (M9) before a tool change or pause",
         "Cut depth": "Final depth below the material top",
         "Pass depth": "Maximum depth of each pass (off = the tool's stepdown)",
         "Max pass depth": "Split the carve into passes no deeper than this (off = one pass)",

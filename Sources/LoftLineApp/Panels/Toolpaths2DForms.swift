@@ -366,6 +366,21 @@ struct PauseStepForm: View {
     }
 }
 
+/// Coolant while this toolpath cuts (`OperationSetup.coolant`): Off, Mist (M7) or Air (M8).
+struct CoolantForm: View {
+    @Binding var coolant: Coolant?
+
+    var body: some View {
+        Picker("Coolant", selection: $coolant) {
+            Text("Off").tag(Coolant?.none)
+            ForEach(Coolant.allCases, id: \.self) { c in Text(c.displayName).tag(Coolant?.some(c)) }
+        }
+        .help("Turned on after the spindle starts and off (M9) before a tool change, a pause and the program's end")
+        Text("Mist writes M7 and Air writes M8. A stock GRBL controller has no M7: use Air there. No recalculation is needed.")
+            .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 /// A merged toolpath: its parts in cutting order and a Split button.
 struct MergeForm: View {
     var operation: MergeOperation

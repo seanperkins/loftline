@@ -21,6 +21,11 @@ public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
     public var minRPM: Double?
     public var maxRPM: Double?
     public var notes: String?
+    /// Park, swap by hand and re-zero Z on a touch plate at every tool change (nil = off, the post's own tool change).
+    public var toolChangeProbe: ToolChangeProbe?
+    /// Set when a project asked for probing that this machine cannot give (see `ProjectPost.resolve`); the post built
+    /// from this machine then refuses. Never in a file.
+    @NeverCoded public var probeRefusal: String? = nil
     /// See `PostProfile.currentSchemaVersion`: 1 for every file written before the key existed.
     public static let currentSchemaVersion = 1
     @SchemaVersion public var schemaVersion: Int = MachineDefinition.currentSchemaVersion
@@ -53,7 +58,36 @@ public struct MachineDefinition: Codable, Hashable, Identifiable, Sendable {
         if let m = maxFeed { p.maxFeed = m * f }
         if let lo = minRPM { p.minRPM = lo }
         if let hi = maxRPM { p.maxRPM = hi }
+        p.toolChangeProbe = probeSetting(for: profile, factor: f)
         return p
+    }
+
+    /// The probe a post built from this machine and `raw` carries. Only a built-in post, unchanged, of the probe's own
+    /// controller can probe: a post has no field naming its dialect, and a machine's post list is editable.
+    private func probeSetting(for raw: PostProfile, factor f: Double) -> ProbeSetting? {
+        if let r = probeRefusal { return .refused(r) }
+        guard let probe = toolChangeProbe else { return nil }
+        var base = raw
+        base.toolChangeProbe = nil
+        guard BuiltInPosts.probeController(for: base) == probe.controller else {
+            return .refused("The post \"\(raw.name)\" cannot probe tool changes on \(probe.controller.displayName): use the built-in "
+                            + "\(probe.controller.displayName) post, unchanged.")
+        }
+        return .on(probe.scaled(by: f))
+    }
+
+    /// The machine in `new` units: every length and speed scaled, the probe's included (the Machines editor's switch).
+    public func switchingUnits(to new: LengthUnit) -> MachineDefinition {
+        guard new != units else { return self }
+        var m = self
+        let f = units.factor(to: new)
+        m.limits = MachineLimits(xTravel: limits.xTravel * f, yTravel: limits.yTravel * f, zTravel: limits.zTravel * f,
+                                 maxSpoilboardCut: limits.maxSpoilboardCut * f)
+        m.rapidRate = rapidRate.map { $0 * f }
+        m.maxFeed = maxFeed.map { $0 * f }
+        m.toolChangeProbe = toolChangeProbe?.scaled(by: f)
+        m.units = new
+        return m
     }
 
     /// "60 x 96 x 8 in".

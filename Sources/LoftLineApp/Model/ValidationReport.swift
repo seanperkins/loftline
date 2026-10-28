@@ -21,7 +21,7 @@ struct ValidationReport {
     var isClean: Bool { allIssues.isEmpty }
 
     static func make(project: LoftLineProject, results: [UUID: ToolpathResult], profile: PostProfile,
-                     groupByTool: Bool) -> ValidationReport {
+                     groupByTool: Bool, sheetToolpaths: SheetToolpaths? = nil) -> ValidationReport {
         let jobName = project.document.name
         var sections: [Section] = []
         var seen = Set<String>()
@@ -36,7 +36,8 @@ struct ValidationReport {
                 if let e = r.error {
                     issues.append(GCodeIssue(severity: .warning, message: "Not exported — \(e)"))
                 } else {
-                    let ex = GCodeExporter.export(project: project, toolpaths: r.toolpaths, profile: profile, jobName: jobName)
+                    let ex = GCodeExporter.export(project: project, toolpaths: GCodeExporter.operationToolpaths(op, results: results),
+                                                        profile: profile, jobName: jobName, sheetToolpaths: sheetToolpaths)
                     if let e = ex.errorMessage { issues.append(GCodeIssue(severity: .error, message: e)) }
                     issues += ex.issues
                 }
@@ -49,7 +50,8 @@ struct ValidationReport {
         let all = GCodeExporter.toolpaths(scope: .all, operations: project.operations, results: results,
                                           groupByTool: groupByTool)
         if !all.isEmpty {
-            let ex = GCodeExporter.export(project: project, toolpaths: all, profile: profile, jobName: jobName)
+            let ex = GCodeExporter.export(project: project, toolpaths: all, profile: profile, jobName: jobName,
+                                          sheetToolpaths: sheetToolpaths)
             var extra = ex.issues.filter { !seen.contains($0.message) }
             if let e = ex.errorMessage { extra.insert(GCodeIssue(severity: .error, message: e), at: 0) }
             sections.append(Section(id: "combined", title: "Combined program", operationID: nil, issues: extra))

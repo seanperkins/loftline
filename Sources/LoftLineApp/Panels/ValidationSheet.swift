@@ -95,7 +95,9 @@ struct ValidationSheet: View {
         failure = nil
         calcTask?.cancel()
         calcTask = nil
-        let targets = document.outputProject.operations.filter { $0.setup.isEnabled }.map(\.id)
+        let enabled = document.outputProject.operations.filter { $0.setup.isEnabled }.map(\.id)
+        let targets = GCodeExporter.calculationTargets(project: document.project, exported: enabled, scope: .all,
+                                                       profile: document.postProfile)
         let stale = targets.filter { document.isStale($0) }
         guard !stale.isEmpty else { check(); return }
         report = nil   // the last report is of toolpaths that are being replaced
@@ -111,8 +113,10 @@ struct ValidationSheet: View {
 
     private func check() {
         checkedFrom = currentInputs
+        let sheet = GCodeExporter.sheetToolpathsIfProbing(project: document.project, results: document.results, scope: .all,
+                                                          profile: document.postProfile)
         report = ValidationReport.make(project: document.outputProject, results: document.results,
-                                       profile: document.postProfile, groupByTool: groupByTool)
+                                       profile: document.postProfile, groupByTool: groupByTool, sheetToolpaths: sheet)
     }
 }
 

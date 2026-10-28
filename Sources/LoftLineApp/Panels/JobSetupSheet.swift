@@ -94,6 +94,22 @@ struct JobSetupSheet: View {
                         }
                     }
                     TwoSidedSection(job: $form.job)
+                    if machine?.toolChangeProbe != nil {
+                        FormGroup("Touch-off spot (tool changes)") {
+                            LengthField("Spot X", value: Binding(get: { form.job.touchOffSpot?.x ?? form.job.width / 2 },
+                                                                 set: { form.job.touchOffSpot = Vec2($0, form.job.touchOffSpot?.y ?? form.job.height / 2) }),
+                                        units: u, help: "Where the touch plate goes on the material, from its lower-left corner")
+                            LengthField("Spot Y", value: Binding(get: { form.job.touchOffSpot?.y ?? form.job.height / 2 },
+                                                                 set: { form.job.touchOffSpot = Vec2(form.job.touchOffSpot?.x ?? form.job.width / 2, $0) }),
+                                        units: u, help: "Where the touch plate goes on the material, from its lower-left corner")
+                            if form.job.touchOffSpot == nil {
+                                Button("Use the material's center") { form.job.touchOffSpot = Vec2(form.job.width / 2, form.job.height / 2) }
+                                    .help("Sets the spot; the export refuses until it is set")
+                            }
+                            Text("The plate must lie on material no toolpath on this sheet removes, off clamps and keep-out zones.")
+                                .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
                     FormGroup("Rapid heights (above material top)") {
                         LengthField("Safe Z", value: $form.job.safeZ, units: u)
                         OptionalLengthField(label: "Plunge Z (rapid down to)", value: $form.job.plungeGap, units: u,

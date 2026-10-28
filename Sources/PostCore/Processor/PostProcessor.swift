@@ -8,6 +8,8 @@ public enum PostError: Error, Equatable, Sendable {
     case spindleSpeedOutOfRange(Double)
     /// A move in the named toolpath has a NaN or infinite coordinate, centre or feed.
     case nonFiniteMove(toolpath: String)
+    /// The park-and-probe tool change cannot be written; the message says why.
+    case probe(String)
 }
 
 /// Everything needed to write one G-code file.

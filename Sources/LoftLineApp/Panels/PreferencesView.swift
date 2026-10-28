@@ -212,6 +212,7 @@ struct MachineEditor: View {
                 NumberField("Rapid rate", value: Binding(get: { machine.rapidRate ?? 0 },
                                                          set: { machine.rapidRate = $0 > 0 ? $0 : nil }),
                             unit: "\(u.abbreviation)/min", help: "Used for time estimates (0 = the post's value)")
+                ToolChangeProbeSection(machine: $machine)
                 Section("Post processors") {
                     ForEach(posts) { p in
                         Toggle(p.name, isOn: Binding(get: { machine.postIDs.contains(p.id) },
@@ -242,16 +243,58 @@ struct MachineEditor: View {
     private var isValid: Bool {
         !machine.name.trimmingCharacters(in: .whitespaces).isEmpty && machine.limits.xTravel > 0
             && machine.limits.yTravel > 0 && machine.limits.zTravel > 0 && machine.limits.maxSpoilboardCut >= 0
+            && (machine.toolChangeProbe?.problems(limits: machine.limits, units: machine.units).isEmpty ?? true)
     }
 
-    private func setUnits(_ new: LengthUnit) {
-        guard new != machine.units else { return }
-        let f = machine.units.factor(to: new)
-        machine.limits = MachineLimits(xTravel: machine.limits.xTravel * f, yTravel: machine.limits.yTravel * f,
-                                       zTravel: machine.limits.zTravel * f,
-                                       maxSpoilboardCut: machine.limits.maxSpoilboardCut * f)
-        machine.rapidRate = machine.rapidRate.map { $0 * f }
-        machine.maxFeed = machine.maxFeed.map { $0 * f }
-        machine.units = new
+    private func setUnits(_ new: LengthUnit) { machine = machine.switchingUnits(to: new) }
+}
+
+/// Park, swap by hand and re-zero Z on a touch plate at every tool change (`MachineDefinition.toolChangeProbe`).
+struct ToolChangeProbeSection: View {
+    @Binding var machine: MachineDefinition
+
+    private func value<T>(_ kp: WritableKeyPath<ToolChangeProbe, T>, _ fallback: T) -> Binding<T> {
+        Binding(get: { machine.toolChangeProbe?[keyPath: kp] ?? fallback }, set: { machine.toolChangeProbe?[keyPath: kp] = $0 })
+    }
+
+    var body: some View {
+        let u = machine.units
+        Section("Tool change: park and probe") {
+            Toggle("Park and re-zero Z on a touch plate at every tool change",
+                   isOn: Binding(get: { machine.toolChangeProbe != nil },
+                                 set: { machine.toolChangeProbe = $0 ? ToolChangeProbe.defaults(for: machine) : nil }))
+                .help("The program parks the gantry for a manual tool swap, then probes a plate on the material and sets Z")
+            if let probe = machine.toolChangeProbe {
+                Picker("Controller", selection: value(\.controller, .mach4)) {
+                    ForEach(ToolChangeProbe.Controller.allCases, id: \.self) { Text($0.displayName).tag($0) }
+                }
+                .help("GRBL probes with G38.2 and sets Z with G10 L20; Mach4 probes with G31 and sets Z with your macro")
+                if probe.controller == .mach4 {
+                    IntField("Zero macro (M number)", value: Binding(get: { probe.mach4ZeroMacro ?? 0 },
+                                                                     set: { machine.toolChangeProbe?.mach4ZeroMacro = $0 }),
+                             range: 0...999,
+                             help: "Your Mach4 macro: called as M<n> P<plate Z>, it stops when the probe did not touch and sets Z")
+                }
+                Picker("Work offset", selection: value(\.workOffset, 1)) {
+                    ForEach(1...6, id: \.self) { Text("G\(53 + $0)").tag($0) }
+                }
+                .help("The work offset the program selects and zeroes")
+                LengthField("Park X (machine)", value: value(\.parkX, 0), units: u, help: "Where the gantry parks for the swap, in machine coordinates (G53)")
+                LengthField("Park Y (machine)", value: value(\.parkY, 0), units: u, help: "Where the gantry parks for the swap, in machine coordinates (G53)")
+                LengthField("Park Z (machine)", value: value(\.parkZ, 0), units: u, help: "How far the spindle comes down at the park; 0 is the top of travel")
+                LengthField("Traverse height (machine Z)", value: value(\.topZ, 0), units: u, help: "Every move to and from the park runs at this machine Z")
+                LengthField("Plate thickness", value: value(\.plateThickness, 0), units: u, help: "Measured thickness of the touch plate")
+                LengthField("Plate size", value: value(\.plateSize, 0), units: u, help: "The plate's greatest extent: its diagonal, or a round plate's diameter")
+                NumberField("Probe feed", value: value(\.probeFeed, 0), unit: "\(u.abbreviation)/min", help: "At most 10 in/min (254 mm/min)")
+                LengthField("Probe travel", value: value(\.probeTravel, 0), units: u, help: "At most 1 in (25.4 mm) and no more than the plate thickness")
+                ForEach(probe.problems(limits: machine.limits, units: u), id: \.self) { problem in
+                    Label(problem, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
+                }
+                Text("Every tool, the first one too, is swapped at the park and probed at the job's touch-off spot (Job Setup). "
+                     + "Run the air-probe check in the manual before cutting.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 }

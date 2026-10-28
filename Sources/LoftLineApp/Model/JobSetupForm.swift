@@ -71,6 +71,7 @@ struct JobSetupForm: Equatable {
         for k in Self.lengths where job[keyPath: k] == wasUntouched[keyPath: k] { scaled[keyPath: k] = untouched[keyPath: k] }
         if let g = job.plungeGap, g == wasUntouched.plungeGap { scaled.plungeGap = untouched.plungeGap }
         if let d = job.datumOffset, d == wasUntouched.datumOffset { scaled.datumOffset = untouched.datumOffset }
+        if let s = job.touchOffSpot, s == wasUntouched.touchOffSpot { scaled.touchOffSpot = untouched.touchOffSpot }
         job = scaled
         gridSpacing = gridSpacing == base.gridSpacing * base.units.factor(to: units)
             ? base.gridSpacing * base.units.factor(to: new) : gridSpacing * f

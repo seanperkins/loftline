@@ -54,7 +54,7 @@ enum GCodeBatchExport {
             }
         case .filePerToolpath:
             for op in enabled {
-                let tps = results[op.id]?.toolpaths ?? []
+                let tps = GCodeExporter.operationToolpaths(op, results: results)
                 guard !tps.isEmpty else { continue }
                 files.append(PlannedGCodeFile(
                     fileName: GCodeExporter.suggestedFileName(jobName: jobName, operationName: op.setup.name,
@@ -98,7 +98,8 @@ enum GCodeBatchExport {
 
     /// Posts every planned file (validator included). `GCodeFileSet(posted:)` writes the result.
     static func post(_ files: [PlannedGCodeFile], project: LoftLineProject, profile: PostProfile,
-                     jobName: String) -> [(file: PlannedGCodeFile, result: GCodeExportResult)] {
-        files.map { ($0, GCodeExporter.export(project: project, toolpaths: $0.toolpaths, profile: profile, jobName: jobName)) }
+                     jobName: String, sheetToolpaths: SheetToolpaths? = nil) -> [(file: PlannedGCodeFile, result: GCodeExportResult)] {
+        files.map { ($0, GCodeExporter.export(project: project, toolpaths: $0.toolpaths, profile: profile, jobName: jobName,
+                                               sheetToolpaths: sheetToolpaths)) }
     }
 }

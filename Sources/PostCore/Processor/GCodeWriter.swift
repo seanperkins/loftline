@@ -85,6 +85,13 @@ struct GCodeWriter {
         }
     }
 
+    /// A rapid that always names both X and Y and never Z (the touch-off spot: the writer's position is unknown after a
+    /// machine-coordinate move, and the bit must cross at the height it is at).
+    mutating func rapidXY(_ p: Vec2) {
+        lastMotion = nil
+        emit(motion: profile.rapid, x: p.x, y: p.y, z: nil, feed: nil, extra: [], forceXY: true)
+    }
+
     mutating func retract(to height: Double) {
         if z.map({ $0 < height - 1e-9 }) ?? true { rapidZ(height) }
     }
