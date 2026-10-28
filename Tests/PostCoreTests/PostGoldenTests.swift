@@ -45,7 +45,9 @@ private func expectSameLines(_ actual: String, _ expected: String) {
             // machine that holds it (as the post editor's sample widens limits), and on their own limits below.
             let checked = othermillIDs.contains(p.id) ? BuiltInMachines.avidPRO6096.applied(to: p) : p
             let issues = GCodeValidator(profile: checked, job: job, units: .inch).validate(gcode: try post(p, zZero: mode))
-            #expect(issues.isEmpty, "\(p.id) \(mode): \(issues)")
+            // A post that sets no speed (ShopBot) gets the speed warning, as in the editor's sample.
+            let unexpected = issues.filter { !(BuiltInPosts.noSpindleSpeedIDs.contains(p.id) && PostDraftReport.isNoSpeed($0)) }
+            #expect(unexpected.isEmpty, "\(p.id) \(mode): \(unexpected)")
         }
     }
 }
@@ -68,6 +70,7 @@ private let carbidePreamble = ["G90", "G17", "G40", "G49", "G54"]
 private let carbideChange = ["M5", "; Change to Tool: 1/4\" End Mill [2 flute]", "T1 M6"]
 private let massoPreamble = ["G90", "G17", "G40", "G80", "G94"]
 private let uccncPreamble = ["G90", "G17", "G40", "G49", "G80", "G94"]
+private let fanucPreamble = ["G17", "G40", "G49", "G80", "G90", "G94", "G54"]
 
 private let newPosts = [
     NewPost(id: "generic-grbl-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: grblPreamble,
@@ -100,6 +103,19 @@ private let newPosts = [
             toolChange: carbideChange, footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M30"]),
     NewPost(id: "centroid-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: uccncPreamble,
             toolChange: carbideChange, footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M30"]),
+    // ShopBot numbers every line: its own tests (ShopBotSyntecHaasTests).
+    NewPost(id: "syntec-inch", unitsCode: "G70", zWord: "G0 Z0.2000", preamble: fanucPreamble,
+            toolChange: ["M5", "(\(endMillChange))", "T1 M6", "G0 G43 Z0.2000 H1"],
+            footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M30", "%"]),
+    NewPost(id: "syntec-mm", unitsCode: "G71", zWord: "G0 Z5.080", preamble: fanucPreamble,
+            toolChange: ["M5", "(\(endMillChange))", "T1 M6", "G0 G43 Z5.080 H1"],
+            footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M30", "%"]),
+    NewPost(id: "haas-inch", unitsCode: "G20", zWord: "G0 Z0.2000", preamble: fanucPreamble,
+            toolChange: ["M5", "(\(endMillChange))", "T1 M6", "G0 G43 Z0.2000 H1"],
+            footerTail: ["G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M30", "%"]),
+    NewPost(id: "haas-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: fanucPreamble,
+            toolChange: ["M5", "(\(endMillChange))", "T1 M6", "G0 G43 Z5.080 H1"],
+            footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M30", "%"]),
 ]
 
 private func contains(_ lines: [String], run: [String]) -> Bool {
@@ -153,13 +169,18 @@ private let newPostNumbers = [
                 x: 623, y: 623, z: 155, spoilboard: 1.0, rapid: 8000, feed: 8000, minRPM: 0, maxRPM: 30000, arcTolerance: 0.01),
 ] + genericController("masso-g3", "MASSO G3", mmFeedDecimals: 1) + genericController("uccnc", "UCCNC", mmFeedDecimals: 0)
   + genericController("centroid", "Centroid CNC12", mmFeedDecimals: 0)
+  + [PostNumbers(id: "shopbot-gcode-inch", name: "ShopBot G-code (inch)", ext: "tap", units: .inch, decimals: 4, feedDecimals: 1,
+                 x: 48, y: 48, z: 6, spoilboard: 0.05, rapid: 360, feed: 240, minRPM: 0, maxRPM: 24000, arcTolerance: 0.0005)]
+  + genericController("syntec", "Syntec", mmFeedDecimals: 1, rapid: (1500, 38100), feed: (1500, 38100))
+  + genericController("haas", "Haas", mmFeedDecimals: 1, rapid: (710, 18034), feed: (650, 16510))
 
 /// MASSO, UCCNC and Centroid run on many machines: the posts carry the LinuxCNC posts' generic envelope, which a machine replaces.
-private func genericController(_ id: String, _ name: String, mmFeedDecimals: Int) -> [PostNumbers] {
+private func genericController(_ id: String, _ name: String, mmFeedDecimals: Int, rapid: (Double, Double) = (200, 5080),
+                               feed: (Double, Double) = (200, 5080)) -> [PostNumbers] {
     [PostNumbers(id: "\(id)-inch", name: "\(name) (inch)", ext: "nc", units: .inch, decimals: 4, feedDecimals: 1, x: 48, y: 48,
-                 z: 6, spoilboard: 0.05, rapid: 200, feed: 200, minRPM: 0, maxRPM: 24000, arcTolerance: 0.0005),
+                 z: 6, spoilboard: 0.05, rapid: rapid.0, feed: feed.0, minRPM: 0, maxRPM: 24000, arcTolerance: 0.0005),
      PostNumbers(id: "\(id)-mm", name: "\(name) (mm)", ext: "nc", units: .millimeter, decimals: 3, feedDecimals: mmFeedDecimals,
-                 x: 1219.2, y: 1219.2, z: 152.4, spoilboard: 1.27, rapid: 5080, feed: 5080, minRPM: 0, maxRPM: 24000,
+                 x: 1219.2, y: 1219.2, z: 152.4, spoilboard: 1.27, rapid: rapid.1, feed: feed.1, minRPM: 0, maxRPM: 24000,
                  arcTolerance: 0.01)]
 }
 

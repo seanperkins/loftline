@@ -299,7 +299,12 @@ import Testing
                 let expectedPrefixes = ["warning: This program changes tools"]
                     + (OthermillSetup.postIDs.contains(post.id) ? OthermillSetup.warningPrefixes.map { "warning: " + $0 } : [])
                     + (post.id.hasPrefix("uccnc") ? ["warning: " + DialectChecks.uccncUnitsWarningPrefix] : [])
-                let other = r.err.split(separator: "\n").filter { line in !expectedPrefixes.contains { line.hasPrefix($0) } }
+                // A post that sets no speed (ShopBot's M3 is a switch) gets the validator's speed warning on every program.
+                let noSpeed = BuiltInPosts.noSpindleSpeedIDs.contains(post.id)
+                let other = r.err.split(separator: "\n").filter { line in
+                    !expectedPrefixes.contains { line.hasPrefix($0) }
+                        && !(noSpeed && line.hasPrefix("warning: ") && line.contains("Spindle started (M3/M4) with no speed (S) set"))
+                }
                 #expect(r.status == 0 && other.isEmpty, "\(name) with \(post.id): \(r.err)")
                 let file = expected.appendingPathComponent(post.id).appendingPathComponent(
                     GCodeExporter.suggestedFileName(jobName: name, operationName: nil, profile: post))

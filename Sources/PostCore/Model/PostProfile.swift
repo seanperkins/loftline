@@ -258,6 +258,19 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         return dwellValues(seconds: seconds).filter { dwell.contains("{\($0.key)}") }.allSatisfy { (Double($0.value) ?? 1) != 0 }
     }
 
+    /// Why this post's tool length line would move below the approach height, or nil: a family whose G43 line moves Z
+    /// (`BuiltInPosts.approachToolLengthIDs`, Syntec and Haas) must move to `Z{APPROACH_Z}`, since the line runs at the tool
+    /// change's unknown X Y, before the climb to the approach height. Checked by the builder like `dwellProblem`, so a copy read
+    /// from a file is covered.
+    public var postProblem: String? {
+        guard useToolLengthOffset, let family = BuiltInPosts.family(of: id), BuiltInPosts.approachToolLengthIDs.contains(family)
+        else { return nil }
+        let words = toolLengthOffset.uppercased().split(whereSeparator: { $0 == " " || $0 == "\t" })
+        guard !words.contains("Z{APPROACH_Z}") else { return nil }
+        return "The tool length line must move to Z{APPROACH_Z}: it runs at the tool change's unknown X Y, before the climb to "
+            + "the approach height."
+    }
+
     /// The dwell word and placeholder a dwell template writes (`G4 P{SECONDS}` → `P`, `SECONDS`), case, spacing and leading
     /// zeros ignored, either order; nil when it is not a G4 and one placeholder word.
     public static func dwellForm(_ template: String) -> (letter: Character, placeholder: String)? {
@@ -280,7 +293,8 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         let form = Self.dwellForm(dwell)
         // Syntec reads a whole X, or any P, in its smallest time unit: seconds with a dot go after X, and X takes only them.
         if dwell.contains("{DECIMAL_SECONDS}"), form?.letter != "X" {
-            return "{DECIMAL_SECONDS} goes with G4 X: a P word is read in the controller's own time unit."
+            return "{DECIMAL_SECONDS} goes with X: write the dwell as G4 X{DECIMAL_SECONDS} (a P word is read in the "
+                + "controller's own time unit)."
         }
         if form?.letter == "X", form?.placeholder != "DECIMAL_SECONDS" {
             return "A whole X dwell is read in the controller's smallest time unit: write the dwell as G4 X{DECIMAL_SECONDS}."

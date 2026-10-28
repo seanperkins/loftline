@@ -216,10 +216,83 @@ public enum BuiltInPosts {
         arcOutput: .linearize, arcTolerance: 0.01, footer: othermillFooter,
         limits: genericMMLimits, rapidRate: 5080, maxFeed: 5080)
 
+    /// ShopBot in G-code mode (#106; ShopBot User Guide SBG 00142): every line numbered (a line that does not start with N, G,
+    /// M, X, Y, Z, F or > is commented out), `G90` alone (no G17, G40, G49, G80, G94 or G91.1 on its list), one G word per line
+    /// (it runs only the first), `M3` alone (a switch: the router sets its speed), `G4 P` in seconds, M0 for a tool change, no
+    /// helical arcs (its G02 has no Z). Inch only: the feed unit under G21 is unknown.
+    public static let shopbotGCodeInch = PostProfile(
+        id: "shopbot-gcode-inch", name: "ShopBot G-code (inch)", version: "1.0",
+        fileExtension: "tap", units: .inch, lineNumbers: true, decimals: 4, feedDecimals: 1,
+        preamble: ["G90"], toolChange: uccncToolChange, spindleOn: "M3",
+        spindleDwellSeconds: 3, minRPM: 0, maxRPM: 24000,
+        arcOutput: .incrementalIJ, arcTolerance: 0.0005, helicalArcs: false, footer: othermillFooter,
+        limits: genericInchLimits, rapidRate: 360, maxFeed: 240)
+
+    /// Syntec (#110; Mill Machine Program Manual v8.20): `%` and an O number first (Autodesk's post), G70/G71 for units, `G4 X`
+    /// in seconds with a dot (a whole P or X is the machine's smallest time unit), `T M6` with `G43 H` moving to the approach
+    /// height.
+    static let fanucPreamble = ["G17", "G40", "G49", "G80", "G90", "G94", "G54"]
+    static let fanucToolLength = "G0 G43 Z{APPROACH_Z} H{T}"
+    static let fanucFooter = othermillFooter + ["%"]
+
+    public static let syntecInch: PostProfile = {
+        var p = PostProfile(
+            id: "syntec-inch", name: "Syntec (inch)", version: "1.0",
+            fileExtension: "nc", units: .inch, decimals: 4, feedDecimals: 1,
+            preamble: fanucPreamble, toolChange: massoToolChange, useToolLengthOffset: true, toolLengthOffset: fanucToolLength,
+            spindleDwellSeconds: 3, dwell: "G4 X{DECIMAL_SECONDS}", minRPM: 0, maxRPM: 24000,
+            arcOutput: .incrementalIJ, arcTolerance: 0.0005, footer: fanucFooter,
+            limits: genericInchLimits, rapidRate: 1500, maxFeed: 1500)
+        p.prelude = ["%", "O1000"]
+        p.unitsCodes = .g70g71
+        return p
+    }()
+
+    public static let syntecMM: PostProfile = {
+        var p = PostProfile(
+            id: "syntec-mm", name: "Syntec (mm)", version: "1.0",
+            fileExtension: "nc", units: .millimeter, decimals: 3, feedDecimals: 1,
+            preamble: fanucPreamble, toolChange: massoToolChange, useToolLengthOffset: true, toolLengthOffset: fanucToolLength,
+            spindleDwellSeconds: 3, dwell: "G4 X{DECIMAL_SECONDS}", minRPM: 0, maxRPM: 24000,
+            arcOutput: .incrementalIJ, arcTolerance: 0.01, footer: fanucFooter,
+            limits: genericMMLimits, rapidRate: 38100, maxFeed: 38100)
+        p.prelude = ["%", "O1000"]
+        p.unitsCodes = .g70g71
+        return p
+    }()
+
+    /// Haas (#111; Haas's G04 and M06 pages, by search-result text, and Autodesk's Haas post): `%` and a five-digit O number
+    /// first, `G4 P` in milliseconds (a P with no dot), `T M6` (it stops the spindle and moves Z itself) with `G43 H` moving to
+    /// the approach height.
+    public static let haasInch: PostProfile = {
+        var p = PostProfile(
+            id: "haas-inch", name: "Haas (inch)", version: "1.0",
+            fileExtension: "nc", units: .inch, decimals: 4, feedDecimals: 1,
+            preamble: fanucPreamble, toolChange: massoToolChange, useToolLengthOffset: true, toolLengthOffset: fanucToolLength,
+            spindleDwellSeconds: 3, dwell: "G4 P{MILLISECONDS}", minRPM: 0, maxRPM: 24000,
+            arcOutput: .incrementalIJ, arcTolerance: 0.0005, footer: fanucFooter,
+            limits: genericInchLimits, rapidRate: 710, maxFeed: 650)
+        p.prelude = ["%", "O01000"]
+        return p
+    }()
+
+    public static let haasMM: PostProfile = {
+        var p = PostProfile(
+            id: "haas-mm", name: "Haas (mm)", version: "1.0",
+            fileExtension: "nc", units: .millimeter, decimals: 3, feedDecimals: 1,
+            preamble: fanucPreamble, toolChange: massoToolChange, useToolLengthOffset: true, toolLengthOffset: fanucToolLength,
+            spindleDwellSeconds: 3, dwell: "G4 P{MILLISECONDS}", minRPM: 0, maxRPM: 24000,
+            arcOutput: .incrementalIJ, arcTolerance: 0.01, footer: fanucFooter,
+            limits: genericMMLimits, rapidRate: 18034, maxFeed: 16510)
+        p.prelude = ["%", "O01000"]
+        return p
+    }()
+
     public static let all: [PostProfile] = [avidMach4Inch, avidMach4MM, genericGRBLMM,
                                             genericGRBLInch, linuxCNCInch, linuxCNCMM, othermillInch, othermillMM,
                                             onefinityBBInch, onefinityBBMM, carbideMotionInch, carbideMotionMM,
-                                            massoG3Inch, massoG3MM, uccncInch, uccncMM, centroidInch, centroidMM]
+                                            massoG3Inch, massoG3MM, uccncInch, uccncMM, centroidInch, centroidMM,
+                                            shopbotGCodeInch, syntecInch, syntecMM, haasInch, haasMM]
 
     /// The built-in a post belongs to: its own id when that is a built-in's, or the built-in a duplicate was made from
     /// (Duplicate names a copy `<built-in id>-custom-<n>`, `PostProfileStore.newID`), so a copy keeps its controller's rules.
@@ -239,14 +312,24 @@ public enum BuiltInPosts {
     public static let toolChangeKeepsZIDs: Set<String> = [massoG3Inch.id, massoG3MM.id, centroidInch.id, centroidMM.id]
     /// Built-in families whose M3 is a switch with no speed (ShopBot, #106): their spindle line is M3 alone, and the speed
     /// warning every export gives is expected (the post editor's sample allows it).
-    public static let noSpindleSpeedIDs: Set<String> = []
+    public static let noSpindleSpeedIDs: Set<String> = [shopbotGCodeInch.id]
+    /// Built-in families whose controller runs only the first G word on a line (ShopBot): the probe sequence's multi-G lines
+    /// cannot be written for them, so probing refuses.
+    public static let oneGWordIDs: Set<String> = [shopbotGCodeInch.id]
+    /// Built-in families whose tool length line must move to `Z{APPROACH_Z}` (Syntec, Haas): it runs at the tool change's
+    /// unknown X Y, before the climb to the approach height (`PostProfile.postProblem`).
+    public static let approachToolLengthIDs: Set<String> = [syntecInch.id, syntecMM.id, haasInch.id, haasMM.id]
+    /// Built-in families where T0 selects no tool and G43 H0 applies no length (Syntec, Haas).
+    public static let noToolZeroIDs: Set<String> = [syntecInch.id, syntecMM.id, haasInch.id, haasMM.id]
     /// Built-in families whose controller has no G43 (MASSO), so a Tool Length Offset line is skipped, never applied.
     public static let noToolLengthOffsetIDs: Set<String> = [massoG3Inch.id, massoG3MM.id]
     /// Built-in families whose controller has no coolant, with the reason export gives.
     public static let noCoolantReasons: [String: String] = {
         let othermill = "The Othermill has no coolant, and its G-code reference lists M7, M8 and M9 as unsupported"
         let carbide = "Carbide Motion ignores M7 and does not support M8"
-        return [othermillInch.id: othermill, othermillMM.id: othermill, carbideMotionInch.id: carbide, carbideMotionMM.id: carbide]
+        let shopbot = "ShopBot's G-code has no M7, and M8 turns on output switch 3, which may be wired to anything"
+        return [othermillInch.id: othermill, othermillMM.id: othermill, carbideMotionInch.id: carbide, carbideMotionMM.id: carbide,
+                shopbotGCodeInch.id: shopbot]
     }()
 
     public static func profile(id: String) -> PostProfile? { all.first { $0.id == id } }

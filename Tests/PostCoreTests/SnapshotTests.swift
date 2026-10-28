@@ -28,13 +28,15 @@ import Testing
 
     @Test func schemaVersionIsAlwaysWritten() throws {
         // The built-ins that dwell in milliseconds need version 2 (an older LoftLine would print {MILLISECONDS}); the rest are 1.
+        // Syntec and Haas need 3: a program wrapper, G70/G71, {DECIMAL_SECONDS} and {APPROACH_Z}.
         let versionTwo: Set<String> = ["masso-g3-inch", "masso-g3-mm", "uccnc-inch", "uccnc-mm"]
+        let versionThree: Set<String> = ["syntec-inch", "syntec-mm", "haas-inch", "haas-mm"]
         for p in BuiltInPosts.all {
-            let v = JSONValue.number(versionTwo.contains(p.id) ? 2 : 1)
+            let v = JSONValue.number(versionThree.contains(p.id) ? 3 : versionTwo.contains(p.id) ? 2 : 1)
             #expect(object(try p.snapshot())["schemaVersion"] == v, "\(p.id)")
             #expect(object(try JSONDecoder().decode(JSONValue.self, from: p.toJSON()))["schemaVersion"] == v, "\(p.id)")
         }
-        #expect(versionTwo.allSatisfy { BuiltInPosts.profile(id: $0) != nil })
+        #expect(versionTwo.union(versionThree).allSatisfy { BuiltInPosts.profile(id: $0) != nil })
         #expect(object(try BuiltInMachines.all[0].snapshot())["schemaVersion"] == .number(1))
         #expect(PostProfile.currentSchemaVersion == 3 && MachineDefinition.currentSchemaVersion == 1)
     }
