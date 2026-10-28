@@ -86,7 +86,7 @@ public enum BuiltInPosts {
         if let builtIn = profile(id: raw.id), builtIn == raw {
             switch raw.id {
             case avidMach4Inch.id, avidMach4MM.id: return .mach4
-            case genericGRBLMM.id: return .grbl
+            case genericGRBLMM.id, genericGRBLInch.id: return .grbl
             default: break
             }
         }

@@ -62,6 +62,23 @@ import Testing
         #expect(BuiltInPosts.probeController(for: edited) == .mach4)
     }
 
+    @Test func grblInchPostProbesAsGRBL() {
+        #expect(BuiltInPosts.probeController(for: BuiltInPosts.genericGRBLInch) == .grbl)
+        #expect(BuiltInPosts.probeController(for: BuiltInPosts.linuxCNCInch) == nil)
+        #expect(BuiltInPosts.probeController(for: BuiltInPosts.linuxCNCMM) == nil)
+    }
+
+    @Test func inchOnlyGRBLMachineDefaultsToGRBL() {
+        var m = BuiltInMachines.genericGRBL
+        m.postIDs = ["generic-grbl-inch"]
+        #expect(ToolChangeProbe.defaults(for: m).controller == .grbl)
+        #expect(ToolChangeProbe.defaults(for: BuiltInMachines.avidPRO6096).controller == .mach4)
+        m.postIDs = ["avid-pro6096-mach4-inch", "generic-grbl-mm"]
+        #expect(ToolChangeProbe.defaults(for: m).controller == .grbl)
+        m.postIDs = ["linuxcnc-inch"]
+        #expect(ToolChangeProbe.defaults(for: m).controller == .mach4)
+    }
+
     @Test func postVersionIsCommentSafe() throws {
         var p = BuiltInPosts.avidMach4Inch
         p.version = "1.0) M3"

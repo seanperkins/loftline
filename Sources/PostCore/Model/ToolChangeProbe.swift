@@ -44,10 +44,12 @@ public struct ToolChangeProbe: Codable, Hashable, Sendable {
     }
 
     /// Starting values for a machine that switches probing on: a common 1/2 in (12 mm) plate, a slow feed, the controller
-    /// its posts speak (GRBL when it lists the GRBL post). The park position is the owner's to set.
+    /// its posts speak (GRBL when it lists a built-in GRBL post). The park position is the owner's to set.
     public static func defaults(for machine: MachineDefinition) -> ToolChangeProbe {
-        defaults(controller: machine.postIDs.contains(BuiltInPosts.genericGRBLMM.id) ? .grbl : .mach4, units: machine.units,
-                 limits: machine.limits)
+        let grbl = machine.postIDs.contains { id in
+            BuiltInPosts.profile(id: id).map { BuiltInPosts.probeController(for: $0) == .grbl } ?? false
+        }
+        return defaults(controller: grbl ? .grbl : .mach4, units: machine.units, limits: machine.limits)
     }
 
     /// Starting values for `controller` on a machine of `limits` in `units` (the post editor's probe sample uses them too).
