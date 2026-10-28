@@ -1,6 +1,6 @@
 # LoftLine: more built-in posts
 
-Part 5, the last of the post-processor work. Parts 1–4 are on main at `b96ed4c`. Revision 3 (after the r2 panel).
+Part 5, the last of the post-processor work. Parts 1–4 are on main at `b96ed4c`. Revision 4 (after the r3 panel; the last revision round, remaining points ruled in Decisions 1 and 6).
 
 ## Why
 
@@ -46,8 +46,10 @@ The three footers share one constant, `m2Footer`; the LinuxCNC posts use `machPr
    tool table aborts the program. `M0` stops on every configuration and needs no tool table. Neither re-zeroes Z: at `M0`
    LinuxCNC stays in Auto, so the operator cannot touch off, and the program resumes at the old safe Z. That is the same as the
    GRBL post's `M0` today. Help (Machines) says: on LinuxCNC (and GRBL without a touch plate), post a job with more than one tool
-   with Save All Toolpaths ▸ one file per tool, and touch off Z before each file. An owner with tool length offsets or a tool
-   changer duplicates the post and edits the tool change.
+   with Save All Toolpaths ▸ one file per tool; load that file's tool and touch off Z **before** starting it (the stop at the
+   top of each file only confirms the tool, and Z cannot be set there). An owner with tool length offsets or a tool changer
+   duplicates the post and edits the tool change. **Ruling:** a single multi-tool LinuxCNC file is still allowed, as it is for
+   the GRBL post today; refusing or warning needs a new post field ("this tool change cannot re-zero Z") and is a follow-up.
 2. **No Mach3 posts.** A Mach3 post would write the Avid posts' G-code byte for byte (same dialect, M30, `.tap`); its only
    difference would be the fallback limits, which a machine replaces. DECISIONS (not Help: nothing has run on Mach3) records that
    a Mach3 owner can list the Avid posts in a machine of their own, with Mach3's tool change set to stop, `G4 P` in seconds, and
@@ -55,7 +57,8 @@ The three footers share one constant, `m2Footer`; the LinuxCNC posts use `machPr
 3. **Probing.** `BuiltInPosts.probeController(for:)` maps `generic-grbl-inch` to GRBL. `ToolChangeProbe.defaults(for:)` chooses
    GRBL when any of the machine's listed post ids is a built-in that `probeController` maps to `.grbl`, so a machine listing only
    `generic-grbl-inch` gets GRBL defaults (today it checks `genericGRBLMM.id` alone, and would give Mach4 and then refuse). The
-   LinuxCNC posts map to nothing: the editor's controller names would mislabel them. An owner can duplicate and declare one.
+   LinuxCNC posts map to nothing, and LoftLine has no LinuxCNC probe sequence: touch-plate tool changes are for Mach4 and GRBL
+   only (Help already says which).
 4. **Built-in machines are unchanged** (their `postIDs` keep their bytes, so no project's machine copy starts to differ). The new
    posts appear under "other posts" for the built-in machines. The fallback limits apply only to a project with no machine:
    new projects get the default machine (the Avid), whose limits replace the post's. Help (Machines) says: with any post but the
@@ -91,6 +94,7 @@ The three footers share one constant, `m2Footer`; the LinuxCNC posts use `machPr
 - `README.md:117`: reword so it doesn't enumerate the posts.
 - Help (`.machines` topic): which posts are proven on a machine; decision 1's one-file-per-tool sentence; decision 4's machine
   sentence.
-- `TESTING.md` air cut: one line, with a post other than the Avid ones, confirm each tool change pauses and the spindle dwell is
-  seconds.
+- `TESTING.md`: a short "Other controllers" section after the Avid air cut, for the GRBL and LinuxCNC posts on their own
+  machines: post one file per tool; load and touch off each tool before its file; air-cut each file and confirm it stops at the
+  top and that the spindle dwell is seconds.
 - No PARITY change (no new test file).
