@@ -11,6 +11,9 @@ public struct DAEImporter: MeshImporter {
     /// Total node visits and triangles one import may produce, so self-referencing instances stay bounded.
     static let maxNodeVisits = 100_000
     static let maxTriangles = 20_000_000
+    /// Past a limit the import fails with the reason, rather than return part of the model.
+    static let tooLarge = LoftLineIOError.malformed(
+        "the COLLADA file instances more than \(maxNodeVisits) nodes or \(maxTriangles) triangles (a node may instance itself)")
 
     public func importMesh(from data: Data, targetUnits: LengthUnit) throws -> Mesh3D {
         let tris = try parts(from: data, targetUnits: targetUnits, split: false).flatMap(\.triangles)
@@ -67,8 +70,10 @@ public struct DAEImporter: MeshImporter {
         var depth = 0
         // The depth guard bounds nesting, not work: a node instancing itself twice is 2^32 visits (#121).
         var visits = 0
+        var overLimit = false
         func visit(_ node: XMLTree, _ parent: Matrix4, into tris: inout [(Vec3, Vec3, Vec3)]) {
-            guard depth < 32, visits < Self.maxNodeVisits, tris.count < Self.maxTriangles else { return }
+            guard depth < 32, !overLimit else { return }
+            guard visits < Self.maxNodeVisits else { overLimit = true; return }
             visits += 1
             depth += 1
             defer { depth -= 1 }
@@ -77,7 +82,9 @@ public struct DAEImporter: MeshImporter {
                 switch c.name {
                 case "instance_geometry":
                     if let g = ref(c.attributes["url"]) {
-                        tris += Self.triangles(of: g, ids: ids).map { (m.apply($0.0), m.apply($0.1), m.apply($0.2)) }
+                        let more = Self.triangles(of: g, ids: ids)
+                        guard more.count <= Self.maxTriangles - tris.count else { overLimit = true; return }
+                        tris += more.map { (m.apply($0.0), m.apply($0.1), m.apply($0.2)) }
                     }
                 case "instance_node":
                     if let n = ref(c.attributes["url"]) { visit(n, m, into: &tris) }
@@ -116,15 +123,18 @@ public struct DAEImporter: MeshImporter {
         guard let scene else {
             // No scene: take every geometry untransformed (one part each).
             let geoms = (root.child("library_geometries")?.children ?? []).filter { $0.name == "geometry" }
-            return geoms.enumerated().map { i, g in
+            let parts = geoms.enumerated().map { i, g in
                 (g.attributes["name"] ?? "Part \(i + 1)",
                  Self.triangles(of: g, ids: ids).map { (base.apply($0.0), base.apply($0.1), base.apply($0.2)) })
             }
+            guard parts.reduce(0, { $0 + $1.1.count }) <= Self.maxTriangles else { throw Self.tooLarge }
+            return parts
         }
         var roots: [(XMLTree, Matrix4)] = scene.children.filter { $0.name == "node" }.map { ($0, base) }
         if !split {
             var all: [(Vec3, Vec3, Vec3)] = []
             for (n, m) in roots { visit(n, m, into: &all) }
+            if overLimit { throw Self.tooLarge }
             return [("Model", all)]
         }
         // Unwrap single wrapper nodes (e.g. one "SketchUp" node around the whole model).
@@ -136,11 +146,13 @@ public struct DAEImporter: MeshImporter {
             roots = kids
             unwraps += 1
         }
-        return roots.enumerated().map { i, r in
+        let parts = roots.enumerated().map { i, r in
             var tris: [(Vec3, Vec3, Vec3)] = []
             visit(r.0, r.1, into: &tris)
             return (name(r.0, index: i), tris)
         }
+        guard !overLimit, parts.reduce(0, { $0 + $1.1.count }) <= Self.maxTriangles else { throw Self.tooLarge }
+        return parts
     }
 
     /// Triangles of one `<geometry>` in its own coordinates.
@@ -164,9 +176,11 @@ public struct DAEImporter: MeshImporter {
             let inputs = prim.children.filter { $0.name == "input" }
             guard let vin = inputs.first(where: { $0.attributes["semantic"] == "VERTEX" }) else { continue }
             let pts = positions(vin.attributes["source"])
-            let offsets = inputs.compactMap { $0.attributes["offset"].flatMap(Int.init) }
-            // A negative or absurd offset indexed outside the list or overflowed the width (#121): skip the primitive.
-            guard offsets.allSatisfy({ (0...255).contains($0) }) else { continue }
+            // A negative, absurd or unreadable offset indexed outside the list, overflowed the width or silently became 0
+            // (#121): skip the primitive.
+            let raw = inputs.compactMap { $0.attributes["offset"] }
+            let offsets = raw.compactMap { Int($0) }
+            guard offsets.count == raw.count, offsets.allSatisfy({ (0...255).contains($0) }) else { continue }
             let vOffset = vin.attributes["offset"].flatMap(Int.init) ?? 0
             let width = (offsets.max() ?? 0) + 1
             func polygon(_ idx: ArraySlice<Int>) {
@@ -187,7 +201,7 @@ public struct DAEImporter: MeshImporter {
                 let vIdx = Swift.stride(from: vOffset, to: all.count, by: width).map { all[$0] }
                 var at = 0
                 for n in prim.child("vcount")?.integers ?? [] {
-                    guard n > 0, at + n <= vIdx.count else { break }
+                    guard n > 0, n <= vIdx.count - at else { break }   // no `at + n`: a crafted count overflowed it (#121)
                     polygon(vIdx[at..<(at + n)])
                     at += n
                 }

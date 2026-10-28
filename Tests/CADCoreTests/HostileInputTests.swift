@@ -72,7 +72,23 @@ import Testing
     @Test(.timeLimit(.minutes(1))) func colladaSelfReferencingNodesAreBounded() throws {
         let tri = ##"<triangles count="1"><input semantic="VERTEX" source="#triv" offset="0"/><p>0 1 2</p></triangles>"##
         let scene = ##"<node id="a"><instance_geometry url="#trig"/><instance_node url="#a"/><instance_node url="#a"/></node>"##
-        _ = try? DAEImporter().importMesh(from: Self.dae(tri, scene: scene), targetUnits: .inch)
+        // Past the limit the import fails with a reason, never returns part of the model.
+        #expect(throws: LoftLineIOError.self) { try DAEImporter().importMesh(from: Self.dae(tri, scene: scene), targetUnits: .inch) }
+    }
+
+    @Test func colladaPolylistCountsThatOverflowAreSkipped() throws {
+        let poly = ##"<polylist count="2"><input semantic="VERTEX" source="#triv" offset="0"/><vcount>3 9223372036854775807</vcount><p>0 1 2</p></polylist>"##
+        let mesh = try DAEImporter().importMesh(from: Self.dae(poly, scene: ##"<node id="a"><instance_geometry url="#trig"/></node>"##),
+                                                targetUnits: .inch)
+        #expect(mesh.triangleCount == 1)
+    }
+
+    @Test func colladaOffsetThatCannotBeReadSkipsThePrimitive() {
+        let tri = ##"<triangles count="1"><input semantic="VERTEX" source="#triv" offset="9223372036854775808"/><p>0 1 2</p></triangles>"##
+        #expect(throws: LoftLineIOError.self) {
+            try DAEImporter().importMesh(from: Self.dae(tri, scene: ##"<node id="a"><instance_geometry url="#trig"/></node>"##),
+                                         targetUnits: .inch)
+        }
     }
 
     @Test func meshIndicesOutOfRangeAreRefusedOnDecode() throws {

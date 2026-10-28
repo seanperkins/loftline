@@ -1007,3 +1007,15 @@
   their posts only (an Onefinity Elite runs MASSO, whose `P` is milliseconds). The `samples/expected` folders for the new posts
   are regression bytes posted with the samples' Avid machine. GRBL's M7 stays out of scope (some builds enable it; the coolant
   form warns).
+- **review-fixes — findings of the 2026-10-28 whole-project review (#120, #121, #122).** A block-delete line (`/…`) is parsed
+  and validated like any other: LinuxCNC and Mach run it whenever Block Delete is off, so skipping it let `/G1 Z-1` through
+  with no depth error; the validator and the file preview each warn that the line is optional. R arcs are checked along their
+  sweep (the reader's `rArcCentre`), and an R that cannot reach its end point is an error. A units switch mid-program keeps the
+  travel seen so far (`MotionChecker.carryExtents`). Machine ids must be plain file names (`PostProfileStore.isSafeID`) and
+  match their file's name, as post ids already did, so a machine file cannot make Save or Delete reach outside the folder.
+  Crafted imports: a DXF ellipse angle is reduced with a remainder (a loop never ended at 1e20); flattening clamps a step
+  count as a Double before converting it; PDF image sizes multiply with overflow checks; a COLLADA input offset must be a
+  readable 0–255 and a polylist count is compared with what remains; node visits (100,000), triangles (20 million) and SVG
+  `<use>` expansions (10,000) are capped, and COLLADA past its caps fails with the reason instead of importing part of the
+  model; a mesh whose indices pass its vertices is refused on decode. Not yet: the file preview's position after `G53` (#120
+  item 4), duplicate operation ids, recovery metadata order, the unsigned G-code-change flag (#123) and ramp angles (#124).

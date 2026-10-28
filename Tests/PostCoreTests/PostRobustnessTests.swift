@@ -99,6 +99,12 @@ private func warns(_ issues: [GCodeIssue], _ fragment: String) -> Bool {
     #expect(GCodeParser.parse("/G1 Z-1").blocks.first?.value("Z") == -1)
 }
 
+/// The file preview draws a block-delete line as if Block Delete were off, and says so (#120).
+@Test func previewSaysBlockDeleteLinesAreShown() {
+    let r = GCodeReader.read("G20\nG90\nG0 X0 Y0 Z0.2\n/G1 Z-1 F10\n", units: .inch, startZ: 0.2)
+    #expect(r.warnings.contains { $0.contains("Line 4") && $0.contains("Block Delete") }, "\(r.warnings)")
+}
+
 /// An R arc is checked along its sweep, not only at its end (#120): the long way round from X0 to X10 with R-50 is ~100 in wide.
 @Test func rArcsAreCheckedAlongTheirPath() {
     let long = validate("G20\nG90\nG0 Z0.2\nM3 S18000\nG0 X0 Y0\nG1 Z-0.1 F30\nG2 X10 Y0 R-50 F30\nG0 Z0.2\nM5\nM30\n")

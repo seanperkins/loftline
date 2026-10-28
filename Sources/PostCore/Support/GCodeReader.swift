@@ -39,6 +39,9 @@ public enum GCodeReader {
         var warnings: [String] = []
         func warn(_ line: Int, _ s: String) { if warnings.count < 200 { warnings.append("Line \(line): \(s)") } }
         for g in parsed.garbage.prefix(20) { warn(g.line, "unrecognised text '\(g.text)'") }
+        for line in parsed.blockDeleteLines.prefix(20) {
+            warn(line, "starts with '/' (block delete): shown as if Block Delete were off, which is when the controller runs it")
+        }
 
         var progUnits: LengthUnit?
         var f: Double { (progUnits ?? assumedUnits ?? units).factor(to: units) }
