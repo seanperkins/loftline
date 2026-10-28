@@ -1,6 +1,6 @@
 # ShopBot G-code, Syntec and Haas posts, with the engine options they need
 
-Status: draft, revision 3 (review rounds 1 and 2 answered: see "Rulings" at the end). Issues: #106 (ShopBot G-code), #110 (Syntec),
+Status: approved, revision 4 (review rounds 1 to 3 answered: see "Rulings" at the end). Issues: #106 (ShopBot G-code), #110 (Syntec),
 #111 (Haas / Fanuc-style); engine gaps #99 items 2, 3, 7, 9 and 12. Follows
 `2026-10-28-masso-uccnc-centroid-ncstudio-posts-design.md` (merged at 5258fb6). NcStudio (#109), RichAuto (#112) and OpenSBP
 (#113) are not in this batch.
@@ -46,6 +46,11 @@ never below safe Z). The tool length line of the Syntec and Haas posts is `G0 G4
 move goes no lower than the reentry that follows it (a `Z{SAFE_Z}` there would rapid down to safe Z at an unknown XY, under a
 clamp taller than safe Z).
 
+A Syntec or Haas family post with the tool length offset on must keep that form: its tool length line must hold the word
+`Z{APPROACH_Z}` (any order, any spacing). `PostProfile.postProblem` (beside `dwellProblem`, and refused by the builder the
+same way, so a copy read from a file is covered) says otherwise "The tool length line must move to Z{APPROACH_Z}: it runs at
+the tool change's unknown X Y, before the climb to the approach height".
+
 The parser already skips a `%` line, and an `O1000` block parses as an O word: the validator's plain-move rule treats it as not
 a plain move (it only drops the remembered hole) and nothing else fires. A test pins this.
 
@@ -83,10 +88,13 @@ a plain move (it only drops the remembered hole) and nothing else fires. A test 
   copy with `G4 P{SECONDS}`, `G4 P{MILLISECONDS}` or `G4 P{DECIMAL_SECONDS}` is refused ("This controller reads a whole P in
   its smallest time unit: write the dwell as G4 X{DECIMAL_SECONDS}"), including a copy read from a file, which never passes
   the editor. Any post whose dwell uses `{DECIMAL_SECONDS}` after a word other than X is refused. The "`{SECONDS}` elsewhere"
-  rule covers any post whose dwell is not `{SECONDS}`, and walks the prelude.
-- **A dwell that prints as zero is not written** (`GCodeWriter.dwell`): below 0.0005 s for `{DECIMAL_SECONDS}` (Syntec's X
-  starts at 0.001 s) and `{MILLISECONDS}`. `{SECONDS}` prints any positive value. No existing golden or sample has such a
-  dwell.
+  rule covers any post whose dwell is not `{SECONDS}`, and walks the prelude. X is accepted only with `{DECIMAL_SECONDS}`
+  (a whole X is the smallest time unit on Syntec): a dwell `G4 X{SECONDS}` or `G4 X{MILLISECONDS}` is refused for every post.
+- **A dwell that prints as zero is not written**, whatever its form: below 0.0005 s every placeholder prints zero
+  (`{SECONDS}` keeps three decimals too, `NumberFormat.compact`). One predicate, `PostProfile.writesDwell(seconds:)`, decides
+  it for `GCodeWriter.dwell` and for the validator's toolpath check that forgets a drilled hole after a dwell
+  (`GCodeValidator.swift:75`), so the two never disagree. No existing golden or sample has such a dwell.
+- `ProbeSequenceChecker` skips G4 blocks in all its move rules, not only the spot gate.
 
 ### E4. Schema version 3
 
@@ -189,7 +197,8 @@ none declares a controller (no touch-plate probing). No built-in machine is adde
   dwell is 3 s, unscaled in a mm program; a Syntec copy with `G4 P{SECONDS}`, `G4 P{MILLISECONDS}` or `G4 P{DECIMAL_SECONDS}`
   is refused, also when read with `fromJSON`; an Avid copy with `G4 X{DECIMAL_SECONDS}` is refused; a 0.0004 s dwell writes no
   line in a Syntec or Haas program; `spot-descent` still fires after a `G4 X` block at the touch-off spot.
-- **E1b:** `{APPROACH_Z}` renders the approach height (above safe Z when the job's approach height is) and safe Z otherwise;
+- **E1b:** a Syntec or Haas copy whose tool length line is `G0 G43 Z{SAFE_Z} H{T}` is refused (also from `fromJSON`);
+  `{APPROACH_Z}` renders the approach height (above safe Z when the job's approach height is) and safe Z otherwise;
   the Haas and Syntec tool length line never rapids below the approach height (a job with a 1.5 in approach height and 0.5 in
   safe Z).
 - **E4:** `requiredSchemaVersion` is 3 for each new field or placeholder; a version 3 file is refused by a reader capped at 2;
@@ -224,4 +233,7 @@ safety facts; #99 gets E5.
   of which ShopBot runs only `G90`.
 - **`{APPROACH_Z}`, not `{SAFE_Z}`, in the G43 line** (skeptic, round 2): a tool change must not rapid below the approach
   height before the reentry.
+- **Round 3 had the last revision**: the auditor's three round-3 gaps (a copy's G43 form, `{SECONDS}` printing zero, one
+  dwell predicate) and the skeptic's three minors (one predicate, G4 skipped by every probe-check rule, X only with
+  `{DECIMAL_SECONDS}`) are written into this revision without a fourth round; each has a test.
 - **The preview's P>100 heuristic** (auditor) stays, as ruled in the earlier batch: a file's dialect is unknown to the preview.
