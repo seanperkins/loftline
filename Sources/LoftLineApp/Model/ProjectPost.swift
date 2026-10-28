@@ -221,7 +221,7 @@ enum ProjectPost {
         let r = resolve(p, profiles: profiles, machines: machines)
         var lines: [String] = []
         if r.postSource == .projectCopy {
-            lines.append("Using this project's copy of \"\(r.post.name)\" v\(r.post.version)" + (r.postInstalledHere ? "" : " (not installed here)"))
+            lines.append("Using this project's copy of \"\(r.post.name)\" v\(r.post.version)" + (r.postInstalledHere ? "" : " (not installed here: add it in Toolpaths > Post Processors)"))
         }
         if r.machineSource == .projectCopy, let m = r.machine {
             lines.append("Using this project's copy of the machine \"\(m.name)\"" + (r.machineInstalledHere ? "" : " (not installed here)"))

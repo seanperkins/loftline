@@ -2,11 +2,14 @@ import AppKit
 import CADCore
 import PostCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Toolpaths ▸ Post Processors…: the posts (built in, custom, and files that did not load), a form for every field of the
 /// selected post, and the G-code it writes for a fixed sample job with the validator's verdict. Built-in posts are read-only;
 /// Duplicate makes an editable copy that is written only by Save.
 struct PostProcessorsSheet: View {
+    /// The open project's own post when this Mac does not have it (Add This Project's Post).
+    var carried: PostProfile?
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var catalog = PostProfileCatalog.shared
     @StateObject private var model = PostEditorModel(catalog: PostProfileCatalog.shared)
@@ -207,6 +210,20 @@ struct PostProcessorsSheet: View {
                 .help("Make an editable copy of the selected post (written only when you save)")
             Button("Folder") { openFolder() }
                 .help("Open the folder that holds custom post files (JSON)")
+            Button("Import…") { importFile() }
+                .disabled(model.isDirty && model.draft != nil)
+                .help("Open a .loftlinepost file someone shared as a draft; it is checked, and saved only when you Save")
+            Button("Export…") { exportFile() }
+                .disabled(model.exportData() == nil)
+                .help("Save the selected custom post as a .loftlinepost file to share it")
+            switch model.addState(for: carried) {
+            case .hidden: EmptyView()
+            case .enabled:
+                Button("Add This Project's Post") { if let carried { model.beginAdd(carried) } }
+                    .help("Add the post this project carries to this Mac's posts (checked, saved when you Save)")
+            case .disabled(let why):
+                Button("Add This Project's Post") {}.disabled(true).help(why)
+            }
             Button("Delete", role: .destructive) { run { try model.delete() } }
                 .disabled(!model.canDelete || model.isDirty)
                 .help("Move the selected custom post's file to the Trash")
@@ -226,6 +243,25 @@ struct PostProcessorsSheet: View {
 
     private func run(_ action: () throws -> Void) {
         do { try action(); error = nil } catch { self.error = error.localizedDescription }
+    }
+
+    static let postType = UTType(filenameExtension: "loftlinepost", conformingTo: .json) ?? .json
+
+    private func importFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [Self.postType, .json]
+        panel.message = "Import a post (.loftlinepost or .json): it opens as a draft and is saved only when you Save"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        run { model.beginImport(try catalog.store.read(url)) }
+    }
+
+    private func exportFile() {
+        guard let data = model.exportData(), let name = model.draft?.name else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [Self.postType]
+        panel.nameFieldStringValue = name + ".loftlinepost"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        run { try data.write(to: url, options: .atomic) }
     }
 
     private func openFolder() {

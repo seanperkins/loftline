@@ -100,7 +100,7 @@ import Testing
         var p = LoftLineProject(document: Document(name: "G"), postProfileID: "ghost")
         p.postSnapshot = try ghost.snapshot()
         let notInstalled = env.document(p).0.copyNotice
-        #expect(notInstalled.lines.first?.hasSuffix("(not installed here)") == true)
+        #expect(notInstalled.lines.first?.hasSuffix("(not installed here: add it in Toolpaths > Post Processors)") == true)
         #expect(notInstalled.warnings.isEmpty)
     }
 }

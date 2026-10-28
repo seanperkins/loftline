@@ -54,7 +54,7 @@ struct ContentView: View {
             case .inlayWizard: InlayWizardSheet(document: document)
             case .placeModel(let form): ModelPlacementSheet(document: document, form: form)
             case .saveAllToolpaths: SaveAllToolpathsSheet(document: document)
-            case .postProcessors: PostProcessorsSheet()
+            case .postProcessors: PostProcessorsSheet(carried: document.carriedPostNotInstalled)
             case .validation: ValidationSheet(document: document)
             case .keepOutZones: KeepOutZonesSheet(document: document)
             case .nesting: NestingSheet(document: document)

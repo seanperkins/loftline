@@ -156,4 +156,17 @@ import Testing
         let r = ProjectPost.resolve(project, profiles: m.catalog.profiles, machines: [BuiltInMachines.avidPRO6096])
         #expect(r.postInstalledHere && r.postCopyDiffers == nil)
     }
+
+    // MARK: Task 3
+
+    @Test func exportWritesTheSavedPostsBytes() throws {
+        let m = model(folder())
+        _ = m.select(BuiltInPosts.avidMach4Inch.id)
+        #expect(m.exportData() == nil)   // a built-in is on every Mac: Duplicate it to share a copy
+        m.duplicate()
+        #expect(m.exportData() == nil)   // unsaved
+        try m.save()
+        let data = try #require(m.exportData())
+        #expect(try PostProfile.fromJSON(data) == m.draft)
+    }
 }
