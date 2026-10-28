@@ -3,7 +3,7 @@
 Part 3 of the post-processor work. Part 1 (projects carry their post) and part 2 (coolant, park-and-probe) are on main at
 `f186ee7`. Part 4 (share a post as a file) and part 5 (more built-in posts) are out of scope.
 
-Revision 3, after two review rounds (Executor, Auditor, Claude Skeptic, Claude Simplifier).
+Revision 4, after three review rounds (Executor, Auditor, Claude Skeptic, Claude Simplifier).
 
 ## Why
 
@@ -65,12 +65,14 @@ Grouped like the file, every field of `PostProfile`:
 
 The list on the left: Built in, Custom, and Did not load (file name and reason). Buttons: Duplicate, Folder, Delete (custom
 posts), Save (disabled while there is a blocking problem), Cancel. Save of a new draft never replaces a file: if `<id>.json`
-appeared since Duplicate (another window's new post), Save takes the next free id and says so. Save of an edit to an existing
+appeared since Duplicate (another window's new post), Save takes the next free id and says so. The new file is created
+exclusively (a write that fails if the file exists), so two windows saving at the same moment cannot overwrite each other. Save of an edit to an existing
 custom post replaces its own file.
 
 ## The report
 
-One function, synchronous (run on each edit; with decimals capped at 6 the sample is at most a few thousand lines):
+One function, synchronous (run on each edit; with decimals capped at 6 the sample is at most a few tens of thousands of
+lines, in mm):
 
 `PostDraftReport.make(_ draft: PostProfile) -> PostDraftReport` with `problems: [String]` (blocking), `program: String?`,
 `issues: [GCodeIssue]` (shown). The static rules run first; the sample is posted only when none fails, so a typed value can
@@ -83,14 +85,13 @@ never reach the builder (a huge `decimals` would exhaust memory).
 - Round trip: `PostProfile.fromJSON(draft.toJSON())` succeeds (the loader's own bounds, such as 0–12 decimals).
 - Decimals 3 to 6 for an inch post, 2 to 6 for mm (rounding of 0.0005 in / 0.005 mm; above 6 a linearised arc runs to tens of
   thousands of lines on every keystroke); feed decimals 0–3.
-- Every number finite: travels, rapid rate, max feed and max RPM above 0; allowed spoilboard cut, dwell seconds and min RPM at
+- Every number finite: travels, rapid rate and max feed above 0, max RPM at least 1; allowed spoilboard cut, dwell seconds and min RPM at
   least 0; min RPM at most max RPM.
 - Arc tolerance between half a digit (`0.5·10^-decimals`) and 0.01 in (0.25 mm), whatever the arc output (helices and tiny arcs
   are linearised too).
-- **Fixed codes**, checked by parsing the field (`GCodeParser`) after rendering it with sample values, so `G00` and `M03` pass
-  and `G40`, `M30` or a comment do not: rapid is exactly one word `G0`, linear `G1`, arc CW `G2`, arc CCW `G3`, nothing else;
-  spindle on is exactly `M3` and an `S` word from `{S}`; spindle off is exactly `M5`; the dwell template is exactly `G4` and a
-  `P` word from `{SECONDS}`. (A swapped or empty arc code, `G0 F600`, `M4` or `M30 S{S}` would post a program the validator
+- **Fixed codes**, each matching its exact pattern (letters any case, optional leading zeros, single spaces, nothing else: no
+  comment, no `;`): rapid `G0`, linear `G1`, arc CW `G2`, arc CCW `G3`; spindle on `M3 S{S}` (either order); spindle off `M5`;
+  dwell `G4 P{SECONDS}`. So `G00`, `M03` and `G04` pass, and `G40`, `M30 S{S}`, `M3 (S{S})` and `G0 ;` do not. (A swapped or empty arc code, `G0 F600`, `M4` or `M30 S{S}` would post a program the validator
   cannot see is wrong.)
 - **Placeholders per template**: a `{` or `}` in a template is allowed only as an allowed `{NAME}` for that template:
 
@@ -112,22 +113,33 @@ never reach the builder (a huge `decimals` would exhaust memory).
 document 4 × 3 × 0.5 in, material-top zero, safe Z 0.2 in, three toolpaths that cut no deeper than the material bottom: A (tool
 1, a profile with a clockwise and a counter-clockwise arc, **a pause after it**), B (tool 1), C (tool 2, Mist coolant). So the
 pause sits between toolpaths (the builder drops a pause after the last one) and the change from B to C has no pause before it.
-Its spindle speed is `clamp(18000, max(1, minRPM), maxRPM)`, its feeds `min(feed, maxFeed)`, and it is posted with the draft's
+No toolpath starts at the sheet's centre (the touch-off spot of the probe pass). Its spindle speed is
+`clamp(18000, max(1, minRPM), maxRPM)`, its feeds `min(feed, maxFeed converted to the document's units)`, and it is posted with
+the draft's
 limits widened to at least 100 × 100 × 10 in, converted to the draft's units (limits and RPM are machine numbers a machine
 replaces; the sample tests the dialect). The report runs `GCodeValidator.validate(toolpaths:)` and `validate(gcode:)` on it, as
 the exporter does. It blocks when:
 
-- the builder throws, or the validator reports **any** error or warning except `coordinate-shift` (a footer may legitimately lift
-  with `G53 G0 Z0`). Every built-in posts the sample with no issue at all, so this blocks a units change in a template, a stop
+- the builder throws, or the validator reports **any** error or warning, except a `coordinate-shift` warning on a block whose
+  only G words are `G53` and `G0` (a footer may legitimately lift with `G53 G0 Z0`; a `G92` or `G10` in a template blocks). Every built-in posts the sample with no issue at all, so this blocks a units change in a template, a stop
   with the spindle running, `M3` with no speed, garbage text and a missing program end;
-- in the **parsed** program, the change from tool 1 to tool 2 has no block with `M0`/`M1`, and no block with `T<tool 2>` and
-  `M6`, between B's last cut and C's first (the second tool's paths would be cut with the first bit);
-- after the pause comment, no parsed `M0`/`M1` comes before the next motion block (a `{STOP}` in a comment, or an empty pause,
-  stops nothing).
+- in the **parsed** program, at **each** tool change (before A's first cut, with tool 1, and between B's last cut and C's first,
+  with tool 2) there is neither an `M0` nor a `T<that tool>` followed by an `M6` (on the same block or a later one, with no other
+  `T` in between) before the next cut. `M1` does not count: it stops only when the operator's Optional Stop switch is on, and
+  GRBL ignores it. Otherwise the tool's paths would be cut with another bit;
+- after the pause comment (the sample's pause is a mandatory one, `M0`), no parsed `M0` comes before the next X/Y move or feed
+  move (a lift before the stop is fine; a `{STOP}` in a comment, a hard-coded `M1`, or an empty pause stops nothing).
 
-When the draft declares a controller, the same job is also posted with `ToolChangeProbe.defaults` for that controller (in the
-draft's units, on the widened limits) and a touch-off spot at the sheet's centre, and the same rules apply, the probe state
-table included.
+When the draft declares a controller, the same job is also posted with `ToolChangeProbe.defaults(controller:units:limits:)`
+(a new overload; the existing `defaults(for:)` calls it) in the draft's units on the widened limits, and a touch-off spot at
+the sheet's centre, and the same rules apply, the probe state table included. With a declared controller, a footer that lifts
+with `G53` and then rapids X/Y is refused (Z is unknown after the lift, a `rapid-unknown-z` warning); so is a `G91 G28` footer
+(an `incremental` warning).
+
+**A fix to part 2 found here.** The builder writes every `G53` value rounded toward zero, but `ProbeSequenceChecker` accepts a
+`G53` value only within half a digit of the exact one. A value the post's decimals cannot represent (an inch post at 4 decimals
+with GRBL's top Z of −1 mm = −0.03937 in, written `-0.0393`) then fails, at export as well as in the editor. The checker
+compares with `NumberFormat.towardZero(value, decimals)` exactly, which is what the writer emits; nothing is widened.
 
 The preview pane shows `program` read-only in a monospaced view, and the issues above it.
 
@@ -136,8 +148,9 @@ The preview pane shows `program` read-only in a monospaced view, and the issues 
 - `PostProfileStore.load() -> (profiles: [PostProfile], skipped: [SkippedPost])`, one scan of the folder, `SkippedPost {
   fileName, reason }`. A file is skipped when it does not decode (the `SnapshotError` reason: newer LoftLine, malformed with its
   path), when its id is not a safe name (`[A-Za-z0-9._-]`, not starting with `.`), when its name is not `<id>.json`
-  (exactly, case included: save and delete act on `<id>.json`), or when an earlier file has the same id. A file's `pause: []`
-  is read as no pause template. `allProfiles()` is `load().profiles`;
+  (exactly, case included: save and delete act on `<id>.json`), or when an earlier loaded file has the same id. The name is
+  checked first and only a loaded file claims an id, so Finder's `x copy.json` (holding id `x`) is skipped for its name and
+  `x.json` still loads. A file's `pause: []` is read as no pause template. `allProfiles()` is `load().profiles`;
   `userProfiles()` goes. `PostProfileCatalog` publishes `skipped`.
 - `newID(from:)` checks the folder's file names, case-folded (loaded, skipped and unreadable files alike), and the built-in ids.
 - `save` refuses an unsafe id, and for a new post refuses an existing destination (the editor then takes the next free id);
@@ -147,7 +160,7 @@ The preview pane shows `program` read-only in a monospaced view, and the issues 
 ## Tests
 
 1. Store: malformed, newer-schema, unsafe-id, name-mismatch (also case only) and duplicate-id files are skipped with their
-   reasons; a good file loads; `pause: []` loads as nil; `newID` avoids a skipped file's name and a case-only clash, and drops
+   reasons; `x copy.json` holding id `x` is skipped and `x.json` loads; a good file loads; `pause: []` loads as nil; `newID` avoids a skipped file's name and a case-only clash, and drops
    an existing `-custom-<n>`; delete calls the injected function with the file's URL; save refuses `../x` and a new post over an
    existing file; the CLI prints skipped files.
 2. Controller: a post with `controller` round-trips; without it no key is written (every built-in's bytes unchanged); a decoder
@@ -158,10 +171,14 @@ The preview pane shows `program` read-only in a monospaced view, and the issues 
    `M3 (S{S})`, `G40 P{SECONDS}`, `G04 P{SECONDS}` and `M03 S{S}` (accepted), `{T}` in the footer, `{SAFE_Z}` in the dwell,
    `{S}` in spindle off, a lone `{`, `{TOOL_NAME}` outside a comment, `{STOP}` inside a comment, a version with `)`, a non-ASCII
    quote in a template, decimals 2 and 7 on an inch post, an arc tolerance of 0.05 in, an infinite travel, max RPM 0, a
-   controller with the tool length offset; and the sample: a tool change of `["M5"]`, `[]` and `["M5", "M6"]` (no `T`) refused;
+   controller with the tool length offset; and the sample: a tool change of `["M5"]`, `[]`, `["M5", "M6"]` (no `T`), `["M5", "M1"]` and
+   `["M5", "T2 M6"]` (always tool 2) refused; `["M5", "T{T}", "M6"]` accepted; a pause of `["M5", "(MSG, {MESSAGE})", "M1"]`
+   refused and `["M5", "G53 G0 Z0", "(MSG, {MESSAGE})", "{STOP}"]` accepted;
    a tool change with `M5` removed refused; a pause of `["M05"]` refused; `G21` in an inch post's footer refused; a footer
-   `G53 G0 Z0` accepted; a 0–12000 RPM post and a 100 mm travel post accepted; a declared-controller draft runs the probe
-   sample.
+   `G53 G0 Z0` accepted without a controller and refused on a Duplicate of the Avid post (which declares Mach4); a `G92 Z10`
+   preamble refused; `G0 ;` refused; max RPM 0.1 refused; an mm post with max feed 1000 accepted; a 0–12000 RPM post and a
+   100 mm travel post accepted; an inch draft declaring GRBL at 4 decimals is clean; a declared-controller draft runs the probe
+   sample. Probe validator: a park value the post's decimals cannot represent passes.
 4. Every built-in post's report is clean (no problem, no issue), and so is an unedited Duplicate of each (which carries its
    controller, so the probe sample runs).
 5. UI: a harness scenario opens Post Processors with a custom post selected; the PNG and the accessibility tree are checked.
@@ -182,5 +199,5 @@ Trash, the custom-post air-probe step), Help (Machines and Post Processors), and
 
 ## Order of work
 
-1. Store: `load()`, skipped files, safe ids, `newID`, Trash delete, CLI. 2. `PostProfile.controller`, the probe rule and its
-message, `POST_VERSION` comment-safe. 3. `PostSampleJob` and `PostDraftReport`. 4. The Post Processors sheet. 5. Docs.
+1. Store: `load()`, skipped files, safe ids, `newID`, exclusive create, Trash delete, CLI. 2. `PostProfile.controller`, the
+probe rule and its message, `POST_VERSION` comment-safe, `defaults(controller:units:limits:)`, the checker's `G53` comparison. 3. `PostSampleJob` and `PostDraftReport`. 4. The Post Processors sheet. 5. Docs.
