@@ -232,6 +232,11 @@ import Testing
         let d = GCodeExporter.export(project: doc.project, toolpaths: [long], profile: BuiltInPosts.avidMach4Inch, jobName: "T")
         #expect(d.text == nil)
         #expect(d.errorMessage?.contains("dwells 4000 s") == true)
+        // A drill dwell far past Int.max is refused with its message, not a crash while formatting it.
+        var huge = try #require(tps.first)
+        huge.moves.append(.dwell(seconds: 1e20))
+        let h = GCodeExporter.export(project: doc.project, toolpaths: [huge], profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+        #expect(h.text == nil && h.errorMessage?.contains("more than the 3600 s") == true)
     }
 
     @Test func anOthermillSetupErrorStillWritesAProgramToSaveAnyway() throws {

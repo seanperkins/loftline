@@ -207,7 +207,7 @@ enum GCodeExporter {
             return GCodeExporter.refused("The post \"\(profile.name)\" cannot be used: \(message)", issues: issues,
                                          toolpathCount: toolpaths.count)
         } catch PostError.dwellTooLong(let name, let seconds) {
-            return GCodeExporter.refused("\(name) dwells \(Int(seconds.rounded())) s, more than the "
+            return GCodeExporter.refused("\(name) dwells \(String(format: "%.0f", seconds)) s, more than the "
                                          + "\(Int(PostProfile.maxDwellSeconds)) s a program may hold: shorten its dwell.",
                                          issues: issues, toolpathCount: toolpaths.count)
         } catch PostError.spindleSpeedOutOfRange(let rpm) {
