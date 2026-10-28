@@ -1,10 +1,12 @@
 # Onefinity (Buildbotics) and Carbide Motion posts; GRBL-family machines (issues #104, #105, #100)
 
-Revision 2, 2026-10-28. Part of the dialect roadmap (#98), approved by Sean ("go"; "keep moving through post processors";
+Revision 3, 2026-10-28. Part of the dialect roadmap (#98), approved by Sean ("go"; "keep moving through post processors";
 "continue until they are all done"); owner checks deferred ("I am not gonna check those right now"). Revision 2 answers the
 first review (executor, auditor, skeptic, simplifier): BB and Carbide Motion join one id set that fixes the optional stop
 and the dwell unit; coolant on a post without it is one general check; semicolon comments bracket parentheses; machines are
-appended, with published figures; every number is stated.
+appended, with published figures; every number is stated. Revision 3 answers round 2: Carbide Motion's duplicate tool
+numbers become an export error; the generic GRBL machine is left untouched (the new GRBL machines list only the mm post);
+every machine number is stated; the coolant message names each controller's reason.
 
 ## Goal
 
@@ -41,37 +43,58 @@ machines; TESTING gets an owner check for each, as for the LinuxCNC and Othermil
      Z zero is after an `M6` without one.
    - dwell `G4 P{SECONDS}`, 3 s, assumed seconds: CM lists G4 without a unit, GRBL underneath is seconds, and Carbide staff
      wrote "P seems to be seconds". The owner check times it first.
-   - footer `m2Footer` (CM: `M30` "may return the machine to the machine origin"; `M2` lifts and moves back).
-   - optional stop `M0` (Decision 3): CM lists `M1` as "Sleep (optional stop)".
+   - footer `m2Footer`: its `G0 Z{HOME_Z}` and `G0 X{HOME_X} Y{HOME_Y}` lift and move home before `M2` ends the program
+     (CM: `M30` "may return the machine to the machine origin", so it is avoided).
+   - optional stop `M0` (Decision 3): CM lists `M1` as "Sleep (optional stop)" and documents nothing more about it, so whether
+     it stops is unknown; `M0` always stops, which is the safe reading of a pause the operator asked for.
    - coolant: CM ignores `M7` ("accepted but ignored") and does not list `M8`, so coolant on these posts is an export error
      (Decision 4).
    - limits the Shapeoko 5 Pro 2×2's, from mm, rounded down for inch as the GRBL inch post is: 623 × 623 × 155 mm =
      24.5 × 24.5 × 6.1 in; spoilboard 1.0 mm / 0.039 in; feeds and RPM are the GRBL posts' (8000 mm/min, 314.9 in/min,
      0–30,000 rpm), kept on purpose because Carbide publishes neither; the machine leaves them unset.
-   - tool numbers: CM wants a distinct number for each tool that needs a change; the validator already makes two different
-     tools sharing a number an error (a same-geometry duplicate is the same cutter, no change, a warning). Numbers above 255
-     may fail if CM forwards `T` to GRBL: an owner check.
+   - tool numbers: CM wants a distinct number for each tool that needs a change. Today two different cutters sharing a
+     number are only a pre-flight warning (`PreflightChecks`), and `ProgramBuilder` changes tools by id, so both would be
+     `T1 M6`; if CM skips the prompt when `T` names the loaded tool, the second toolpath would cut with the first bit. For the
+     Carbide Motion ids, two tools of different geometry sharing a number are an export **error** (Decision 4). Two library
+     entries of the same geometry are the same cutter; a second `T1 M6` only prompts again, so they stay a warning. Numbers
+     above 255 may fail if CM forwards `T` to GRBL: an owner check.
 3. **One id set for the controllers' fixed behaviour.** `BuiltInPosts.secondsNoOptionalStopIDs`: the Othermill, BB and Carbide
    Motion ids, documented as "built-in posts whose controller reads `G4 P` in seconds and has no usable Optional Stop".
    `honoursOptionalStop` (M0 for an optional stop) and `dwellProblem` (no `{MILLISECONDS}`) read it, by id, so an edited copy
-   that keeps the id keeps both rules. `OthermillSetup.postIDs` stays Othermill-only (its setup checks).
-4. **Coolant where there is none.** `BuiltInPosts.noCoolantIDs` (the Othermill and Carbide Motion ids) and one check,
-   `UnsupportedCoolant.issue(toolpaths:profile:)` beside `ToolChangeZ` in `GCodeExporter.export`: one error naming the
-   toolpaths with coolant, saying the controller has none. The Othermill's coolant error moves out of `OthermillSetup` into
-   it; `PostSampleJob` drops coolant for every id in the set.
+   that keeps the id keeps both rules. `OthermillSetup.postIDs` stays Othermill-only (its setup checks). The GRBL posts are
+   not in it: their optional stop is judged by value or a declared controller (#115), unchanged; but `dwellProblem` also
+   refuses `{MILLISECONDS}` for the two GRBL ids, so an edited GRBL copy that keeps its id cannot dwell in milliseconds.
+4. **Dialect checks at export.** One `DialectChecks.issues(toolpaths:profile:)` beside `ToolChangeZ` in
+   `GCodeExporter.export`, keyed by built-in id:
+   - coolant where there is none (`BuiltInPosts.noCoolantIDs`: the Othermill and Carbide Motion ids): one error naming the
+     toolpaths with coolant, with the controller's reason — Othermill: "its G-code reference lists M7, M8 and M9 as
+     unsupported"; Carbide Motion: "Carbide Motion ignores M7 and does not support M8". The Othermill's coolant error moves out
+     of `OthermillSetup` into it (with its test); `PostSampleJob` drops coolant for every id in the set.
+   - for the Carbide Motion ids, one error naming each tool number shared by tools of different geometry.
+   GRBL's `M7` stays out of scope as before (DECISIONS more-posts): stock GRBL rejects it, the coolant form warns, and some
+   GRBL builds enable it.
 5. **Semicolon comments bracket parentheses**, as parenthesis comments already do (`PostProfile.comment`), so a Carbide Motion
    program has no `(` anywhere (header names, tool names, job names). No built-in post used semicolons, so no sample moves;
    a user's semicolon post changes only inside comments. DECISIONS says so.
 6. **GRBL family (#100).** grblHAL and FluidNC with #100's defaults take the GRBL posts' text unchanged, so no new posts.
-   `BuiltInMachines.genericGRBL` now lists `generic-grbl-inch` too, so a project on either GRBL post infers the generic
-   machine as before (for the mm post) or instead of none (for the inch post, whose own envelope is the same machine's
-   rounded down). New machines are appended after the existing ones: `genmitsu-3018-prover-v2` "Genmitsu 3018-PROVer V2"
-   (290 × 180 × 40 mm, SainSmart's V2 figures; RPM left unset), `longmill-mk2-30x30` "Sienci LongMill MK2 30×30"
-   (820 × 868 × 114 mm, Sienci; max feed 4,000 mm/min; 15,000–25,000 rpm), both listing both GRBL posts, with notes that
-   GRBL's `$30` must equal the machine's max RPM (`$31` its min) or every `S` word clamps. Maslow 4 is left out.
-7. **Machines for the new posts**, appended: `onefinity-woodworker` "Onefinity Woodworker (Buildbotics)" (BB posts; #104's
-   safety flag: an Elite runs MASSO, whose `P` is milliseconds, and is not this machine) and `shapeoko-5-pro-2x2` "Shapeoko 5
-   Pro 2×2 (Carbide Motion)" (Carbide Motion posts).
+   `BuiltInMachines.genericGRBL` is untouched (a changed built-in would make every saved project's copy "differ"). The new
+   GRBL machines list only `generic-grbl-mm` (a mm post drives GRBL whatever the document's units), so no machine starts
+   listing `generic-grbl-inch` and inference for saved and new projects is unchanged; `generic-grbl-mm` still infers
+   `generic-grbl`, which comes first. Appended, in this order:
+   - `genmitsu-3018-prover-v2` "Genmitsu 3018-PROVer V2": mm; 290 × 180 × 40 mm (SainSmart's V2 product page); spoilboard
+     1.0 mm; rapid, feed and RPM unset (the post's 8000 mm/min and 0–30,000 rpm).
+   - `longmill-mk2-30x30` "Sienci LongMill MK2 30×30": mm; 820 × 868 × 114 mm (Sienci's MK2 article and specs page); spoilboard
+     1.0 mm; rapid and max feed 4,000 mm/min (Sienci's maximum cutting speed); RPM unset.
+   Their notes: "Set Max RPM (Preferences > Machines) to your spindle's top speed and GRBL's $30 to the same value ($31 to its
+   lowest), or every S word is scaled wrong." Maslow 4 is left out.
+7. **Machines for the new posts**, appended after the GRBL machines:
+   - `onefinity-woodworker` "Onefinity Woodworker (Buildbotics)": inch; 32.125 × 32.125 × 5.25 in; spoilboard 0.05 in; rapid
+     and max feed 400 in/min; 10,000–30,000 rpm; lists the BB posts (#104's safety flag: an Elite runs MASSO, whose `P` is
+     milliseconds, and is not this machine).
+   - `shapeoko-5-pro-2x2` "Shapeoko 5 Pro 2×2 (Carbide Motion)": mm; 623 × 623 × 155 mm; spoilboard 1.0 mm; rapid, feed and
+     RPM unset (the post's); lists the Carbide Motion posts.
+   Posts are appended to `BuiltInPosts.all` after the Othermill posts in this order: BB inch, BB mm, Carbide Motion inch,
+   Carbide Motion mm.
 8. **Probing.** None of the new posts declares a controller, so park-and-probe refuses them.
 
 ## Tests
@@ -81,18 +104,26 @@ machines; TESTING gets an owner check for each, as for the LinuxCNC and Othermil
   modes, inch and mm; the dwell line `G4 P3`.
 - Optional stop: BB and Carbide Motion write `M0` as built, machine-applied, and edited with the same id.
 - Dwell: an edited BB or Carbide Motion post with `{MILLISECONDS}` is refused (`dwellProblem`).
-- Coolant: Mist and Air on a Carbide Motion post, and coolant on an Othermill post, each give the one error; a BB post and a
-  GRBL post give none; the editor sample for a Carbide Motion post has no coolant.
+- Coolant: Mist and Air on a Carbide Motion post, and coolant on an Othermill post, each give the one error with that
+  controller's reason (the Othermill test moves from `OthermillSetupTests`); a BB post and a GRBL post give none; the editor
+  sample has no coolant for every id in `noCoolantIDs`.
+- Tool numbers: on a Carbide Motion post, two tools of different geometry numbered 1 give the error; two of the same
+  geometry do not; on the Avid post neither does.
+- Dwell: an edited GRBL post keeping its id with `{MILLISECONDS}` is refused.
 - `ToolChangeZ`: a two-tool program warns on BB and does not on Carbide Motion.
 - Semicolon comments: a tool name with `(2 flute)` is written `[2 flute]`.
-- Machines: a table of the six new or changed machines with their numbers; inference pins `generic-grbl-mm` and
-  `generic-grbl-inch` to `generic-grbl`; `orderedPosts`' "other" list gains the four ids; park-and-probe on a new post refuses.
-- `samples/expected` gains the four posts' folders; the existing folders stay byte-identical.
+- Machines: a table of the four new machines with every number above; `generic-grbl` is unchanged; inference pins
+  `generic-grbl-mm` to `generic-grbl` and leaves an unmarked `generic-grbl-inch` project with no machine; `orderedPosts`' "other" list gains the four ids; park-and-probe on a new post refuses.
+- `samples/expected` gains the four posts' folders (posted with the samples' own Avid machine, so the Avid's numbers); the
+  existing folders stay byte-identical; the samples test's accepted warnings already cover BB's two-tool warning.
 
 ## Docs
 
-DECISIONS (`onefinity-carbide-posts`: the assumptions, the id sets, the semicolon change, the grblHAL ruling), Help (Machines:
-the built-in list, the BitSetter assumption, `$30`; the pause text's controller list gains BB and Carbide Motion), TESTING
+DECISIONS (`onefinity-carbide-posts`: the assumptions with each figure's source, the id sets and why GRBL is judged apart, the
+semicolon change, the grblHAL ruling, the GRBL machines' mm-only lists), doc comments (`honoursOptionalStop`, `OthermillSetup`,
+`PostSampleJob`, `Toolpaths2DForms` and `JobSheet` controller lists), Help (Machines: the built-in list, "make a machine" now
+for posts without one, BB's M0 tool change, the BitSetter assumption, `$30` and Max RPM; the pause text gains BB and Carbide
+Motion; coolant names Carbide Motion), TESTING
 (owner checks: Onefinity air cut, two-file job, `M1`; Carbide Motion: time the spin-up dwell, `M6` with and without a
 BitSetter, `;` comments, a tool numbered above 255, the `M2` move back clears clamps; GRBL machines: `$30`), README and PARITY
 lists, a comment on #100, #104 and #105 answering #98's nine safety facts.
