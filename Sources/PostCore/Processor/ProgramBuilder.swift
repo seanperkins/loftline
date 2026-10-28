@@ -50,9 +50,11 @@ struct ProgramBuilder {
 
         var currentTool: UUID?
         var currentRPM: Double?
+        var coolantOn: Coolant?
         for (index, tp) in active.enumerated() {
             if tp.tool.id != currentTool {
                 if currentTool != nil { w.retract(to: coords.safeZ) }
+                coolantOff(&coolantOn, into: &w)
                 writeToolChange(tp, into: &w)
                 currentTool = tp.tool.id
                 currentRPM = nil
@@ -61,11 +63,17 @@ struct ProgramBuilder {
                 writeSpindleStart(tp, into: &w)
                 currentRPM = tp.spindleRPM
             }
+            if tp.coolant != coolantOn {
+                // Mist to Air turns the one off first: never both on.
+                coolantOff(&coolantOn, into: &w)
+                if let c = tp.coolant { w.code(c.code); coolantOn = c }
+            }
             w.comment("Toolpath: \(tp.name) [\(tp.kind.displayName)]")
             writeMoves(tp.moves, into: &w)
             // A stop belongs between toolpaths: the program's own end already stops the machine.
             if let pause = tp.pauseAfter, index + 1 < active.count {
                 let next = active[index + 1]
+                coolantOff(&coolantOn, into: &w)
                 writePause(pause, after: tp, into: &w)
                 currentRPM = nil   // the pause stops the spindle
                 // A tool change that follows re-enters the work itself.
@@ -74,6 +82,7 @@ struct ProgramBuilder {
         }
 
         w.retract(to: coords.safeZ)
+        coolantOff(&coolantOn, into: &w)
         for line in render(profile.footer) { w.code(line) }
         return w.lines.joined(separator: "\n") + "\n"
     }
@@ -179,6 +188,13 @@ struct ProgramBuilder {
         if approachZ > coords.safeZ + 1e-9, let first = next.moves.first(where: { $0.target != nil })?.target {
             w.rapid(to: Vec3(first.xy, z: approachZ))
         }
+    }
+
+    /// `M9` when coolant is on; a pause or a tool change turns it off, and the next toolpath turns its own on.
+    private func coolantOff(_ on: inout Coolant?, into w: inout GCodeWriter) {
+        guard on != nil else { return }
+        w.code("M9")
+        on = nil
     }
 
     private func writeSpindleStart(_ tp: Toolpath, into w: inout GCodeWriter) {
