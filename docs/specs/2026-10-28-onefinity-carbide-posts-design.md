@@ -1,6 +1,6 @@
 # Onefinity (Buildbotics) and Carbide Motion posts; GRBL-family machines (issues #104, #105, #100)
 
-Revision 3, 2026-10-28. Part of the dialect roadmap (#98), approved by Sean ("go"; "keep moving through post processors";
+Revision 4, 2026-10-28 (final: rulings on round 3, the last review round, at the end). Part of the dialect roadmap (#98), approved by Sean ("go"; "keep moving through post processors";
 "continue until they are all done"); owner checks deferred ("I am not gonna check those right now"). Revision 2 answers the
 first review (executor, auditor, skeptic, simplifier): BB and Carbide Motion join one id set that fixes the optional stop
 and the dwell unit; coolant on a post without it is one general check; semicolon comments bracket parentheses; machines are
@@ -127,3 +127,20 @@ Motion; coolant names Carbide Motion), TESTING
 (owner checks: Onefinity air cut, two-file job, `M1`; Carbide Motion: time the spin-up dwell, `M6` with and without a
 BitSetter, `;` comments, a tool numbered above 255, the `M2` move back clears clamps; GRBL machines: `$30`), README and PARITY
 lists, a comment on #100, #104 and #105 answering #98's nine safety facts.
+
+## Rulings on round 3 (final; these override the text above where they differ)
+
+1. **No Carbide Motion tool-number check.** `GCodeValidator.validate(toolpaths:)` already makes two different tools sharing a
+   T number an export error for every post when their geometry differs (a warning when it is the same; `PostRobustnessTests`
+   pins it). `DialectChecks` keeps only the coolant rule. The geometry test was too loose: it compared kind, diameter and
+   angle only, so two cutters differing in tip diameter or cutter shape counted as one. One `Tool.hasSameGeometry(as:)`
+   (CADCore) compares kind, diameter, angle, tip diameter and shape; the validator and `PreflightChecks` both use it. Tests:
+   a tip-diameter or shape difference under one number is an error.
+2. **Same-geometry duplicates** raise the validator's warning and nothing else; whether CM prompts again or not, the same cutter
+   stays in.
+3. **Owner checks added:** "`T1 M6` with T1 already loaded: does Carbide Motion prompt and run the BitSetter?" (one file per
+   tool, or a second job, can start with a different bit numbered 1).
+4. **The `$30` note** reads: "Duplicate this machine (Preferences > Machines), set the copy's Max RPM to your spindle's top speed
+   and choose it in Job Setup; set GRBL's $30 to the same value ($31 to its lowest)." Built-in machines are read-only.
+5. **Docs sweep adds** `ToolChangeZ`'s doc comment (BB stops with M0 too) and Help's note that a duplicated post under a new id
+   loses the id-based rules (optional stop, dwell, coolant) of BB and Carbide Motion as of the Othermill.
