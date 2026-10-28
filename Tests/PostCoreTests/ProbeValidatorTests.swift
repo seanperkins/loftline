@@ -216,4 +216,21 @@ import Testing
         // A GRBL footer that lifts to machine Z 0, not its traverse height, keeps today's warning.
         #expect(g.inserting("G53 G0 Z0", before: "M2").issues.contains { $0.message.contains("changes the coordinate system") })
     }
+
+    // MARK: Final review
+
+    @Test func extraWordsOnTheSpotRapidAreAnError() throws {
+        let m = try Self.mach4()
+        expectError(m.replacing("G0 X6.0000 Y4.0000", with: "G0 X6.0000 Y4.0000 M3 S18000"), "spindle started on the spot rapid")
+    }
+
+    @Test func aDescentInTheBlockThatLeavesTheSpotIsAnError() throws {
+        let m = try Self.mach4()
+        let lines = m.text.components(separatedBy: "\n")
+        let removal = try #require(lines.firstIndex { $0.hasPrefix("(MSG, Remove the touch plate") })
+        var leaving = lines
+        leaving[removal + 3] = "G0 X6.0010 Z0.3000"   // leaves the spot and descends in one move
+        let p = Program(text: leaving.joined(separator: "\n"), profile: m.profile, job: m.job, units: m.units)
+        #expect(p.errors.contains { $0.message.contains("touch-off spot") }, "\(p.errors)")
+    }
 }

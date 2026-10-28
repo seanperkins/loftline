@@ -144,14 +144,15 @@ struct ProbeSequenceChecker {
         // The spot rapid.
         if state == .leaving, motionOf(b, motion) == 0, b.value("X") != nil || b.value("Y") != nil {
             guard let spot else { error("spot", "The job has no touch-off spot"); return Effect(consumed: 1) }
-            if b.value("Z") == nil, near(b.value("X"), spot.x), near(b.value("Y"), spot.y) {
+            // Exactly G0 X Y: the block is consumed, so any other word in it (a spindle start) would go unchecked.
+            if Self.shape(b, g: [0], letters: ["X", "Y"]), near(b.value("X"), spot.x), near(b.value("Y"), spot.y) {
                 if activeOffset != 53 + probe.workOffset {
                     error("offset", "The move to the touch-off spot runs in a work offset other than G\(53 + probe.workOffset)")
                 }
                 state = .atSpot
                 return Effect(consumed: 1, xy: spot)
             }
-            error("spot", "The move to the touch-off spot is not to the job's touch-off spot, or moves Z")
+            error("spot", "The move to the touch-off spot must be G0 X Y to the job's touch-off spot, with no other word")
             return Effect(consumed: 1)
         }
 
