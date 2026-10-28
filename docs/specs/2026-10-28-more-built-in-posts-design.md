@@ -1,6 +1,6 @@
 # LoftLine: more built-in posts
 
-Part 5, the last of the post-processor work. Parts 1–4 are on main at `b96ed4c`. Revision 2 (after the r1 panel).
+Part 5, the last of the post-processor work. Parts 1–4 are on main at `b96ed4c`. Revision 3 (after the r2 panel).
 
 ## Why
 
@@ -27,15 +27,15 @@ comments, a 3 s spindle dwell, no tool length offset. Each preamble, tool-change
 | units / decimals / feed decimals | in / 4 / 1 | in / 4 / 1 | mm / 3 / 0 |
 | file extension | `nc` | `ngc` | `ngc` |
 | preamble | `G90`, `G17`, `G94` (as `genericGRBLMM`) | `machPreamble`: `G90`, `G91.1`, `G17`, `G40`, `G49`, `G80`, `G94` | same |
-| tool change | `M5`, `(Change to Tool: {TOOL_NAME})`, `M0` | same as GRBL | same |
+| tool change | `M5`, `(Change to Tool: {TOOL_NAME})`, `M0` (as `genericGRBLMM`) | `M5`, `(MSG, Change to Tool: {TOOL_NAME})`, `M0` | same |
 | footer | `G0 Z{HOME_Z}`, `M5`, `G0 X{HOME_X} Y{HOME_Y}`, `M2` | same | same |
 | arc tolerance | 0.0005 in | 0.0005 in | 0.01 mm |
 | fallback limits (x, y, z, spoilboard cut) | 29.5, 29.5, 2.55, 0.039 in | 48, 48, 6, 0.05 in | 1219.2, 1219.2, 152.4, 1.27 mm |
 | RPM | 0–30000 | 0–24000 | 0–24000 |
 | rapid rate and max feed | 314.9 in/min | 200 in/min | 5080 mm/min |
 
-The GRBL inch values are the GRBL mm post's converted and rounded **down** (750 mm = 29.53 in, 65 mm = 2.56 in, 1 mm = 0.0394 in,
-8000 mm/min = 314.96 in/min), so the inch post never allows more than the mm one. The LinuxCNC pair is one machine, converted exactly.
+The GRBL inch values are the GRBL mm post's, rounded down. The LinuxCNC pair is one machine, converted exactly. LinuxCNC's
+screens show only `(MSG, …)` comments, so its tool-change comment uses that form (`{TOOL_NAME}` stays inside the parentheses).
 
 The three footers share one constant, `m2Footer`; the LinuxCNC posts use `machPreamble` directly. `genericGRBLMM` is not edited.
 
@@ -43,11 +43,15 @@ The three footers share one constant, `m2Footer`; the LinuxCNC posts use `machPr
 
 1. **LinuxCNC tool change stops with `M0`, not `T{T} M6`.** M6 stops only when LinuxCNC is configured for a manual change
    (`hal_manualtoolchange`); a config that loops `tool-change` back to `tool-changed` completes it at once, and a `T` not in the
-   tool table aborts the program. `M0` stops on every configuration and needs no tool table. The post uses no tool length offset,
-   so nothing is lost; an owner with a tool changer duplicates the post and edits the tool change.
+   tool table aborts the program. `M0` stops on every configuration and needs no tool table. Neither re-zeroes Z: at `M0`
+   LinuxCNC stays in Auto, so the operator cannot touch off, and the program resumes at the old safe Z. That is the same as the
+   GRBL post's `M0` today. Help (Machines) says: on LinuxCNC (and GRBL without a touch plate), post a job with more than one tool
+   with Save All Toolpaths ▸ one file per tool, and touch off Z before each file. An owner with tool length offsets or a tool
+   changer duplicates the post and edits the tool change.
 2. **No Mach3 posts.** A Mach3 post would write the Avid posts' G-code byte for byte (same dialect, M30, `.tap`); its only
-   difference would be the fallback limits, which a machine replaces. Help says a Mach3 owner can use the Avid posts' G-code (set
-   Mach3's tool change to stop, and check `G4 P` is in seconds) by listing them in a machine of their own.
+   difference would be the fallback limits, which a machine replaces. DECISIONS (not Help: nothing has run on Mach3) records that
+   a Mach3 owner can list the Avid posts in a machine of their own, with Mach3's tool change set to stop, `G4 P` in seconds, and
+   touch-plate tool changes **off** (LoftLine's Mach4 probe sequence calls a Mach4 macro).
 3. **Probing.** `BuiltInPosts.probeController(for:)` maps `generic-grbl-inch` to GRBL. `ToolChangeProbe.defaults(for:)` chooses
    GRBL when any of the machine's listed post ids is a built-in that `probeController` maps to `.grbl`, so a machine listing only
    `generic-grbl-inch` gets GRBL defaults (today it checks `genericGRBLMM.id` alone, and would give Mach4 and then refuse). The
@@ -59,29 +63,34 @@ The three footers share one constant, `m2Footer`; the LinuxCNC posts use `machPr
    the job against the selected machine.
 5. **Order of `BuiltInPosts.all`**: the existing three first, unchanged, then `generic-grbl-inch`, `linuxcnc-inch`, `linuxcnc-mm`.
    The default post and every picker's first entries stay as they are.
-6. **A user file with a new built-in's id keeps winning** (the existing rule in `PostProfileStore`: a user post overrides the
-   built-in with its id). Recorded in DECISIONS, no code.
-7. **Known limitation, not fixed here:** mist coolant writes `M7`, which GRBL builds without `ENABLE_M7` reject. This already
-   applies to the GRBL mm post. Help (Machines) says so; a fix (a per-post coolant code) is a follow-up.
+6. **Out of scope:** mist coolant writes `M7`, which stock GRBL rejects. This already applies to the GRBL mm post, and the coolant
+   form and Help already say "A stock GRBL controller has no M7: use Air there." The editor report checks LoftLine's own rules, not
+   a controller's build options; "clean" means that.
 
 ## Tests
 
-1. `NewBuiltInPostTests` (PostCoreTests), table-driven over the three posts, posting `PostFixtures.postJob()` and asserting
-   literals written in the test (not derived from the profile): `G20` or `G21`; the preamble lines in order; the tool-change lines;
-   the last four lines of the footer; one decimals check (`Z` with 4 decimals in inch, 3 in mm). The whole output is pinned by
+1. A table-driven test in `PostGoldenTests.swift` over the three posts, posting `PostFixtures.postJob()` and asserting literals
+   written in the test (not derived from the profile): `G20` or `G21`; the preamble lines in order; the tool-change lines; the
+   last four lines of the footer; one decimals check (`Z` with 4 decimals in inch, 3 in mm). A second table-driven test pins each
+   post's `name`, `fileExtension`, `limits`, `rapidRate`, `maxFeed`, `minRPM`, `maxRPM` and `arcTolerance` against the table's
+   literals (samples run with the Avid machine applied, so nothing else checks them). The whole output is pinned by
    `samples/expected/<id>/`.
 2. `probeController`: `generic-grbl-inch` gives `.grbl`, the LinuxCNC posts give nil. `ToolChangeProbe.defaults(for:)` on a machine
    with `postIDs: ["generic-grbl-inch"]` gives the GRBL controller; on the Avid machine, Mach4 (unchanged).
 3. `MachineConfigTests.orderedPostsPutsMachinePostsFirst` changes: the Avid machine's `other` is
    `[generic-grbl-mm, generic-grbl-inch, linuxcnc-inch, linuxcnc-mm]` in that order, and the no-machine count is `BuiltInPosts.all.count`.
-4. Free, already looping over `BuiltInPosts.all`: `everyBuiltInIsClean` (editor report), `goldenProgramsPassTheValidator` (both Z
-   modes), `builtInProfilesRoundTripJSON` (ids unique).
+4. Free, already looping over `BuiltInPosts.all`: `everyBuiltInIsClean` (editor report), `unchangedDuplicatesAreClean` (posts and
+   validates the GRBL touch-plate sequence in G20 for the first time), `goldenProgramsPassTheValidator` (both Z modes),
+   `builtInProfilesRoundTripJSON` (ids unique). A failure in any of them is a finding, not a test to adjust.
 5. `scripts/check-samples.sh --update` adds three `samples/expected/<id>/` folders and changes no existing file (`git status`).
 
 ## Docs
 
-- `docs/DECISIONS.md`: one `more-posts` entry (decisions 1–4, 6, 7).
+- `docs/DECISIONS.md`: one `more-posts` entry (decisions 1–4, 6; that a user file with a new built-in's id keeps overriding it,
+  by the existing rule).
 - `README.md:117`: reword so it doesn't enumerate the posts.
-- Help (`.machines` topic): the proven posts, decision 4's machine sentence, decision 2's Mach3 sentence, decision 7's M7 line.
-- `docs/PARITY.md`: `io-post-processors` test list only if a test file is added (it is: `NewBuiltInPostTests`).
-- No TESTING change: its air cut already applies before the first real cut with any post.
+- Help (`.machines` topic): which posts are proven on a machine; decision 1's one-file-per-tool sentence; decision 4's machine
+  sentence.
+- `TESTING.md` air cut: one line, with a post other than the Avid ones, confirm each tool change pauses and the spindle dwell is
+  seconds.
+- No PARITY change (no new test file).
