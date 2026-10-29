@@ -16,10 +16,11 @@ public struct PostDraftReport: Sendable {
 
     /// The templates of a post and the placeholders each one is rendered with.
     public enum Template: String, CaseIterable, Sendable {
-        case preamble, footer, toolChange, toolLengthOffset, spindleOn, pause, dwell
+        case prelude, preamble, footer, toolChange, toolLengthOffset, spindleOn, pause, dwell
 
         public var label: String {
             switch self {
+            case .prelude: return "Program start"
             case .preamble: return "Preamble"
             case .footer: return "Footer"
             case .toolChange: return "Tool change"
@@ -31,14 +32,15 @@ public struct PostDraftReport: Sendable {
         }
     }
 
-    static let base: Set<String> = ["SAFE_Z", "HOME_X", "HOME_Y", "HOME_Z", "JOB_NAME", "POST_NAME", "POST_VERSION", "SECONDS"]
+    static let base: Set<String> = ["SAFE_Z", "APPROACH_Z", "HOME_X", "HOME_Y", "HOME_Z", "JOB_NAME", "POST_NAME", "POST_VERSION",
+                                    "SECONDS"]
     /// Which placeholders each template can use (`ProgramBuilder.render` and `GCodeWriter.dwell`); the editor shows them.
     public static let placeholders: [Template: Set<String>] = [
-        .preamble: base, .footer: base,
+        .prelude: base, .preamble: base, .footer: base,
         .toolChange: base.union(["T", "TOOL_NAME", "S"]), .toolLengthOffset: base.union(["T", "TOOL_NAME", "S"]),
         .spindleOn: base.union(["T", "TOOL_NAME", "S"]),
         .pause: base.union(["MESSAGE", "STOP"]),
-        .dwell: ["SECONDS", "MILLISECONDS"],
+        .dwell: ["SECONDS", "MILLISECONDS", "DECIMAL_SECONDS"],
     ]
     /// User text: allowed only inside a comment on its line, where a tool name like "1/4 Z-2" cannot write a Z word.
     static let textPlaceholders: Set<String> = ["JOB_NAME", "POST_NAME", "POST_VERSION", "TOOL_NAME", "MESSAGE"]
@@ -69,7 +71,7 @@ public struct PostDraftReport: Sendable {
             out.append("The file extension may hold only letters and digits.")
         }
         let templates: [(Template?, String, [String])] = [
-            (.preamble, "Preamble", p.preamble), (.footer, "Footer", p.footer), (.toolChange, "Tool change", p.toolChange),
+            (.prelude, "Program start", p.prelude ?? []), (.preamble, "Preamble", p.preamble), (.footer, "Footer", p.footer), (.toolChange, "Tool change", p.toolChange),
             (.toolLengthOffset, "Tool length offset", [p.toolLengthOffset]), (.spindleOn, "Spindle on", [p.spindleOn]),
             (.pause, "Pause", p.pause ?? []), (.dwell, "Dwell", [p.dwell]),
             (nil, "Spindle off", [p.spindleOff]), (nil, "Rapid", [p.rapid]), (nil, "Linear", [p.linear]),
@@ -100,13 +102,16 @@ public struct PostDraftReport: Sendable {
             out.append("Arc tolerance must be between half a digit (\(NumberFormat.compact(halfDigit, maxDecimals: 8))) and "
                        + "\(NumberFormat.compact(maxTolerance, maxDecimals: 4)) \(p.units.abbreviation).")
         }
+        let noSpeed = BuiltInPosts.family(of: p.id).map(BuiltInPosts.noSpindleSpeedIDs.contains) ?? false
         let codes: [(String, String, String)] = [
             (p.rapid, #"^[Gg]0*0$"#, "Rapid must be G0"), (p.linear, #"^[Gg]0*1$"#, "Linear must be G1"),
             (p.arcCW, #"^[Gg]0*2$"#, "Arc CW must be G2"), (p.arcCCW, #"^[Gg]0*3$"#, "Arc CCW must be G3"),
             (p.spindleOff, #"^[Mm]0*5$"#, "Spindle off must be M5"),
-            (p.spindleOn, #"^([Mm]0*3 [Ss]\{S\}|[Ss]\{S\} [Mm]0*3)$"#, "Spindle on must be M3 S{S}"),
-            (p.dwell, #"^([Gg]0*4 [Pp]\{(SECONDS|MILLISECONDS)\}|[Pp]\{(SECONDS|MILLISECONDS)\} [Gg]0*4)$"#,
-             "Dwell must be G4 P{SECONDS} or G4 P{MILLISECONDS}"),
+            // A family whose controller takes its speed elsewhere (ShopBot's M3 is a switch, #106) may write M3 alone.
+            (p.spindleOn, noSpeed ? #"^([Mm]0*3|[Mm]0*3 [Ss]\{S\}|[Ss]\{S\} [Mm]0*3)$"# : #"^([Mm]0*3 [Ss]\{S\}|[Ss]\{S\} [Mm]0*3)$"#,
+             "Spindle on must be M3 S{S}"),
+            (p.dwell, #"^([Gg]0*4 [Pp]\{(SECONDS|MILLISECONDS)\}|[Pp]\{(SECONDS|MILLISECONDS)\} [Gg]0*4|[Gg]0*4 [Xx]\{DECIMAL_SECONDS\}|[Xx]\{DECIMAL_SECONDS\} [Gg]0*4)$"#,
+             "Dwell must be G4 P{SECONDS}, G4 P{MILLISECONDS} or G4 X{DECIMAL_SECONDS}"),
         ]
         for (value, pattern, message) in codes where value.range(of: pattern, options: .regularExpression) == nil {
             out.append("\(message) (found \"\(value)\").")
@@ -167,12 +172,19 @@ public struct PostDraftReport: Sendable {
         let validator = GCodeValidator(profile: post, job: job.job, units: job.units)
         let parsed = GCodeParser.parse(text)
         let found = validator.validate(toolpaths: job.toolpaths) + validator.validate(gcode: text)
-        for issue in found where !Self.isAllowedLift(issue, parsed: parsed) {
+        let noSpeed = BuiltInPosts.family(of: post.id).map(BuiltInPosts.noSpindleSpeedIDs.contains) ?? false
+        for issue in found where !Self.isAllowedLift(issue, parsed: parsed) && !(noSpeed && Self.isNoSpeed(issue)) {
             issues.append(issue)
             problems.append(label + "The sample program: \(issue.description)")
         }
         problems += Self.stopProblems(text: text, parsed: parsed).map { label + $0 }
         return text
+    }
+
+    /// A family that sets no speed (`BuiltInPosts.noSpindleSpeedIDs`) starts the spindle with M3 alone, which the validator
+    /// rightly warns about at every export; its sample may carry that warning.
+    static func isNoSpeed(_ issue: GCodeIssue) -> Bool {
+        issue.severity == .warning && issue.message.hasPrefix("Spindle started (M3/M4) with no speed")
     }
 
     /// The one warning a sample may carry: a coordinate shift on a block that is exactly `G53 G0 Z0` (a lift to the top of

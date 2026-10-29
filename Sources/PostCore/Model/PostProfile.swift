@@ -9,6 +9,9 @@ import Foundation
 /// Numeric placeholders are formatted with `decimals`.
 public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     public enum CommentStyle: String, Codable, Sendable { case parentheses, semicolon }
+    /// The units words a controller reads. nil is G20/G21; Syntec's 900M reads G70/G71 instead (#110). One case only, so no
+    /// file can spell out the default and a built-in recognised by value never drifts.
+    public enum UnitsCodes: String, Codable, Sendable { case g70g71 }
     public enum ArcOutput: String, Codable, Sendable {
         /// G2/G3 with I J relative to the arc start (Mach default, GRBL).
         case incrementalIJ
@@ -69,11 +72,17 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// need it: the probe sequence is written in code for that controller. Built-in posts leave it nil and are recognised by
     /// value (`BuiltInPosts.probeController(for:)`), so their bytes do not change.
     public var controller: ToolChangeProbe.Controller?
+    /// Lines written before anything else, never numbered: a program wrapper (`%`, an O number) that a Fanuc-style controller
+    /// wants first (#99 item 2). nil = none; an empty list is read as nil (`normalized`).
+    public var prelude: [String]?
+    /// The units words (nil = G20/G21).
+    public var unitsCodes: UnitsCodes?
     /// The highest version of a post's JSON layout this LoftLine reads. A project or file whose copy has a higher version is
     /// refused, never read with fields or placeholders dropped. Raise it when a reader that drops a new field or placeholder
     /// could post different G-code (`controller` does not: without it a post cannot probe), and say in
-    /// `requiredSchemaVersion` which content needs it. 2: `{MILLISECONDS}` in the dwell template.
-    public static let currentSchemaVersion = 2
+    /// `requiredSchemaVersion` which content needs it. 2: `{MILLISECONDS}` in the dwell template. 3: `prelude`, `unitsCodes`,
+    /// `{DECIMAL_SECONDS}` or `{APPROACH_Z}`.
+    public static let currentSchemaVersion = 3
     /// Always 1 in memory: a post is written with `requiredSchemaVersion` (`toJSON`, `snapshot`) and read back as 1, so the
     /// version never takes part in value equality (`BuiltInPosts.probeController` recognises a built-in by value).
     @SchemaVersion public var schemaVersion: Int = 1
@@ -116,6 +125,7 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     public var normalized: PostProfile {
         var p = self
         if p.pause?.isEmpty == true { p.pause = nil }
+        if p.prelude?.isEmpty == true { p.prelude = nil }
         return p
     }
 
@@ -133,7 +143,12 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     }
 
     /// "G20" or "G21".
-    public var unitsCode: String { units == .inch ? "G20" : "G21" }
+    public var unitsCode: String {
+        switch unitsCodes {
+        case .g70g71: return units == .inch ? "G70" : "G71"
+        case nil: return units == .inch ? "G20" : "G21"
+        }
+    }
 
     public func comment(_ text: String) -> String {
         let text = Self.asciiOnly(text)
@@ -170,9 +185,17 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         return try enc.encode(stamped)
     }
 
-    /// The oldest layout version that can read this post without posting different G-code: 2 for a dwell in milliseconds
-    /// (an older LoftLine leaves `{MILLISECONDS}` in the text), else 1, which every LoftLine since `schemaVersion` reads.
-    public var requiredSchemaVersion: Int { dwell.contains("{MILLISECONDS}") ? 2 : 1 }
+    /// The oldest layout version that can read this post without posting different G-code: 3 for a program wrapper, G70/G71,
+    /// `{DECIMAL_SECONDS}` or `{APPROACH_Z}` (an older LoftLine drops the field or prints the placeholder), 2 for a dwell in
+    /// milliseconds (it leaves `{MILLISECONDS}` in the text), else 1, which every LoftLine since `schemaVersion` reads.
+    public var requiredSchemaVersion: Int {
+        let templates = (prelude ?? []) + preamble + toolChange + [toolLengthOffset, spindleOn, dwell] + footer + (pause ?? [])
+        if prelude?.isEmpty == false || unitsCodes != nil
+            || templates.contains(where: { $0.contains("{DECIMAL_SECONDS}") || $0.contains("{APPROACH_Z}") }) {
+            return 3
+        }
+        return dwell.contains("{MILLISECONDS}") ? 2 : 1
+    }
 
     /// This post as it is written: its version is what its content needs, not what it was read with.
     private var stamped: PostProfile {
@@ -219,10 +242,64 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// The longest dwell a program may hold (spin-up or toolpath): an hour. Beyond it `{MILLISECONDS}` could print `INF`.
     public static let maxDwellSeconds = 3600.0
 
-    /// The dwell template's values: `{SECONDS}` (3 s → `3`) and `{MILLISECONDS}` (3 s → `3000`; whole, `%.0f`), for a
-    /// controller whose `G4 P` is milliseconds (MASSO, NcStudio, UCCNC by default; #99 item 1).
+    /// The dwell template's values: `{SECONDS}` (3 s → `3`), `{MILLISECONDS}` (3 s → `3000`; whole, `%.0f`), for a
+    /// controller whose `G4 P` is milliseconds (MASSO, NcStudio, UCCNC by default; #99 item 1), and `{DECIMAL_SECONDS}` (3 s →
+    /// `3.000`, always a dot), for Syntec's `G4 X`, the one dwell word its manual does not leave to a machine setting (#110).
     public func dwellValues(seconds: Double) -> [String: String] {
-        ["SECONDS": NumberFormat.compact(seconds), "MILLISECONDS": NumberFormat.fixed(seconds * 1000, decimals: 0)]
+        ["SECONDS": NumberFormat.compact(seconds), "MILLISECONDS": NumberFormat.fixed(seconds * 1000, decimals: 0),
+         "DECIMAL_SECONDS": NumberFormat.fixed(seconds, decimals: 3)]
+    }
+
+    /// Whether a dwell of `seconds` is written: it must be positive and print as a non-zero number in the dwell template (below
+    /// 0.0005 s every placeholder prints zero, which Syntec's X does not accept). The writer and the validator's toolpath check
+    /// both ask this, so a dwell the program leaves out is never counted as one.
+    public func writesDwell(seconds: Double) -> Bool {
+        guard seconds > 0 else { return false }
+        return dwellValues(seconds: seconds).filter { dwell.contains("{\($0.key)}") }.allSatisfy { (Double($0.value) ?? 1) != 0 }
+    }
+
+    /// Why this post would write what its built-in family's controller misreads, or nil. Checked by the builder like
+    /// `dwellProblem`, so a copy read from a file, which never passes the editor, is covered:
+    /// - a family keeps its built-in's units words (a Syntec copy writing G20/G21 would be 25.4 times off on a 900M);
+    /// - ShopBot runs only the first G word on a line (`BuiltInPosts.oneGWordIDs`);
+    /// - a Syntec or Haas tool length line (`BuiltInPosts.approachToolLengthIDs`) is `G43`, `H{T}` and `Z{APPROACH_Z}`: it runs
+    ///   at the tool change's unknown X Y, before the climb to the approach height, and without G43 H their M6 leaves the old
+    ///   length in place.
+    public var postProblem: String? {
+        guard let family = BuiltInPosts.family(of: id), let builtIn = BuiltInPosts.profile(id: family) else { return nil }
+        if unitsCodes != builtIn.unitsCodes {
+            return builtIn.unitsCodes == .g70g71
+                ? "This controller reads G70/G71 for units (its manual lists no G20/G21): keep the units words G70/G71."
+                : "This controller reads G20/G21 for units: keep the units words G20/G21."
+        }
+        if BuiltInPosts.oneGWordIDs.contains(family) {
+            let lines = (prelude ?? []) + preamble + toolChange + (useToolLengthOffset ? [toolLengthOffset] : [])
+                + [spindleOn, dwell] + footer + pauseLines
+            if lines.contains(where: { GCodeParser.parse($0).blocks.contains { $0.values("G").count > 1 } }) {
+                return "ShopBot runs only the first G word on a line: write one G word per line."
+            }
+        }
+        if useToolLengthOffset, BuiltInPosts.approachToolLengthIDs.contains(family) {
+            let words = Set(toolLengthOffset.uppercased().split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init))
+            if !words.isSuperset(of: ["G43", "H{T}", "Z{APPROACH_Z}"]) {
+                return "The tool length line must be G0 G43 Z{APPROACH_Z} H{T}: it runs at the tool change's unknown X Y, before "
+                    + "the climb to the approach height, and without G43 H the new tool's length is not applied."
+            }
+        }
+        return nil
+    }
+
+    /// The dwell word and placeholder a dwell template writes (`G4 P{SECONDS}` → `P`, `SECONDS`), case, spacing and leading
+    /// zeros ignored, either order; nil when it is not a G4 and one placeholder word.
+    public static func dwellForm(_ template: String) -> (letter: Character, placeholder: String)? {
+        let words = template.uppercased().split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+        guard words.count == 2, let g = words.firstIndex(where: { $0.range(of: #"^G0*4$"#, options: .regularExpression) != nil })
+        else { return nil }
+        let word = words[1 - g]
+        guard let m = word.range(of: #"^[A-Z]\{(SECONDS|MILLISECONDS|DECIMAL_SECONDS)\}$"#, options: .regularExpression) else {
+            return nil
+        }
+        return (word.first!, String(word[word.index(word.startIndex, offsetBy: 2)..<word.index(before: m.upperBound)]))
     }
 
     /// Why this post's dwell would be written in the wrong unit, or nil. The editor lists it; the builder refuses to post with
@@ -231,20 +308,39 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         if !(0...Self.maxDwellSeconds).contains(spindleDwellSeconds) {
             return "The spindle dwell must be 0 to \(Int(Self.maxDwellSeconds)) s."
         }
+        let form = Self.dwellForm(dwell)
+        // Syntec reads a whole X, or any P, in its smallest time unit: seconds with a dot go after X, and X takes only them.
+        if dwell.contains("{DECIMAL_SECONDS}"), form?.letter != "X" {
+            return "{DECIMAL_SECONDS} goes with X: write the dwell as G4 X{DECIMAL_SECONDS} (a P word is read in the "
+                + "controller's own time unit)."
+        }
+        if form?.letter == "X", form?.placeholder != "DECIMAL_SECONDS" {
+            return "A whole X dwell is read in the controller's smallest time unit: write the dwell as G4 X{DECIMAL_SECONDS}."
+        }
         let millis = dwell.contains("{MILLISECONDS}")
-        // A built-in family's dwell unit is its own template's, both ways (#107, #108, #103).
+        // A built-in family's dwell form is its own template's, both ways (#107, #108, #103, #110).
         if let family = BuiltInPosts.family(of: id), let builtIn = BuiltInPosts.profile(id: family),
-           builtIn.dwell.contains("{MILLISECONDS}") != millis {
-            return millis
-                ? "This controller reads G4 P in seconds: a dwell in milliseconds would wait a thousand times too long."
-                : "This controller reads G4 P in milliseconds: a dwell in seconds would last a thousandth as long."
+           let own = Self.dwellForm(builtIn.dwell), form.map({ $0 != own }) ?? true {
+            switch own.placeholder {
+            case "MILLISECONDS":
+                return "This controller reads G4 P in milliseconds: a dwell in seconds would last a thousandth as long."
+            case "DECIMAL_SECONDS":
+                return "This controller reads a whole P in its smallest time unit: write the dwell as G4 X{DECIMAL_SECONDS}."
+            default:
+                return millis
+                    ? "This controller reads G4 P in seconds: a dwell in milliseconds would wait a thousand times too long."
+                    : "This controller reads G4 P in seconds: write the dwell as G4 P{SECONDS}."
+            }
         }
-        guard millis else { return nil }
-        let others = preamble + toolChange + [toolLengthOffset, spindleOn] + footer + pauseLines
+        guard form.map({ $0 != ("P", "SECONDS") }) ?? millis else { return nil }
+        let others = (prelude ?? []) + preamble + toolChange + [toolLengthOffset, spindleOn] + footer + pauseLines
         if others.contains(where: { $0.contains("{SECONDS}") }) {
-            return "A post that dwells in milliseconds cannot also write {SECONDS}: a G4 P{SECONDS} elsewhere would dwell milliseconds."
+            return millis
+                ? "A post that dwells in milliseconds cannot also write {SECONDS}: a G4 P{SECONDS} elsewhere would dwell milliseconds."
+                : "A post whose dwell is not G4 P{SECONDS} cannot also write {SECONDS}: a G4 P{SECONDS} elsewhere would be read in "
+                    + "another time unit."
         }
-        if controller == .grbl {
+        if millis, controller == .grbl {
             return "This controller reads G4 P in seconds: a dwell in milliseconds would wait a thousand times too long."
         }
         return nil

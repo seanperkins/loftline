@@ -3,7 +3,7 @@ import Foundation
 
 /// Built-in controllers' own limits, checked at export beside `ToolChangeZ`, by built-in family (`BuiltInPosts.family(of:)`), so
 /// an edited or duplicated copy keeps them: coolant on a controller without it (#105, #114), MASSO's tool numbers and its lack
-/// of G43 (#107), UCCNC's profile units (#108) and Centroid's dwell range (#103).
+/// of G43 (#107), UCCNC's profile units (#108), Centroid's dwell range (#103) and T0 on Syntec and Haas (#110, #111).
 public enum DialectChecks {
     public static let uccncUnitsWarningPrefix = "UCCNC takes units from its profile"
     static let massoIDs: Set<String> = [BuiltInPosts.massoG3Inch.id, BuiltInPosts.massoG3MM.id]
@@ -37,6 +37,10 @@ public enum DialectChecks {
             if profile.useToolLengthOffset, BuiltInPosts.noToolLengthOffsetIDs.contains(family) {
                 error("MASSO has no G43, and it skips a line with a word it does not know: turn Tool Length Offset off.")
             }
+        }
+        if BuiltInPosts.noToolZeroIDs.contains(family), posting.contains(where: { $0.tool.number == 0 }) {
+            let names = posting.filter { $0.tool.number == 0 }.map(\.name)
+            error("T0 selects no tool and G43 H0 applies no length offset on this controller: renumber T0 for \(unique(names)).")
         }
         if uccncIDs.contains(family) {
             let units = profile.units == .inch ? "inches" : "millimetres"

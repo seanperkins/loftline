@@ -155,6 +155,12 @@ final class PostEditorModel: ObservableObject {
     }
 
     /// An empty pause text area means the default pause (nil), never an empty template that stops nothing.
+    /// The program start: no lines is none (`PostProfile.normalized`).
+    func setPreludeText(_ text: String) {
+        let l = Self.lines(text)
+        draft?.prelude = l.isEmpty ? nil : l
+    }
+
     func setPauseText(_ text: String) {
         let l = Self.lines(text)
         draft?.pause = l.isEmpty ? nil : l

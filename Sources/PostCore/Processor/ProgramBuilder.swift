@@ -38,7 +38,7 @@ struct ProgramBuilder {
         for tp in active where !tp.moves.allSatisfy(Self.isFinite) {
             throw PostError.nonFiniteMove(toolpath: tp.name)
         }
-        if let problem = profile.dwellProblem { throw PostError.invalidPost(problem) }
+        if let problem = profile.dwellProblem ?? profile.postProblem { throw PostError.invalidPost(problem) }
         for tp in active {
             for case .dwell(let s) in tp.moves where s > PostProfile.maxDwellSeconds {
                 throw PostError.dwellTooLong(toolpath: tp.name, seconds: s)
@@ -47,6 +47,7 @@ struct ProgramBuilder {
         let probe = try probeForBuild(active)
 
         var w = GCodeWriter(profile: profile, safeZ: coords.safeZ)
+        for line in render(profile.prelude ?? []) { w.raw(line) }
         if profile.headerComments { writeHeader(into: &w, toolpaths: active) }
         w.code(profile.unitsCode)
         for line in render(profile.preamble) { w.code(line) }
@@ -110,6 +111,7 @@ struct ProgramBuilder {
     private func baseValues() -> [String: String] {
         [
             "SAFE_Z": fmt(coords.safeZ),
+            "APPROACH_Z": fmt(approachZ),
             "HOME_X": fmt(setup.home.x),
             "HOME_Y": fmt(setup.home.y),
             "HOME_Z": fmt(coords.homeZ),
@@ -246,6 +248,9 @@ struct ProgramBuilder {
         }
         let units = profile.units
         func probe(_ m: String) -> PostError { .probe(m) }
+        if let family = BuiltInPosts.family(of: profile.id), BuiltInPosts.oneGWordIDs.contains(family) {
+            throw probe("ShopBot runs only the first G word on a line: touch-plate tool changes cannot be written for it.")
+        }
         if job.job.isTwoSided {
             throw probe("A two-sided job cannot be posted with touch-plate tool changes yet: the touch-off spot is not defined per side. "
                         + "Switch probing off in Preferences > Machines to post it.")

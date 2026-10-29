@@ -224,7 +224,8 @@ struct ProbeSequenceChecker {
             return Effect(consumed: consumed, z: plateZ)
         }
 
-        // Moves after the zero.
+        // Moves after the zero. A dwell's X (Syntec's `G4 X`) is a time, not a position.
+        if b.has("G", 4) { return Effect() }
         let m = motionOf(b, motion)
         let bz = b.value("Z")
         if spotGate {

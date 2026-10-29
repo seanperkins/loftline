@@ -145,6 +145,10 @@ struct PostProcessorsSheet: View {
                     NumberField("Max RPM", value: value(\.maxRPM, 0), unit: "RPM")
                 }
                 Section("Program") {
+                    TemplateArea(label: "Program start (before the header; never numbered)",
+                                 text: Binding(get: { (model.draft?.prelude ?? []).joined(separator: "\n") },
+                                               set: { model.setPreludeText($0) }))
+                    caption(.prelude)
                     TemplateArea(label: "Preamble", text: lines(\.preamble)); caption(.preamble)
                     TemplateArea(label: "Tool change", text: lines(\.toolChange)); caption(.toolChange)
                     Toggle("Use the tool length offset", isOn: value(\.useToolLengthOffset, false))
