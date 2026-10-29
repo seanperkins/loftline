@@ -3,7 +3,7 @@ import Foundation
 
 /// Built-in controllers' own limits, checked at export beside `ToolChangeZ`, by built-in family (`BuiltInPosts.family(of:)`), so
 /// an edited or duplicated copy keeps them: coolant on a controller without it (#105, #114), MASSO's tool numbers and its lack
-/// of G43 (#107), UCCNC's profile units (#108), Centroid's dwell range (#103) and T0 on Syntec and Haas (#110, #111).
+/// of G43 (#107), UCCNC's profile units (#108), Centroid's dwell range (#103), Haas's longest dwell and T0 on Syntec and Haas (#110, #111).
 public enum DialectChecks {
     public static let uccncUnitsWarningPrefix = "UCCNC takes units from its profile"
     static let massoIDs: Set<String> = [BuiltInPosts.massoG3Inch.id, BuiltInPosts.massoG3MM.id]
@@ -11,6 +11,9 @@ public enum DialectChecks {
     static let centroidIDs: Set<String> = [BuiltInPosts.centroidInch.id, BuiltInPosts.centroidMM.id]
     /// CNC12's documented dwell range, seconds.
     static let centroidDwell = 0.01...327.67
+    static let haasIDs: Set<String> = [BuiltInPosts.haasInch.id, BuiltInPosts.haasMM.id]
+    /// Haas's programming workbook's G04 maximum, seconds.
+    static let haasMaxDwell = 1000.0
 
     public static func issues(toolpaths: [Toolpath], profile: PostProfile) -> [GCodeIssue] {
         guard let family = BuiltInPosts.family(of: profile.id) else { return [] }
@@ -55,6 +58,15 @@ public enum DialectChecks {
             let names = outside + (spinUp > 0 && !centroidDwell.contains(spinUp) ? ["the spindle start (the post's dwell)"] : [])
             if !names.isEmpty {
                 error("CNC12 documents dwells of 0.01 to 327.67 s: change the dwell of \(unique(names)).")
+            }
+        }
+        if haasIDs.contains(family) {
+            let over = posting.filter { tp in
+                tp.moves.contains { if case .dwell(let s) = $0 { return s > haasMaxDwell }; return false }
+            }.map(\.name)
+            let names = over + (profile.spindleDwellSeconds > haasMaxDwell ? ["the spindle start (the post's dwell)"] : [])
+            if !names.isEmpty {
+                error("Haas documents dwells of up to 1000 s: change the dwell of \(unique(names)).")
             }
         }
         return out

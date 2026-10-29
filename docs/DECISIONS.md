@@ -1056,9 +1056,10 @@
   family only), `G4 P` seconds, M0 tool change, no helical arcs, no coolant (M8 is output switch 3), no mm post (the feed unit
   under G21 is unknown). Syntec follows its 900M manual: G70/G71, `G4 X` seconds with a dot (a whole P is the machine's smallest
   time unit, which can make a 3 s spin-up 0.3 s), `T M6`, `G0 G43 Z{APPROACH_Z} H{T}` (a bare `G43 H` may move Z at once, and
-  safe Z could be below a clamp at the tool change's X Y); `%`/`O1000` and parentheses comments from Autodesk's post. Haas rests
-  on search-result text of its own pages (they refuse automated fetches) and Autodesk's post: `%`/`O01000`, `G4 P`
-  milliseconds (a wrong reading fails long, where forced-dot seconds would fail short), `T M6`, the same G43 line. Both: G54
+  safe Z could be below a clamp at the tool change's X Y); `%`/`O1000` and parentheses comments from Autodesk's post. Haas follows
+  its Mill Programming Workbook (G04: "If the P has no fraction part, the delay is in milliseconds") and Autodesk's post:
+  `%`/`O01000`, `G4 P` whole milliseconds, a dwell longer than the workbook's 1000 s refused at export (`DialectChecks`),
+  `T M6`, the same G43 line. Both: G54
   in the preamble, T0 refused, Air writes M8 (flood). The posts carry the generic envelope and 0–24,000 rpm (a Haas spindle
   tops out lower: the 18,000 rpm fixtures and samples would otherwise be refused, and a machine narrows it). No built-in
   machine: the dealer figures conflict, and a project takes the first machine that lists its post.

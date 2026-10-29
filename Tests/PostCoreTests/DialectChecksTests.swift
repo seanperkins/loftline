@@ -85,6 +85,25 @@ import Testing
         #expect(errors(slowSpinUp, [tooled(1)]).contains { $0.contains("327.67") })
     }
 
+    /// Haas's programming workbook gives G04 a maximum of P1000.0 seconds (#111).
+    @Test func haasDwellsStayUnderItsDocumentedMaximum() {
+        func dwelling(_ s: Double) -> Toolpath {
+            var tp = tooled(1)
+            tp.moves.append(.dwell(seconds: s))
+            return tp
+        }
+        var copy = BuiltInPosts.haasMM
+        copy.id = "haas-mm-custom-2"
+        for p in [BuiltInPosts.haasInch, copy] {
+            #expect(errors(p, [dwelling(1001)]).contains { $0.contains("1000 s") }, "\(p.id)")
+            #expect(errors(p, [dwelling(3), dwelling(1000)]).isEmpty, "\(p.id)")
+            var slowSpinUp = p
+            slowSpinUp.spindleDwellSeconds = 1200
+            #expect(errors(slowSpinUp, [tooled(1)]).contains { $0.contains("spindle start") }, "\(p.id)")
+        }
+        #expect(errors(BuiltInPosts.syntecMM, [dwelling(1001)]).isEmpty)
+    }
+
     @Test func aDuplicateKeepsItsCoolantRule() {
         var p = BuiltInPosts.carbideMotionMM
         p.id = "carbide-motion-mm-custom-3"
