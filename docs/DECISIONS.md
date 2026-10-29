@@ -1063,3 +1063,23 @@
   in the preamble, T0 refused, Air writes M8 (flood). The posts carry the generic envelope and 0–24,000 rpm (a Haas spindle
   tops out lower: the 18,000 rpm fixtures and samples would otherwise be refused, and a machine narrows it). No built-in
   machine: the dealer figures conflict, and a project takes the first machine that lists its post.
+- **apostrophe-comments — A third comment style, `'` to the end of the line (#109, #99 item 5).** `PostProfile.CommentStyle`
+  gains `.apostrophe`. The parser takes the comments a program's controller reads (`GCodeParser.Comments`, no default, so
+  every caller is named): `.standard` (`( … )` and `;`) for every other post, exactly as before; `.apostrophe` (`'` only, so a
+  `(`, `)` or `;` is text, and in that mode stray text is an export **error**, since the controller would run it); `.any` for
+  the file preview, which does not know the dialect. Treating `'` as a comment everywhere was declined: the validator would
+  then pass a `'` comment to Mach4 or GRBL, which are not documented to read one. `postProblem` refuses an apostrophe post
+  that declares a probing controller (any post, before the family guard) and locks only the apostrophe boundary per family
+  (an Avid copy set to `;` stays allowed). Schema version 4: an older LoftLine checks the version first, so it refuses such a
+  file as newer rather than as malformed. The editor's placeholder scan, the writer's numbering, the reader's tool names and
+  the export sheet's deepest cut read comments the same way. `postProblem` is now also listed by the editor's draft report,
+  once, instead of as a failed sample.
+- **ncstudio-post — NcStudio (mm) (#109).** From the NcStudio Programming Manual, 6th ed. R6 (2016; Weihong's site refuses
+  this machine, so the ncstudio.ru copy; the review read R6.1 and found it agrees): `'` comments (the PDF prints `’`;
+  Autodesk's post writes ASCII `'`, as this one does), `G4 P` milliseconds, `G90 G40 G49 G54` (no G94 or G17 in its index),
+  M0 for a tool change (no M06), M0 for an optional stop too (M01 is listed, but no Optional Stop switch is described), arcs as
+  lines (I/J are start-relative only when a controller mode the program cannot set is on), mm only (F is mm/min), M8 but no
+  M7 (mist is refused at export, from `BuiltInPosts.noMistReasons`, which also gives the editor's sample Air), `G43` off and,
+  in a copy that turns it on, `G0 G43 Z{APPROACH_Z} H{T}` with T1–T7 (H00–H07, H00 applies none). A copy keeps `'`, mm and
+  lines (`postProblem`). A user post or duplicate whose id was already `ncstudio-mm` or `ncstudio-mm-custom-<n>` joins the
+  family and its rules, as Syntec and Haas ids did. No dwell cap (none documented), no built-in machine.

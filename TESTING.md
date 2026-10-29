@@ -248,6 +248,12 @@ and accepts parentheses comments, time the spin-up dwell (`G4 X3.000`, 3 s), and
 if it waits 50 minutes P is read in seconds: stop and report it), check the arc centres (I/J) in the graphics view, and that
 `G0 G43 Z… H…` after `T M6` moves up, not down.
 
+**NcStudio:** before the first cut, check the program loads and its `'` lines show as comments (the manual prints a curly
+`’`; the post writes the plain ASCII `'`), and that a `( … )` comment is refused or ignored if you write one by hand. Time the
+spin-up dwell (`G4 P3000`, 3 s). Check `M0` waits for Cycle Start at each tool change and at a pause marked optional (the post
+writes M0 there; M01 needs a switch the manual does not describe). Check the rapid speed: the manual says an F on a G00 line
+sets the rapid rate, and the post writes none. Then air-cut.
+
 **GRBL machines (Genmitsu, LongMill):** check `$30` against the machine's Max RPM in LoftLine (duplicate the built-in machine
 to set it), and `$31` against its lowest speed, before trusting any S word.
 
