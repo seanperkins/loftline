@@ -48,7 +48,8 @@ import Testing
         let store = PostProfileStore(directory: folder())
         _ = try store.saveNew(shop())
         #expect(throws: (any Error).self) { try store.saveNew(shop(), keepingID: true) }
-        #expect(store.load().profiles.filter { $0.id.hasPrefix("shop") }.count == 1)
+        // The built-in ShopBot post shares the prefix: count the saved files only.
+        #expect(store.load().profiles.filter { $0.id.hasPrefix("shop") && BuiltInPosts.profile(id: $0.id) == nil }.count == 1)
     }
 
     @Test func failedNewSaveLeavesNoFile() throws {
