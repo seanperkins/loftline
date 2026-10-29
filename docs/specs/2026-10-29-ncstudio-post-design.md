@@ -170,12 +170,11 @@ OpenSBP (#113).
   error message depends on the fragment** (Skeptic E, G, F, I).
 - **The end-to-end apostrophe test uses a non-family id** (Auditor, Skeptic C).
 - **The reader's M0 segments and `P > 100` guess stay deferred** (Auditor, again). The "read back with no warnings" test proves
-  only that the program parses; previewing an imported multi-tool NcStudio file shows one tool, a known limitation filed as its
-  own issue.
+  only that the program parses; previewing an imported multi-tool NcStudio file shows one tool, a known limitation filed as #126.
 - **R6.1:** the auditor read the R6.1 copy on Weihong's storage and found it agrees on comments, dwell, M00 and H registers;
   it times out from this machine, so R6 stays the cited source.
 - **The reader's M0 tool change does not start a new segment, and its `P > 100` dwell guess** (Auditor) are outside this
   change. Both already affect every M0 post and every millisecond post; the guess was ruled to stay in the previous batch.
 - **A text placeholder outside a comment is refused only in the editor, not at build** (Skeptic). This is outside this change:
-  it applies to every comment style today. It is filed as its own issue.
+  it applies to every comment style today. It is filed as #125.
 - **The manual gate is met**: the R6 copy confirms each row, and the post is no longer blocked.
