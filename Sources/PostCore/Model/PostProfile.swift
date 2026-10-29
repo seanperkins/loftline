@@ -258,17 +258,35 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         return dwellValues(seconds: seconds).filter { dwell.contains("{\($0.key)}") }.allSatisfy { (Double($0.value) ?? 1) != 0 }
     }
 
-    /// Why this post's tool length line would move below the approach height, or nil: a family whose G43 line moves Z
-    /// (`BuiltInPosts.approachToolLengthIDs`, Syntec and Haas) must move to `Z{APPROACH_Z}`, since the line runs at the tool
-    /// change's unknown X Y, before the climb to the approach height. Checked by the builder like `dwellProblem`, so a copy read
-    /// from a file is covered.
+    /// Why this post would write what its built-in family's controller misreads, or nil. Checked by the builder like
+    /// `dwellProblem`, so a copy read from a file, which never passes the editor, is covered:
+    /// - a family keeps its built-in's units words (a Syntec copy writing G20/G21 would be 25.4 times off on a 900M);
+    /// - ShopBot runs only the first G word on a line (`BuiltInPosts.oneGWordIDs`);
+    /// - a Syntec or Haas tool length line (`BuiltInPosts.approachToolLengthIDs`) is `G43`, `H{T}` and `Z{APPROACH_Z}`: it runs
+    ///   at the tool change's unknown X Y, before the climb to the approach height, and without G43 H their M6 leaves the old
+    ///   length in place.
     public var postProblem: String? {
-        guard useToolLengthOffset, let family = BuiltInPosts.family(of: id), BuiltInPosts.approachToolLengthIDs.contains(family)
-        else { return nil }
-        let words = toolLengthOffset.uppercased().split(whereSeparator: { $0 == " " || $0 == "\t" })
-        guard !words.contains("Z{APPROACH_Z}") else { return nil }
-        return "The tool length line must move to Z{APPROACH_Z}: it runs at the tool change's unknown X Y, before the climb to "
-            + "the approach height."
+        guard let family = BuiltInPosts.family(of: id), let builtIn = BuiltInPosts.profile(id: family) else { return nil }
+        if unitsCodes != builtIn.unitsCodes {
+            return builtIn.unitsCodes == .g70g71
+                ? "This controller reads G70/G71 for units (its manual lists no G20/G21): keep the units words G70/G71."
+                : "This controller reads G20/G21 for units: keep the units words G20/G21."
+        }
+        if BuiltInPosts.oneGWordIDs.contains(family) {
+            let lines = (prelude ?? []) + preamble + toolChange + (useToolLengthOffset ? [toolLengthOffset] : [])
+                + [spindleOn, dwell] + footer + pauseLines
+            if lines.contains(where: { GCodeParser.parse($0).blocks.contains { $0.values("G").count > 1 } }) {
+                return "ShopBot runs only the first G word on a line: write one G word per line."
+            }
+        }
+        if useToolLengthOffset, BuiltInPosts.approachToolLengthIDs.contains(family) {
+            let words = Set(toolLengthOffset.uppercased().split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init))
+            if !words.isSuperset(of: ["G43", "H{T}", "Z{APPROACH_Z}"]) {
+                return "The tool length line must be G0 G43 Z{APPROACH_Z} H{T}: it runs at the tool change's unknown X Y, before "
+                    + "the climb to the approach height, and without G43 H the new tool's length is not applied."
+            }
+        }
+        return nil
     }
 
     /// The dwell word and placeholder a dwell template writes (`G4 P{SECONDS}` → `P`, `SECONDS`), case, spacing and leading

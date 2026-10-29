@@ -108,4 +108,36 @@ import Testing
         #expect(DialectChecks.issues(toolpaths: [tp], profile: BuiltInPosts.avidMach4Inch).isEmpty)
         #expect(DialectChecks.issues(toolpaths: PostFixtures.toolpaths(), profile: BuiltInPosts.haasInch).isEmpty)
     }
+
+    // MARK: Final review fixes
+
+    @Test func aSyntecCopyKeepsG70AndG71() throws {
+        let c = copy(BuiltInPosts.syntecInch) { $0.unitsCodes = nil }
+        #expect(c.postProblem?.contains("G70/G71") == true)
+        let read = try PostProfile.fromJSON(c.toJSON())
+        #expect(throws: PostError.self) { try TemplatePostProcessor(profile: read).post(PostFixtures.postJob()) }
+    }
+
+    @Test func aSyntecOrHaasToolLengthLineMustApplyTheOffset() {
+        for line in ["G0 Z{APPROACH_Z}", "G0 G43 Z{APPROACH_Z}", "G0 Z{APPROACH_Z} H{T}"] {
+            #expect(copy(BuiltInPosts.haasInch) { $0.toolLengthOffset = line }.postProblem != nil, "\(line)")
+        }
+    }
+
+    /// Their M6 does not apply the new tool's length (G43 does): with the offset off, a second tool gets the warning.
+    @Test func aSyntecOrHaasCopyWithoutTheOffsetIsWarnedOnASecondTool() {
+        for base in [BuiltInPosts.syntecMM, BuiltInPosts.haasInch] {
+            #expect(ToolChangeZ.setsZ(base))
+            #expect(!ToolChangeZ.setsZ(copy(base) { $0.useToolLengthOffset = false }), "\(base.id)")
+        }
+    }
+
+    @Test func aShopBotCopyWritesOneGWordPerLine() throws {
+        let c = copy(BuiltInPosts.shopbotGCodeInch) { $0.preamble = ["G20 G90"] }
+        #expect(c.postProblem?.contains("first G word") == true)
+        #expect(throws: PostError.self) { try TemplatePostProcessor(profile: c).post(PostFixtures.postJob()) }
+        #expect(copy(BuiltInPosts.shopbotGCodeInch) { $0.preamble = ["G90", "G17"] }.postProblem == nil)
+        // The editor lists it, so the copy cannot be saved.
+        #expect(PostDraftReport.make(c).problems.contains { $0.contains("first G word") })
+    }
 }

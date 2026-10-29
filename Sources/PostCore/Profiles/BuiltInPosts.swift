@@ -307,9 +307,10 @@ public enum BuiltInPosts {
     /// built-in family writes M0 for an optional stop: GRBL ignores M1, TinyG treats it as M0, Buildbotics resumes it at once,
     /// and Carbide Motion, MASSO, UCCNC and Centroid document no switch. A built-in added later defaults to M0.
     public static let optionalStopIDs: Set<String> = [avidMach4Inch.id, avidMach4MM.id, linuxCNCInch.id, linuxCNCMM.id]
-    /// Built-in families whose M6 changes the tool without applying its length (MASSO has no G43; Centroid's needs G43 H):
-    /// a second tool resumes at the old Z, so `ToolChangeZ` does not count their M6.
-    public static let toolChangeKeepsZIDs: Set<String> = [massoG3Inch.id, massoG3MM.id, centroidInch.id, centroidMM.id]
+    /// Built-in families whose M6 changes the tool without applying its length (MASSO has no G43; Centroid's, Syntec's and
+    /// Haas's need G43 H): a second tool resumes at the old Z, so `ToolChangeZ` does not count their M6.
+    public static let toolChangeKeepsZIDs: Set<String> = [massoG3Inch.id, massoG3MM.id, centroidInch.id, centroidMM.id,
+                                                          syntecInch.id, syntecMM.id, haasInch.id, haasMM.id]
     /// Built-in families whose M3 is a switch with no speed (ShopBot, #106): their spindle line is M3 alone, and the speed
     /// warning every export gives is expected (the post editor's sample allows it).
     public static let noSpindleSpeedIDs: Set<String> = [shopbotGCodeInch.id]

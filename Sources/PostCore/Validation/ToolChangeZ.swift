@@ -21,7 +21,7 @@ public enum ToolChangeZ {
             + "Save one file per tool (Toolpaths > Save All Toolpaths), and load and touch off each tool before starting its file.")
     }
 
-    private static func setsZ(_ p: PostProfile) -> Bool {
+    static func setsZ(_ p: PostProfile) -> Bool {
         if case .on? = p.toolChangeProbe { return true }
         let family = BuiltInPosts.family(of: p.id)
         // MASSO has no G43: its offset line is skipped, so it sets nothing (DialectChecks reports it).
