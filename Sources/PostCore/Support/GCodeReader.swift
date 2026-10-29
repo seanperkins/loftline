@@ -32,10 +32,12 @@ public enum GCodeReader {
     ///   - startZ: Z assumed before the program first sets Z (e.g. the job's safe Z).
     ///   - absoluteArcCentres: default arc-centre mode before any G90.1/G91.1 (Mach4 keeps this
     ///     as a controller setting; incremental is the common default).
+    ///   - comments: the comments the program's controller reads; `.any` when it is not known (a file being previewed).
     public static func read(_ text: String, units: LengthUnit, assumedUnits: LengthUnit? = nil,
-                            startZ: Double, absoluteArcCentres: Bool = false) -> Result {
-        let parsed = GCodeParser.parse(text, comments: .standard)
-        let comments = toolComments(text)
+                            startZ: Double, absoluteArcCentres: Bool = false,
+                            comments commentSyntax: GCodeParser.Comments = .any) -> Result {
+        let parsed = GCodeParser.parse(text, comments: commentSyntax)
+        let comments = toolComments(text, comments: commentSyntax)
         var warnings: [String] = []
         func warn(_ line: Int, _ s: String) { if warnings.count < 200 { warnings.append("Line \(line): \(s)") } }
         for g in parsed.garbage.prefix(20) { warn(g.line, "unrecognised text '\(g.text)'") }
@@ -253,8 +255,15 @@ public enum GCodeReader {
         return out
     }
 
-    /// Text of the first comment on each line that has an M6 (the tool's name in most posts).
-    static func toolComments(_ text: String) -> [Int: String] {
+    /// Text of the first comment on each line that has an M6 (the tool's name in most posts): the first comment opener on the
+    /// line, as the parser reads `comments`.
+    static func toolComments(_ text: String, comments: GCodeParser.Comments) -> [Int: String] {
+        let parentheses = comments != .apostrophe
+        let endOfLine: Set<Character> = switch comments {
+        case .standard: [";"]
+        case .apostrophe: ["'"]
+        case .any: [";", "'"]
+        }
         var out: [Int: String] = [:]
         var lineNo = 0
         var lastComment: String?
@@ -262,10 +271,13 @@ public enum GCodeReader {
             lineNo += 1
             let s = String(raw)
             var comment: String?
-            if let o = s.firstIndex(of: "("), let c = s[o...].firstIndex(of: ")") {
-                comment = String(s[s.index(after: o)..<c]).trimmingCharacters(in: .whitespaces)
-            } else if let semi = s.firstIndex(of: ";") {
-                comment = String(s[s.index(after: semi)...]).trimmingCharacters(in: .whitespaces)
+            if let o = s.firstIndex(where: { (parentheses && $0 == "(") || endOfLine.contains($0) }) {
+                let rest = s[s.index(after: o)...]
+                if s[o] == "(" {
+                    if let c = rest.firstIndex(of: ")") { comment = String(rest[..<c]).trimmingCharacters(in: .whitespaces) }
+                } else {
+                    comment = String(rest).trimmingCharacters(in: .whitespaces)
+                }
             }
             let code = s.uppercased().replacingOccurrences(of: " ", with: "")
             if code.range(of: #"M0?6(?![0-9])"#, options: .regularExpression) != nil {

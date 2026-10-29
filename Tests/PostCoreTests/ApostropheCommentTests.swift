@@ -89,6 +89,26 @@ import Testing
         #expect(ToolChangeZ.setsZ(p) == false)
     }
 
+    @Test func anApostropheLineIsNeverNumbered() throws {
+        let p = apostrophePost { $0.lineNumbers = true }
+        let lines = try TemplatePostProcessor(profile: p).post(PostFixtures.postJob()).split(separator: "\n").map(String.init)
+        #expect(lines.contains { $0.hasPrefix("'") })
+        #expect(lines.allSatisfy { !($0.hasPrefix("N") && $0.contains("'")) })
+        var w = GCodeWriter(profile: p, safeZ: 1)
+        w.code("   ' x")
+        #expect(w.lines == ["' x"])
+    }
+
+    @Test func theReaderSkipsAnApostropheComment() {
+        let r = GCodeReader.read("G21\nG0 Z5\n' T2 X5\nG1 X10 F100\n", units: .millimeter, startZ: 5)
+        let moves = r.segments.flatMap(\.moves)
+        #expect(!moves.contains { $0.target?.x == 5 })
+        #expect(r.segments.allSatisfy { $0.toolNumber != 2 })
+        #expect(GCodeReader.toolComments("' Change to Tool: Vbit\nT3 M6", comments: .any)[2] == "Change to Tool: Vbit")
+        #expect(GCodeReader.toolComments("(a) ' b T3 M6", comments: .any)[1] == "a")
+        #expect(GCodeReader.toolComments("T3 M6 ' b (a)", comments: .any)[1] == "b (a)")
+    }
+
     @Test func anApostrophePostNeedsSchemaFour() throws {
         #expect(apostrophePost().requiredSchemaVersion == 4)
         let both = apostrophePost {
