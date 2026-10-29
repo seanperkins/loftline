@@ -288,7 +288,7 @@ struct ProgramBuilder {
     /// A message the controller shows while it waits at the next `M0` (the pause's form, so Mach4 displays it).
     private func message(_ text: String, into w: inout GCodeWriter) {
         let safe = TemplateRenderer.commentSafe(text)
-        w.code(profile.commentStyle == .semicolon ? "; \(safe)" : "(MSG, \(safe))")
+        w.code(profile.commentStyle.message(safe))
     }
 
     /// Park, swap by hand, move to the touch-off spot, probe the plate, set Z, clear the plate, re-enter from above.

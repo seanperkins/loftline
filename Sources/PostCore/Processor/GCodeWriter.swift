@@ -47,7 +47,7 @@ struct GCodeWriter {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         // A `%` is the tape's end marker, never a numbered block.
-        if trimmed.hasPrefix("(") || trimmed.hasPrefix(";") || trimmed == "%" || !profile.lineNumbers {
+        if trimmed.hasPrefix("(") || trimmed.hasPrefix(";") || trimmed.hasPrefix("'") || trimmed == "%" || !profile.lineNumbers {
             lines.append(trimmed)
         } else {
             lineNumber += 10

@@ -198,7 +198,7 @@ enum GCodeExporter {
             issues += validator.validate(gcode: text)
             return GCodeExportResult(text: text, issues: GCodeIssue.merged(issues), errorMessage: nil, toolpathCount: toolpaths.count,
                                      deepestCut: DeepestCut.find(in: text, job: doc.job, units: doc.units,
-                                                                postUnits: profile.units))
+                                                                postUnits: profile.units, comments: profile.parserComments))
         } catch PostError.notImplemented(let what) {
             return GCodeExportResult(text: nil, issues: issues,
                                      errorMessage: "\(what) is not available in this build yet.",

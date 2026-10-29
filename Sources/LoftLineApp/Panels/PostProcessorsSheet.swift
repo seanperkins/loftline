@@ -120,6 +120,7 @@ struct PostProcessorsSheet: View {
                     Picker("Comments", selection: value(\.commentStyle, .parentheses)) {
                         Text("( … )").tag(PostProfile.CommentStyle.parentheses)
                         Text("; …").tag(PostProfile.CommentStyle.semicolon)
+                        Text("' …").tag(PostProfile.CommentStyle.apostrophe)
                     }
                 }
                 Section("Motion") {

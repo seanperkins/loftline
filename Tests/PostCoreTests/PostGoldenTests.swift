@@ -116,6 +116,8 @@ private let newPosts = [
     NewPost(id: "haas-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: fanucPreamble,
             toolChange: ["M5", "(\(endMillChange))", "T1 M6", "G0 G43 Z5.080 H1"],
             footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M30", "%"]),
+    NewPost(id: "ncstudio-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: ["G90", "G40", "G49", "G54"],
+            toolChange: ["M5", "' \(endMillChange)", "M0"], footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M30"]),
 ]
 
 private func contains(_ lines: [String], run: [String]) -> Bool {
@@ -173,6 +175,9 @@ private let newPostNumbers = [
                  x: 48, y: 48, z: 6, spoilboard: 0.05, rapid: 360, feed: 240, minRPM: 0, maxRPM: 24000, arcTolerance: 0.0005)]
   + genericController("syntec", "Syntec", mmFeedDecimals: 1, rapid: (1500, 38100), feed: (1500, 38100))
   + genericController("haas", "Haas", mmFeedDecimals: 1, rapid: (710, 18034), feed: (650, 16510))
+  + [PostNumbers(id: "ncstudio-mm", name: "NcStudio (mm)", ext: "nc", units: .millimeter, decimals: 3, feedDecimals: 0,
+                 x: 1219.2, y: 1219.2, z: 152.4, spoilboard: 1.27, rapid: 5080, feed: 5080, minRPM: 0, maxRPM: 24000,
+                 arcTolerance: 0.01)]
 
 /// MASSO, UCCNC and Centroid run on many machines: the posts carry the LinuxCNC posts' generic envelope, which a machine replaces.
 private func genericController(_ id: String, _ name: String, mmFeedDecimals: Int, rapid: (Double, Double) = (200, 5080),
@@ -199,7 +204,7 @@ func massoUCCNCCentroidWriteOnlyTheirCodes(_ id: String) throws {
         var job = PostFixtures.postJob(zZero: mode)
         job.toolpaths[0].pauseAfter = PauseStep(message: "Flip (side)", isOptionalStop: true)
         let text = try TemplatePostProcessor(profile: p).post(job)
-        let blocks = GCodeParser.parse(text).blocks
+        let blocks = GCodeParser.parse(text, comments: .standard).blocks
         for (letter, value) in forbidden {
             #expect(!blocks.contains { $0.has(letter, value) }, "\(id) \(mode) writes \(letter)\(value)")
         }
@@ -227,7 +232,7 @@ func bbAndCarbideWriteOnlyTheirCodes(_ id: String) throws {
         : [("G", 94), ("G", 80), ("G", 91.1), ("M", 30), ("M", 1)]
     for mode in [ZZeroMode.materialTop, .spoilboard] {
         let text = try post(p, zZero: mode)
-        let blocks = GCodeParser.parse(text).blocks
+        let blocks = GCodeParser.parse(text, comments: .standard).blocks
         for (letter, value) in forbidden {
             #expect(!blocks.contains { $0.has(letter, value) }, "\(id) \(mode) writes \(letter)\(value)")
         }
@@ -240,7 +245,7 @@ func bbAndCarbideWriteOnlyTheirCodes(_ id: String) throws {
 @Test(arguments: ["othermill-inch", "othermill-mm"]) func othermillWritesNoForbiddenCode(_ id: String) throws {
     let p = try #require(BuiltInPosts.profile(id: id))
     let text = try post(p)
-    let blocks = GCodeParser.parse(text).blocks
+    let blocks = GCodeParser.parse(text, comments: .standard).blocks
     let forbidden: [(Character, Double)] = [("G", 40), ("G", 49), ("G", 91.1), ("G", 43), ("G", 53), ("G", 28),
                                             ("M", 7), ("M", 8), ("M", 9), ("M", 4)]
     for (letter, value) in forbidden {
@@ -259,7 +264,7 @@ func bbAndCarbideWriteOnlyTheirCodes(_ id: String) throws {
         .rapid(to: Vec3(2, 3, mc.safeZ)),
     ])
     let job = PostJob(name: "H", units: .inch, job: PostFixtures.job(zZero: .materialTop), toolpaths: [tp])
-    let blocks = GCodeParser.parse(try TemplatePostProcessor(profile: p).post(job)).blocks
+    let blocks = GCodeParser.parse(try TemplatePostProcessor(profile: p).post(job), comments: .standard).blocks
     #expect(!blocks.contains { $0.has("G", 2) || $0.has("G", 3) })
 }
 
@@ -272,7 +277,7 @@ func bbAndCarbideWriteOnlyTheirCodes(_ id: String) throws {
     var arcs = 0
     for file in files {
         var at = Vec2(0, 0)
-        for b in GCodeParser.parse(try String(contentsOf: file, encoding: .utf8)).blocks {
+        for b in GCodeParser.parse(try String(contentsOf: file, encoding: .utf8), comments: .standard).blocks {
             let end = Vec2(b.value("X") ?? at.x, b.value("Y") ?? at.y)
             if b.has("G", 2) || b.has("G", 3), let i = b.value("I"), let j = b.value("J") {
                 let sweep = ArcGeometry.sweep(from: at, to: end, center: Vec2(at.x + i, at.y + j), clockwise: b.has("G", 2))

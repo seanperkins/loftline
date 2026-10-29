@@ -24,7 +24,7 @@ import Testing
         let p = try #require(BuiltInPosts.profile(id: id))
         for mode in [ZZeroMode.materialTop, .spoilboard] {
             let (text, lines) = try program(p, zZero: mode)
-            let blocks = GCodeParser.parse(text).blocks
+            let blocks = GCodeParser.parse(text, comments: .standard).blocks
             switch id {
             case "shopbot-gcode-inch":
                 #expect(lines.contains { $0.hasSuffix(" G4 P3") })

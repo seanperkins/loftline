@@ -17,6 +17,14 @@ import Testing
         "\(units)\nG90\nG0 Z0.5\nG0 X0 Y0\nG0 Z-5\nG0 Z0.1\nG1 Z\(z) F20\nG1 X2 F60\nG0 Z0.5\nM30\n"
     }
 
+    /// An apostrophe post's comment is not read as code (#109).
+    @Test func readsAnApostrophePostsProgramAsItsValidatorDoes() throws {
+        let text = "G21\nG90\nG0 Z5\nG1 Z-3 F100 ' Z-9\nG0 Z5\nM30\n"
+        let cut = try #require(DeepestCut.find(in: text, job: job(.materialTop), units: .millimeter, postUnits: .millimeter,
+                                               comments: .apostrophe))
+        #expect(approx(cut.machineZ, -3))
+    }
+
     @Test func readsTheDeepestFeedMoveAndNotTheRapids() throws {
         let cut = try #require(DeepestCut.find(in: program(cutZ: -0.77), job: job(.materialTop), units: .inch))
         #expect(approx(cut.machineZ, -0.77))

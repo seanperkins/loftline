@@ -43,8 +43,10 @@ public enum PostSampleJob {
             .linear(to: Vec3(3.5, 2.5, shallow), feed: f(60)),
             .rapid(to: Vec3(3.5, 2.5, safe)),
         ])
-        // A controller with no coolant (the Othermill, Carbide Motion) gets a sample without one.
-        c.coolant = BuiltInPosts.family(of: draft.id).flatMap { BuiltInPosts.noCoolantReasons[$0] } == nil ? .mist : nil
+        // A controller with no coolant (the Othermill, Carbide Motion) gets a sample without one; one with no mist (NcStudio), Air.
+        let family = BuiltInPosts.family(of: draft.id)
+        c.coolant = family.flatMap { BuiltInPosts.noCoolantReasons[$0] } != nil ? nil
+            : family.flatMap { BuiltInPosts.noMistReasons[$0] } != nil ? .air : .mist
         return PostJob(name: "Sample", units: .inch, job: setup, toolpaths: [a, b, c])
     }
 

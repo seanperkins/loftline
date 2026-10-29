@@ -31,14 +31,16 @@ import Testing
         // Syntec and Haas need 3: a program wrapper, G70/G71, {DECIMAL_SECONDS} and {APPROACH_Z}.
         let versionTwo: Set<String> = ["masso-g3-inch", "masso-g3-mm", "uccnc-inch", "uccnc-mm"]
         let versionThree: Set<String> = ["syntec-inch", "syntec-mm", "haas-inch", "haas-mm"]
+        // NcStudio needs 4: its ' comments.
+        let versionFour: Set<String> = ["ncstudio-mm"]
         for p in BuiltInPosts.all {
-            let v = JSONValue.number(versionThree.contains(p.id) ? 3 : versionTwo.contains(p.id) ? 2 : 1)
+            let v = JSONValue.number(versionFour.contains(p.id) ? 4 : versionThree.contains(p.id) ? 3 : versionTwo.contains(p.id) ? 2 : 1)
             #expect(object(try p.snapshot())["schemaVersion"] == v, "\(p.id)")
             #expect(object(try JSONDecoder().decode(JSONValue.self, from: p.toJSON()))["schemaVersion"] == v, "\(p.id)")
         }
-        #expect(versionTwo.union(versionThree).allSatisfy { BuiltInPosts.profile(id: $0) != nil })
+        #expect(versionTwo.union(versionThree).union(versionFour).allSatisfy { BuiltInPosts.profile(id: $0) != nil })
         #expect(object(try BuiltInMachines.all[0].snapshot())["schemaVersion"] == .number(1))
-        #expect(PostProfile.currentSchemaVersion == 3 && MachineDefinition.currentSchemaVersion == 1)
+        #expect(PostProfile.currentSchemaVersion == 4 && MachineDefinition.currentSchemaVersion == 1)
     }
 
     /// The written version is what the content needs (#99 item 1): an older LoftLine would print `{MILLISECONDS}` literally.

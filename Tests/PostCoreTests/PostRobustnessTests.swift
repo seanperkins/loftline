@@ -96,7 +96,7 @@ private func warns(_ issues: [GCodeIssue], _ fragment: String) -> Bool {
     let issues = validate("G20\nG90\nG0 Z0.2\nM3 S18000\nG0 X1 Y1\n/G1 Z-1 F20\nG0 Z0.2\nM5\nM30\n")
     #expect(issues.contains { $0.severity == .error && $0.message.contains("below the allowed depth") }, "\(issues)")
     #expect(issues.contains { $0.severity == .warning && $0.line == 6 && $0.message.contains("Block Delete") })
-    #expect(GCodeParser.parse("/G1 Z-1").blocks.first?.value("Z") == -1)
+    #expect(GCodeParser.parse("/G1 Z-1", comments: .standard).blocks.first?.value("Z") == -1)
 }
 
 /// The file preview draws a block-delete line as if Block Delete were off, and says so (#120).

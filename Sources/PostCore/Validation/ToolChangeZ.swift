@@ -27,6 +27,6 @@ public enum ToolChangeZ {
         // MASSO has no G43: its offset line is skipped, so it sets nothing (DialectChecks reports it).
         if p.useToolLengthOffset, !(family.map { BuiltInPosts.noToolLengthOffsetIDs.contains($0) } ?? false) { return true }
         if let family, BuiltInPosts.toolChangeKeepsZIDs.contains(family) { return false }
-        return GCodeParser.parse(p.toolChange.joined(separator: "\n")).blocks.contains { $0.has("M", 6) }
+        return GCodeParser.parse(p.toolChange.joined(separator: "\n"), comments: p.parserComments).blocks.contains { $0.has("M", 6) }
     }
 }

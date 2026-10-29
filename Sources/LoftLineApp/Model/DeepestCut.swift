@@ -17,9 +17,11 @@ struct DeepestCut: Equatable {
 
     /// The lowest non-rapid move in `gcode`, or nil when the program never cuts. `postUnits`: the units of the post that wrote
     /// it, assumed until the program states G20/G21 (a Syntec program states G70/G71, which the reader does not apply).
-    static func find(in gcode: String, job: JobSetup, units: LengthUnit, postUnits: LengthUnit? = nil) -> DeepestCut? {
+    /// `comments`: the post's (`PostProfile.parserComments`), so the program is read as the validator reads it.
+    static func find(in gcode: String, job: JobSetup, units: LengthUnit, postUnits: LengthUnit? = nil,
+                     comments: GCodeParser.Comments = .any) -> DeepestCut? {
         let coords = MachineCoordinates(job: job)
-        let program = GCodeReader.read(gcode, units: units, assumedUnits: postUnits, startZ: coords.safeZ)
+        let program = GCodeReader.read(gcode, units: units, assumedUnits: postUnits, startZ: coords.safeZ, comments: comments)
         var lowest: Double?
         for segment in program.segments {
             for move in segment.moves where !move.isRapid {
