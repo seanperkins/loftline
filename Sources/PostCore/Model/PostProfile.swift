@@ -287,7 +287,7 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// - a Syntec, Haas or NcStudio tool length line (`BuiltInPosts.approachToolLengthIDs`) is `G43`, `H{T}` and
     ///   `Z{APPROACH_Z}`: it runs at the tool change's unknown X Y, before the climb to the approach height, and without G43 H
     ///   the new tool's length is not applied;
-    /// - NcStudio (`BuiltInPosts.ncstudioIDs`) stays in millimetres (it reads F in mm/min) with arcs as lines (its I/J mode is a
+    /// - NcStudio (`BuiltInPosts.ncstudioIDs`) stays in millimeters (it reads F in mm/min) with arcs as lines (its I/J mode is a
     ///   controller setting).
     public var postProblem: String? {
         if commentStyle == .apostrophe, controller != nil {
@@ -313,7 +313,7 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
             }
         }
         if BuiltInPosts.ncstudioIDs.contains(family) {
-            if units != .millimeter { return "NcStudio reads F in mm/min whatever G20 says: keep the post in millimetres." }
+            if units != .millimeter { return "NcStudio reads F in mm/min whatever G20 says: keep the post in millimeters." }
             if arcOutput != .linearize {
                 return "NcStudio's I/J mode is a controller setting the program cannot set: keep arcs as lines."
             }

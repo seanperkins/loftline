@@ -32,7 +32,7 @@ import Testing
         #expect(copy { $0.commentStyle = .parentheses }.postProblem?.contains("reads only ' comments") == true)
         #expect(copy { $0.arcOutput = .incrementalIJ }.postProblem?.contains("keep arcs as lines") == true)
         #expect(copy { $0.arcOutput = .absoluteIJ }.postProblem?.contains("keep arcs as lines") == true)
-        #expect(copy { $0.units = .inch }.postProblem?.contains("keep the post in millimetres") == true)
+        #expect(copy { $0.units = .inch }.postProblem?.contains("keep the post in millimeters") == true)
         #expect(copy { $0.useToolLengthOffset = true; $0.toolLengthOffset = "G43 H{T}" }.postProblem?.contains("G43") == true)
         #expect(copy { $0.useToolLengthOffset = true }.postProblem == nil)
     }

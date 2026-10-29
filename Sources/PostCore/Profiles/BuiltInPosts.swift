@@ -332,7 +332,7 @@ public enum BuiltInPosts {
     /// Built-in families whose tool length line must move to `Z{APPROACH_Z}` (Syntec, Haas, NcStudio): it runs at the tool change's
     /// unknown X Y, before the climb to the approach height (`PostProfile.postProblem`).
     public static let approachToolLengthIDs: Set<String> = [syntecInch.id, syntecMM.id, haasInch.id, haasMM.id, ncstudioMM.id]
-    /// The NcStudio family (#109): `'` comments, arcs as lines and millimetres are kept by every copy (`PostProfile.postProblem`).
+    /// The NcStudio family (#109): `'` comments, arcs as lines and millimeters are kept by every copy (`PostProfile.postProblem`).
     public static let ncstudioIDs: Set<String> = [ncstudioMM.id]
     /// Built-in families where T0 selects no tool and G43 H0 applies no length (Syntec, Haas).
     public static let noToolZeroIDs: Set<String> = [syntecInch.id, syntecMM.id, haasInch.id, haasMM.id]
