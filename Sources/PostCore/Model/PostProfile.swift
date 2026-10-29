@@ -8,7 +8,20 @@ import Foundation
 ///   {HOME_Z}, {JOB_NAME}, {POST_NAME}, {POST_VERSION}
 /// Numeric placeholders are formatted with `decimals`.
 public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
-    public enum CommentStyle: String, Codable, Sendable { case parentheses, semicolon }
+    /// How a comment is written: `( … )`, `;` to the end of the line, or `'` to the end of the line (NcStudio, #109).
+    public enum CommentStyle: String, Codable, Sendable {
+        case parentheses, semicolon, apostrophe
+
+        /// A message the controller shows while it waits at the next stop: a parenthesised MSG comment (Mach3/4 and LinuxCNC
+        /// display it; GRBL senders echo the comment when they stop), or a plain comment in a post that writes `;` or `'`.
+        public func message(_ text: String) -> String {
+            switch self {
+            case .parentheses: return "(MSG, \(text))"
+            case .semicolon: return "; \(text)"
+            case .apostrophe: return "' \(text)"
+            }
+        }
+    }
     /// The units words a controller reads. nil is G20/G21; Syntec's 900M reads G70/G71 instead (#110). One case only, so no
     /// file can spell out the default and a built-in recognised by value never drifts.
     public enum UnitsCodes: String, Codable, Sendable { case g70g71 }
@@ -81,8 +94,8 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// refused, never read with fields or placeholders dropped. Raise it when a reader that drops a new field or placeholder
     /// could post different G-code (`controller` does not: without it a post cannot probe), and say in
     /// `requiredSchemaVersion` which content needs it. 2: `{MILLISECONDS}` in the dwell template. 3: `prelude`, `unitsCodes`,
-    /// `{DECIMAL_SECONDS}` or `{APPROACH_Z}`.
-    public static let currentSchemaVersion = 3
+    /// `{DECIMAL_SECONDS}` or `{APPROACH_Z}`. 4: the `apostrophe` comment style (an older LoftLine cannot decode it).
+    public static let currentSchemaVersion = 4
     /// Always 1 in memory: a post is written with `requiredSchemaVersion` (`toJSON`, `snapshot`) and read back as 1, so the
     /// version never takes part in value equality (`BuiltInPosts.probeController` recognises a built-in by value).
     @SchemaVersion public var schemaVersion: Int = 1
@@ -112,11 +125,9 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         self.rapidRate = rapidRate; self.maxFeed = maxFeed; self.pause = pause
     }
 
-    /// Spindle off, the message where the controller shows it, then the stop. The message is a
-    /// parenthesised MSG comment (Mach3/4 and LinuxCNC display it; GRBL senders echo the comment
-    /// when they stop), or a `;` comment in a post that writes its comments that way.
+    /// Spindle off, the message where the controller shows it (`CommentStyle.message`), then the stop.
     public static func defaultPause(for style: CommentStyle) -> [String] {
-        ["M5", style == .semicolon ? "; {MESSAGE}" : "(MSG, {MESSAGE})", "{STOP}"]
+        ["M5", style.message("{MESSAGE}"), "{STOP}"]
     }
 
     /// The post as every reader takes it: an empty pause list means the default pause. An empty template would post no stop at
@@ -160,6 +171,9 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         case .semicolon:
             // Brackets too: a parenthesis anywhere locks up some senders (Carbide Motion, #105).
             return "; " + text.replacingOccurrences(of: "(", with: "[").replacingOccurrences(of: ")", with: "]")
+        case .apostrophe:
+            // The comment runs to the end of the line, so a `'` inside it is plain text; brackets as in the other styles.
+            return "' " + text.replacingOccurrences(of: "(", with: "[").replacingOccurrences(of: ")", with: "]")
         }
     }
 
@@ -185,10 +199,12 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         return try enc.encode(stamped)
     }
 
-    /// The oldest layout version that can read this post without posting different G-code: 3 for a program wrapper, G70/G71,
+    /// The oldest layout version that can read this post without posting different G-code: 4 for `'` comments (whatever else
+    /// it holds), 3 for a program wrapper, G70/G71,
     /// `{DECIMAL_SECONDS}` or `{APPROACH_Z}` (an older LoftLine drops the field or prints the placeholder), 2 for a dwell in
     /// milliseconds (it leaves `{MILLISECONDS}` in the text), else 1, which every LoftLine since `schemaVersion` reads.
     public var requiredSchemaVersion: Int {
+        if commentStyle == .apostrophe { return 4 }
         let templates = (prelude ?? []) + preamble + toolChange + [toolLengthOffset, spindleOn, dwell] + footer + (pause ?? [])
         if prelude?.isEmpty == false || unitsCodes != nil
             || templates.contains(where: { $0.contains("{DECIMAL_SECONDS}") || $0.contains("{APPROACH_Z}") }) {

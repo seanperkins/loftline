@@ -38,7 +38,7 @@ import Testing
         }
         #expect(versionTwo.union(versionThree).allSatisfy { BuiltInPosts.profile(id: $0) != nil })
         #expect(object(try BuiltInMachines.all[0].snapshot())["schemaVersion"] == .number(1))
-        #expect(PostProfile.currentSchemaVersion == 3 && MachineDefinition.currentSchemaVersion == 1)
+        #expect(PostProfile.currentSchemaVersion == 4 && MachineDefinition.currentSchemaVersion == 1)
     }
 
     /// The written version is what the content needs (#99 item 1): an older LoftLine would print `{MILLISECONDS}` literally.
