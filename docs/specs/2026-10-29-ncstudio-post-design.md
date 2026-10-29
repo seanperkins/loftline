@@ -22,7 +22,9 @@ byte-identical, and every existing post is validated exactly as today.
 
 Weihong's site resets every connection from this machine (curl, WebFetch and a headless browser, 2026-10-29), so the R6.1
 quotes come from the #109 research. **Gate:** the post (P2) is not encoded until each "to recheck" row is read again in the
-manual itself; the engine part (E1) does not depend on it.
+manual itself (Sean is asked for the PDF); the engine part (E1) does not depend on it. E1 adds no built-in that uses
+`.apostrophe`, so it can merge on its own; if the manual has not arrived when E1 is reviewed, E1 merges alone and P2 waits.
+P2's values are never filled from the #109 quotes as a stopgap.
 
 ## E1. Apostrophe comments (#99 item 5)
 
@@ -33,7 +35,8 @@ manual itself; the engine part (E1) does not depend on it.
   - `.standard` (the default, today's rules): `( … )` and `;` to the end of the line.
   - `.apostrophe`: `'` to the end of the line, and nothing else. `(`, `)` and `;` are not comments, so they are reported as
     unrecognised text (an error in the validator), because NcStudio is not documented to read them.
-  - `.any`: all three, for the previewer.
+  - `.any`: all three, for the previewer. As with `;` today, a `'` or `;` opens a comment only at parenthesis depth 0, and the
+    first of them on the line ends the code: `(Bob's 1/4" bit) T2 M6` is `T2 M6`; `T2 ' (note` is `T2`.
   - `PostProfile.parserComments` gives `.apostrophe` for an apostrophe post, else `.standard`. Every caller that has a post
     passes it: `GCodeValidator`, `PostDraftReport` (the sample run and its stop checks), `ToolChangeZ`, `postProblem`.
 - **Reader.** `GCodeReader.read` parses with `.any` and its tool-name scan reads a `'` comment too. Its callers (the file
@@ -41,7 +44,9 @@ manual itself; the engine part (E1) does not depend on it.
   change. A file holding a `'` used to give "unrecognised text" warnings in the preview; it now reads it as a comment.
 - **Writer.** `GCodeWriter.append` does not number a line that starts with `'`.
 - **Messages.** `defaultPause(for: .apostrophe)` is `["M5", "' {MESSAGE}", "{STOP}"]`; `ProgramBuilder.message` writes
-  `' <text>`.
+  `' <text>`. These two and `comment(_:)` are the only places PostCore writes a comment of its own (checked: every other
+  literal `(` in `Sources/PostCore` is in a built-in's template or in an error message); the probe sequence writes its notes
+  through `message`, and probing refuses for NcStudio (P2) anyway.
 - **Editor.** The draft report's placeholder scan takes the post's style: for `.apostrophe` only a `'` opens a comment, so
   `( {TOOL_NAME} )` in an apostrophe post is "text outside a comment". The Comments picker gains `' …`.
 - **Schema.** `currentSchemaVersion` becomes 4; `requiredSchemaVersion` is 4 for an apostrophe post (an older LoftLine would
@@ -76,11 +81,13 @@ Family rules (by `BuiltInPosts.family(of:)`, so an edited or duplicated copy kee
 ## Testing
 
 - E1, each by a test that fails first: the parser in all three modes (`'` comment; `(`/`;` as garbage in `.apostrophe`; a
-  `'` inside parentheses in `.standard` stays a comment's text); `comment(_:)`; an unnumbered `'` line with line numbers on;
+  `'` inside parentheses in `.standard` stays a comment's text; `(Bob's 1/4" bit) T2 M6` in `.any` reads `T2 M6`); `comment(_:)`; an unnumbered `'` line with line numbers on;
   the default pause and the builder's message; the draft report's scan (`' {TOOL_NAME}` passes, `( {TOOL_NAME} )` fails in an
   apostrophe post and passes in the others); schema 4 on write, and a version-4 file refused by a reader that knows only 3;
   the reader skipping `' T2 X5` and naming the tool from a `'` comment.
-- A post that is the Avid post with `.apostrophe` is posted and validated: no `(` anywhere, every comment starts with `'`.
+- A post that is the Avid post with `.apostrophe` and its tool change's comment written `' Change to Tool: {TOOL_NAME}` is
+  posted and validated with a job holding two tools, a pause, a toolpath dwell and a second side: no `(` or `;` anywhere,
+  every comment starts with `'`, no errors.
 - P2: goldens (both Z-zero modes; mm only), samples (`samples/expected/ncstudio-mm/`), the validator passes them, the family
   rules (mist, TLO T8 and T0, probing) including on a `-custom-1` copy.
 - Every existing golden and sample byte-identical; `scripts/build.sh` and `scripts/test.sh` green.
