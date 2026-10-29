@@ -1037,3 +1037,28 @@
   a new id); `toolChangeKeepsZIDs` (MASSO, Centroid) makes their M6 not count as setting Z; `noCoolantReasons` and
   `DialectChecks` (coolant, MASSO tools and G43, UCCNC units, Centroid dwells). `ToolChangeZ`'s message now says the post "does
   not set Z for the new bit". NcStudio (#109) moves to its own change with the apostrophe comment style it needs.
+
+- **engine-prelude-units — A program wrapper, G70/G71, a dwell in decimal seconds and the approach height in a template (#99
+  items 2, 3, 7, 9, 12).** Spec: docs/specs/2026-10-28-shopbot-syntec-haas-posts-design.md (revision 4; three review rounds and
+  rulings). `prelude` lines are written before the header and never numbered; a `%` line is never numbered anywhere, so a user
+  post with line numbers on and a `%` footer line loses the `N` on that line, the intended fix. `unitsCodes = .g70g71` writes
+  G70/G71; the validator reads them as units only for such a post (on Haas and Fanuc lathes G70 is a cycle), so it adds a
+  reading and weakens no check; the reader warns on them, and the deepest cut reads a program in its post's units.
+  `{DECIMAL_SECONDS}` (three decimals, always a dot) is accepted only after X, and X only with it; a family keeps its built-in's
+  dwell form (word and placeholder), checked when a post is built so a file copy is covered. A dwell that prints as zero is not
+  written, and the validator's hole memory asks the same `writesDwell`. `{APPROACH_Z}` is the approach height's machine Z; a
+  Syntec or Haas copy's tool length line must move to it (`postProblem`). These need schema version 3, which an older LoftLine
+  refuses instead of dropping the wrapper or writing G21 to a Syntec. Not changed: line numbers (start and step 10), feed
+  decimals (the posts use 1), machine-coordinate moves (no post needs G53).
+- **shopbot-syntec-haas-posts — ShopBot G-code (inch), Syntec and Haas posts (#106, #110, #111).** ShopBot follows its User
+  Guide: numbered lines, `G90` alone, one G word per line (probing refuses for the family, since the probe sequence's lines carry
+  several), plain `M3` (a switch; the validator's speed warning stands at export, and the editor's sample allows it for the
+  family only), `G4 P` seconds, M0 tool change, no helical arcs, no coolant (M8 is output switch 3), no mm post (the feed unit
+  under G21 is unknown). Syntec follows its 900M manual: G70/G71, `G4 X` seconds with a dot (a whole P is the machine's smallest
+  time unit, which can make a 3 s spin-up 0.3 s), `T M6`, `G0 G43 Z{APPROACH_Z} H{T}` (a bare `G43 H` may move Z at once, and
+  safe Z could be below a clamp at the tool change's X Y); `%`/`O1000` and parentheses comments from Autodesk's post. Haas rests
+  on search-result text of its own pages (they refuse automated fetches) and Autodesk's post: `%`/`O01000`, `G4 P`
+  milliseconds (a wrong reading fails long, where forced-dot seconds would fail short), `T M6`, the same G43 line. Both: G54
+  in the preamble, T0 refused, Air writes M8 (flood). The posts carry the generic envelope and 0–24,000 rpm (a Haas spindle
+  tops out lower: the 18,000 rpm fixtures and samples would otherwise be refused, and a machine narrows it). No built-in
+  machine: the dealer figures conflict, and a project takes the first machine that lists its post.

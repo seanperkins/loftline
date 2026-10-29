@@ -235,6 +235,19 @@ lines, look right in UCCNC's toolpath view.
 **Centroid CNC12:** before the first cut, read Parameter 2 bit 2 (dwell in milliseconds): it must be off, or the 3 s spin-up is
 3 ms. Then time the spin-up dwell, check `M6` lifts Z and prompts for the tool, and that `;` comments load.
 
+**ShopBot (G-code mode):** before the first cut, open the `.tap` in the control software's Preview (`[SP]`) or convert it
+with the file converter (`[FC]`) and read the `.sbp`: every line should run (numbered), the spindle line is `M3` alone (set the
+router's speed by hand), and the dwell is `G4 P3` (3 s). Check the line numbers of a long program are accepted (its N limit is
+unknown).
+
+**Syntec:** before the first cut, check the controller reads `G70`/`G71` (the 900M manual says so; newer firmware is unknown)
+and accepts parentheses comments, time the spin-up dwell (`G4 X3.000`, 3 s), and check `T M6` stops the spindle and the
+`G0 G43 Z… H…` line moves up to the approach height.
+
+**Haas:** before the first cut, check the program loads with `%` and `O01000` first, time the spin-up dwell (`G4 P3000`, 3 s;
+if it waits 50 minutes P is read in seconds: stop and report it), check the arc centres (I/J) in the graphics view, and that
+`G0 G43 Z… H…` after `T M6` moves up, not down.
+
 **GRBL machines (Genmitsu, LongMill):** check `$30` against the machine's Max RPM in LoftLine (duplicate the built-in machine
 to set it), and `$31` against its lowest speed, before trusting any S word.
 
