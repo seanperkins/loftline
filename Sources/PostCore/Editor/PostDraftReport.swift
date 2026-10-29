@@ -170,7 +170,7 @@ public struct PostDraftReport: Sendable {
             problems.append(label + "The sample cannot be posted: \(error)"); return nil
         }
         let validator = GCodeValidator(profile: post, job: job.job, units: job.units)
-        let parsed = GCodeParser.parse(text)
+        let parsed = GCodeParser.parse(text, comments: post.parserComments)
         let found = validator.validate(toolpaths: job.toolpaths) + validator.validate(gcode: text)
         let noSpeed = BuiltInPosts.family(of: post.id).map(BuiltInPosts.noSpindleSpeedIDs.contains) ?? false
         for issue in found where !Self.isAllowedLift(issue, parsed: parsed) && !(noSpeed && Self.isNoSpeed(issue)) {

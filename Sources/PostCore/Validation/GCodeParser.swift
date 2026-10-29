@@ -18,10 +18,21 @@ public struct GCodeBlock: Hashable, Sendable {
     }
 }
 
-/// Minimal RS-274 tokenizer: strips `( ... )` and `;` comments and `%` lines, and splits address words (letter + signed
+/// Minimal RS-274 tokenizer: strips comments (as `Comments` says) and `%` lines, and splits address words (letter + signed
 /// decimal). Unparseable text is reported. A block-delete line (`/…`) is parsed like any other, since the controller runs it
 /// whenever Block Delete is off (#120), and its line is listed in `blockDeleteLines`.
 public enum GCodeParser {
+    /// Which comments a program's controller reads. No default: a caller that has a post passes its `parserComments`.
+    public enum Comments: Sendable {
+        /// `( … )`, and `;` outside parentheses to the end of the line.
+        case standard
+        /// `'` to the end of the line, and no other comment (NcStudio, #109): `(`, `)` and `;` are text.
+        case apostrophe
+        /// All three, for a program whose controller is unknown (the file preview): `'` and `;` open a comment outside
+        /// parentheses, and the first of them ends the code.
+        case any
+    }
+
     public struct Result: Sendable {
         public var blocks: [GCodeBlock]
         /// (line, text) of fragments that are not valid words.
@@ -30,19 +41,25 @@ public enum GCodeParser {
         public var blockDeleteLines: [Int] = []
     }
 
-    public static func parse(_ text: String) -> Result {
+    public static func parse(_ text: String, comments: Comments) -> Result {
         var blocks: [GCodeBlock] = []
         var garbage: [(Int, String)] = []
         var blockDeleteLines: [Int] = []
         var lineNo = 0
+        let parentheses = comments != .apostrophe
+        let endOfLine: Set<Character> = switch comments {
+        case .standard: [";"]
+        case .apostrophe: ["'"]
+        case .any: [";", "'"]
+        }
         for raw in text.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\n" || $0 == "\r\n" }) {
             lineNo += 1
             var body = ""
             var depth = 0
             for ch in raw {
-                if ch == ";" && depth == 0 { break }
-                if ch == "(" { depth += 1; continue }
-                if ch == ")" { depth = max(0, depth - 1); continue }
+                if endOfLine.contains(ch) && depth == 0 { break }
+                if parentheses, ch == "(" { depth += 1; continue }
+                if parentheses, ch == ")" { depth = max(0, depth - 1); continue }
                 if depth == 0 { body.append(ch) }
             }
             var trimmed = body.trimmingCharacters(in: .whitespaces)

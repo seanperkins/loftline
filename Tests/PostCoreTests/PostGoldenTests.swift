@@ -199,7 +199,7 @@ func massoUCCNCCentroidWriteOnlyTheirCodes(_ id: String) throws {
         var job = PostFixtures.postJob(zZero: mode)
         job.toolpaths[0].pauseAfter = PauseStep(message: "Flip (side)", isOptionalStop: true)
         let text = try TemplatePostProcessor(profile: p).post(job)
-        let blocks = GCodeParser.parse(text).blocks
+        let blocks = GCodeParser.parse(text, comments: .standard).blocks
         for (letter, value) in forbidden {
             #expect(!blocks.contains { $0.has(letter, value) }, "\(id) \(mode) writes \(letter)\(value)")
         }
@@ -227,7 +227,7 @@ func bbAndCarbideWriteOnlyTheirCodes(_ id: String) throws {
         : [("G", 94), ("G", 80), ("G", 91.1), ("M", 30), ("M", 1)]
     for mode in [ZZeroMode.materialTop, .spoilboard] {
         let text = try post(p, zZero: mode)
-        let blocks = GCodeParser.parse(text).blocks
+        let blocks = GCodeParser.parse(text, comments: .standard).blocks
         for (letter, value) in forbidden {
             #expect(!blocks.contains { $0.has(letter, value) }, "\(id) \(mode) writes \(letter)\(value)")
         }
@@ -240,7 +240,7 @@ func bbAndCarbideWriteOnlyTheirCodes(_ id: String) throws {
 @Test(arguments: ["othermill-inch", "othermill-mm"]) func othermillWritesNoForbiddenCode(_ id: String) throws {
     let p = try #require(BuiltInPosts.profile(id: id))
     let text = try post(p)
-    let blocks = GCodeParser.parse(text).blocks
+    let blocks = GCodeParser.parse(text, comments: .standard).blocks
     let forbidden: [(Character, Double)] = [("G", 40), ("G", 49), ("G", 91.1), ("G", 43), ("G", 53), ("G", 28),
                                             ("M", 7), ("M", 8), ("M", 9), ("M", 4)]
     for (letter, value) in forbidden {
@@ -259,7 +259,7 @@ func bbAndCarbideWriteOnlyTheirCodes(_ id: String) throws {
         .rapid(to: Vec3(2, 3, mc.safeZ)),
     ])
     let job = PostJob(name: "H", units: .inch, job: PostFixtures.job(zZero: .materialTop), toolpaths: [tp])
-    let blocks = GCodeParser.parse(try TemplatePostProcessor(profile: p).post(job)).blocks
+    let blocks = GCodeParser.parse(try TemplatePostProcessor(profile: p).post(job), comments: .standard).blocks
     #expect(!blocks.contains { $0.has("G", 2) || $0.has("G", 3) })
 }
 
@@ -272,7 +272,7 @@ func bbAndCarbideWriteOnlyTheirCodes(_ id: String) throws {
     var arcs = 0
     for file in files {
         var at = Vec2(0, 0)
-        for b in GCodeParser.parse(try String(contentsOf: file, encoding: .utf8)).blocks {
+        for b in GCodeParser.parse(try String(contentsOf: file, encoding: .utf8), comments: .standard).blocks {
             let end = Vec2(b.value("X") ?? at.x, b.value("Y") ?? at.y)
             if b.has("G", 2) || b.has("G", 3), let i = b.value("I"), let j = b.value("J") {
                 let sweep = ArcGeometry.sweep(from: at, to: end, center: Vec2(at.x + i, at.y + j), clockwise: b.has("G", 2))

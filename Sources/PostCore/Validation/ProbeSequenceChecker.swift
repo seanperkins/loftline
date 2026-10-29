@@ -51,7 +51,7 @@ struct ProbeSequenceChecker {
         feedTol = 0.5 * pow(10, -Double(profile.feedDecimals)) + 1e-9
         let line = "G17 G40 G49 G80 G90 G94 \(profile.arcOutput == .absoluteIJ ? "G90.1" : "G91.1") \(profile.unitsCode) "
             + "G\(53 + probe.workOffset)"
-        recoveryLine = GCodeParser.parse(line).blocks.first?.words ?? []
+        recoveryLine = GCodeParser.parse(line, comments: .standard).blocks.first?.words ?? []
     }
 
     // MARK: Matching

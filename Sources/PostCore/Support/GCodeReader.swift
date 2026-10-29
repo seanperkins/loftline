@@ -34,7 +34,7 @@ public enum GCodeReader {
     ///     as a controller setting; incremental is the common default).
     public static func read(_ text: String, units: LengthUnit, assumedUnits: LengthUnit? = nil,
                             startZ: Double, absoluteArcCentres: Bool = false) -> Result {
-        let parsed = GCodeParser.parse(text)
+        let parsed = GCodeParser.parse(text, comments: .standard)
         let comments = toolComments(text)
         var warnings: [String] = []
         func warn(_ line: Int, _ s: String) { if warnings.count < 200 { warnings.append("Line \(line): \(s)") } }

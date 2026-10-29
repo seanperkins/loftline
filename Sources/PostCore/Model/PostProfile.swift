@@ -153,6 +153,9 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         return true
     }
 
+    /// The comments this post's controller reads, for every parse of its templates or its programs.
+    public var parserComments: GCodeParser.Comments { commentStyle == .apostrophe ? .apostrophe : .standard }
+
     /// "G20" or "G21".
     public var unitsCode: String {
         switch unitsCodes {
@@ -291,7 +294,7 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         if BuiltInPosts.oneGWordIDs.contains(family) {
             let lines = (prelude ?? []) + preamble + toolChange + (useToolLengthOffset ? [toolLengthOffset] : [])
                 + [spindleOn, dwell] + footer + pauseLines
-            if lines.contains(where: { GCodeParser.parse($0).blocks.contains { $0.values("G").count > 1 } }) {
+            if lines.contains(where: { GCodeParser.parse($0, comments: parserComments).blocks.contains { $0.values("G").count > 1 } }) {
                 return "ShopBot runs only the first G word on a line: write one G word per line."
             }
         }

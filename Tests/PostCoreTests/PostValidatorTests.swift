@@ -144,7 +144,7 @@ private func has(_ issues: [GCodeIssue], _ fragment: String, _ severity: GCodeIs
 }
 
 @Test func parserHandlesCommentsLineNumbersAndCase() {
-    let r = GCodeParser.parse("N10 g1 x1.5 (move) y-2 ; tail\n(only comment)\n%\nT1 M6")
+    let r = GCodeParser.parse("N10 g1 x1.5 (move) y-2 ; tail\n(only comment)\n%\nT1 M6", comments: .standard)
     #expect(r.blocks.count == 2)
     #expect(r.blocks[0].value("X") == 1.5 && r.blocks[0].value("Y") == -2 && r.blocks[0].has("G", 1))
     #expect(r.blocks[1].line == 4 && r.blocks[1].has("M", 6))

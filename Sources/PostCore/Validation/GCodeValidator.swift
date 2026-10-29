@@ -116,12 +116,22 @@ public struct GCodeValidator: Sendable {
     // MARK: G-code
 
     public func validate(gcode: String) -> [GCodeIssue] {
-        let parsed = GCodeParser.parse(gcode)
+        let parsed = GCodeParser.parse(gcode, comments: profile.parserComments)
         var gUnits: LengthUnit?
         var check = MotionChecker(profile: profile, job: job, jobUnits: units, units: profile.units)
         var carried = IssueCollector()
         for g in parsed.garbage {
-            carried.add("garbage", .warning, line: g.line, "Unrecognised text '\(g.text)'")
+            if profile.parserComments == .apostrophe {
+                // A controller that reads only `'` comments runs any other text as code.
+                if ["(", ")", ";"].contains(g.text) {
+                    carried.add("garbage-comment", .error, line: g.line,
+                                "This controller reads only ' comments: '\(g.text)' would be sent to it as code")
+                } else {
+                    carried.add("garbage", .error, line: g.line, "Unrecognised text '\(g.text)' would be sent to the controller as code")
+                }
+            } else {
+                carried.add("garbage", .warning, line: g.line, "Unrecognised text '\(g.text)'")
+            }
         }
         for line in parsed.blockDeleteLines {
             carried.add("block-delete-\(line)", .warning, line: line,
