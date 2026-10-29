@@ -1,6 +1,6 @@
 # NcStudio post, with apostrophe comments
 
-Status: draft, revision 2 (round 1 answered: see "Rulings" at the end). Issue: #109 (NcStudio / Weihong); engine gap #99
+Status: approved, revision 3 (rounds 1 and 2 answered: see "Rulings" at the end). Issue: #109 (NcStudio / Weihong); engine gap #99
 item 5 (the `'` comment style). Follows `2026-10-28-shopbot-syntec-haas-posts-design.md` (merged at ee676be). RichAuto (#112)
 and OpenSBP (#113) are not in this batch.
 
@@ -38,15 +38,17 @@ from this machine). #109 cited R6.1; nothing below depends on a difference betwe
 - **Parser.** `GCodeParser.parse(_:comments:)` takes a `GCodeParser.Comments`, with **no default**, so the compiler finds every
   caller:
   - `.standard` (today's rules): `( … )`, and `;` at parenthesis depth 0 to the end of the line.
-  - `.apostrophe`: `'` to the end of the line, and nothing else. `(`, `)` and `;` are garbage.
+  - `.apostrophe`: `'` to the end of the line, and no other comment. `(`, `)` and `;` are garbage. A `%` line and a leading
+    `/` (block delete) are handled as today in all three modes.
   - `.any`: all three. `'` and `;` open a comment only at depth 0, and the first of them ends the code:
     `(Bob's 1/4" bit) T2 M6` is `T2 M6`; `T2 ' (note` is `T2`.
   - `PostProfile.parserComments` gives `.apostrophe` for an apostrophe post, else `.standard`. Callers with a post pass it:
     `GCodeValidator`, `PostDraftReport.runSample` (and so its stop checks), `ToolChangeZ.setsZ`, `postProblem`,
     `DeepestCut` (through the reader, below). `ProbeSequenceChecker` parses a fixed `G17 G40 …` line with no comment and
     passes `.standard`. Tests pass `.standard` where they parse today.
-- **The validator.** In `.apostrophe` mode a garbage fragment is an **error**: "This controller reads only `'` comments:
-  '<text>' would be sent to it as code." Garbage stays a warning for every other post.
+- **The validator.** In `.apostrophe` mode a garbage fragment is an **error**: for `(`, `)` or `;`, "This controller reads only
+  `'` comments: '<text>' would be sent to it as code."; for anything else, "Unrecognised text '<text>' would be sent to the
+  controller as code." Garbage stays a warning for every other post.
 - **Reader.** `GCodeReader.read` gains `comments:` (default `.any`): the file preview does not know the dialect and passes
   nothing; `DeepestCut.find` passes the post's `parserComments`, so the export sheet's figure reads the program as the validator
   does. Its tool-name scan (`toolComments`) takes the first comment opener on the line at depth 0 under the same mode.
@@ -55,10 +57,12 @@ from this machine). #109 cited R6.1; nothing below depends on a difference betwe
   `( {TOOL_NAME} )` is text outside a comment there; under the others a `'` opens nothing, so `' {TOOL_NAME}` is text outside a
   comment there. The Comments picker gains `' …`.
 - **Who may use it.** `postProblem` refuses:
-  - a family copy whose style is `.apostrophe` when its built-in's is not, and the reverse ("This controller reads … comments:
-    keep the comment style …"), as it already does for the units words;
-  - an apostrophe post that declares a controller for touch-plate probing (Mach4 and GRBL are not documented to read `'`). The
-    draft report gives the same message.
+  - **any** apostrophe post that declares a controller for touch-plate probing (Mach4 and GRBL are not documented to read
+    `'`), checked **before** its family guard so the owner's own post is refused too. The draft report gives the same
+    message, and `postProblem`'s doc comment says one rule applies to every post;
+  - a family copy where `(style == .apostrophe) != (builtIn.commentStyle == .apostrophe)` ("This controller reads … comments:
+    keep the comment style …"), as it already does for the units words. Only the apostrophe boundary is locked: an Avid copy
+    set to `;` or a Carbide Motion copy set to `( )` stays allowed, as today.
 - **Schema.** `currentSchemaVersion` becomes 4; `requiredSchemaVersion` is 4 for an apostrophe post, tested before the other
   returns (the NcStudio post also has a millisecond dwell). An older LoftLine checks the version before decoding
   (`SnapshotDecoding`), so it refuses the file as "made with a newer LoftLine" rather than as malformed.
@@ -84,18 +88,27 @@ E1 adds no built-in that uses `.apostrophe`; it can merge alone.
 
 Family rules (by `BuiltInPosts.family(of:)`, so an edited or duplicated copy keeps them):
 
-- **At build (`postProblem`):** the comment lock above; arcs stay `.linearize` ("NcStudio's I/J mode is a controller setting
-  the program cannot set: keep arcs as lines"); the family joins `approachToolLengthIDs`, so a copy that turns the offset on
-  keeps `G0 G43 Z{APPROACH_Z} H{T}`.
+- **At build (`postProblem`), in a new `BuiltInPosts.ncstudioIDs` set:**
+  - the comment lock above;
+  - units stay millimetres ("NcStudio reads F in mm/min whatever G20 says: keep the post in millimetres");
+  - arcs stay `.linearize`, refusing both `.incrementalIJ` and `.absoluteIJ` ("NcStudio's I/J mode is a controller setting
+    the program cannot set: keep arcs as lines");
+  - the family joins `approachToolLengthIDs`, so a copy that turns the offset on keeps `G0 G43 Z{APPROACH_Z} H{T}` (its doc
+    comment and refusal message stop naming only Syntec and Haas).
 - **At export (`DialectChecks`):**
-  - Mist is an error: "NcStudio documents M8 but not M7: use Air (M8) or turn coolant off for …". Air writes M8, then M9.
+  - Mist is an error, from a new `BuiltInPosts.noMistReasons: [String: String]` ("NcStudio documents M8 but not M7"),
+    message "<reason>: use Air (M8) or turn coolant off for …". Air writes M8, then M9.
   - With the offset on, a tool numbered outside 1–7 is an error: "NcStudio's G43 takes H00 to H07, and H00 applies no
     length: renumber …". One range rule; NcStudio does not join `noToolZeroIDs` (it writes no T word).
-- **Probing:** `BuiltInPosts.noProbingReasons: [String: String]` replaces the `oneGWordIDs` test in `probeForBuild` (ShopBot's
-  message moves into it unchanged; NcStudio's: "NcStudio's probing commands are not documented here: touch-plate tool changes
-  cannot be written for it."). A built-in NcStudio post declares no controller, so it is refused already; the rule covers a
-  copy, and the comment lock refuses a declared controller too.
-- **The editor's sample** gives the NcStudio family Air, not mist (`PostSampleJob`), so its sample posts clean.
+- **Probing** needs no new rule: a post that declares no controller is refused by `MachineDefinition.probeSetting`, and an
+  NcStudio copy that declares one is refused by the apostrophe-and-controller rule.
+- **Optional stops** write M0 (NcStudio stays out of `optionalStopIDs`): the manual lists M01, but whether the controller has
+  an Optional Stop switch is not stated, and an M0 that always stops is the safe reading. Said in DECISIONS and HelpTopics.
+- **The editor's sample** reads the same `noMistReasons` table as `DialectChecks`, so the NcStudio sample gets Air, not mist,
+  and the two cannot drift.
+- **Ids already in use:** a user's post or duplicate whose id was `ncstudio-mm` or `ncstudio-mm-custom-<n>` before this
+  change joins the family after it and is held to these rules (refused with their messages if it breaks one), as Syntec and
+  Haas did. Said in DECISIONS.
 
 ## Testing
 
@@ -108,17 +121,21 @@ Each by a test that fails first:
   numbers on.
 - `placeholderProblems`: `' {TOOL_NAME}` passes and `( {TOOL_NAME} )` fails in an apostrophe post; `' {TOOL_NAME}` fails in a
   parentheses or semicolon post.
-- `postProblem`: an Avid copy switched to `.apostrophe` refused, an NcStudio copy switched to `.parentheses` refused, an
-  apostrophe post with a controller refused, an NcStudio copy with `.incrementalIJ` refused, an NcStudio copy's offset line
-  without the approach Z refused.
+- `postProblem`: an Avid copy switched to `.apostrophe` refused; an Avid copy set to `.semicolon` and a Carbide Motion copy set
+  to `.parentheses` still nil; an NcStudio copy switched to `.parentheses` refused; a non-family post (`my-post`, read with
+  `PostProfile.fromJSON`) with `.apostrophe` and a controller makes `TemplatePostProcessor.post` throw `invalidPost`; NcStudio
+  copies with `.incrementalIJ`, `.absoluteIJ`, inch units, or an offset line without the approach Z refused.
 - `ToolChangeZ.setsZ` on an apostrophe post whose tool change is `' then M6 by hand` and `M0`: it still warns.
 - Schema: `ncstudio-mm` and any apostrophe post stamp 4; a version-4 file is refused as newer by a reader that knows 3.
 - Reader: `' T2 X5` skipped; a tool name read from a `'` comment; `DeepestCut` with an apostrophe post.
-- An Avid post with `.apostrophe` (and its tool change's comment as `'`) posted with two tools, a pause, a dwell and a second
-  side: no `(` or `;` anywhere, every comment starts with `'`, no errors.
-- P2: goldens in both Z-zero modes; `samples/expected/ncstudio-mm/`; the golden read back by `GCodeReader` with no warnings;
-  the family rules (mist refused, Air allowed with M8 and M9, offset T7 allowed, T8 and T0 refused, probing refused), each also
-  on a `-custom-1` copy.
+- A post built from the Avid's fields under a non-family id (`my-apostrophe-post`, no controller) with `.apostrophe` and its
+  tool change's comment as `'`, posted with two tools, a pause, a dwell and a second side: no `(` or `;` anywhere, every
+  comment starts with `'`, no errors.
+- P2: goldens in both Z-zero modes; `samples/expected/ncstudio-mm/`; a `newPosts` row in `PostGoldenTests`; a "writes only its
+  codes" test in both Z-zero modes with an optional pause: no `G2`, `G3`, `G17`, `G90.1`, `G91.1`, `G94`, `M1`, `M6`, `M7`, `T`
+  word, `(` or `;`; it has `M0` for the optional stop and `G4 P3000`; the golden read back by `GCodeReader` with
+  `comments: .apostrophe` gives no warnings; the editor's NcStudio sample has M8 and M9 and no M7; the family rules (mist
+  refused, Air allowed with M8 and M9, offset T7 allowed, T8 and T0 refused), each also on a `-custom-1` copy.
 - Every existing golden and sample byte-identical; `scripts/build.sh` and `scripts/test.sh` green.
 
 ## Docs
@@ -142,8 +159,21 @@ OpenSBP (#113).
 - **Lock NcStudio's arcs to lines** (Auditor).
 - **The sample gets Air for NcStudio** (Auditor). Running `DialectChecks` in the editor's sample is not added: it would add
   UCCNC's units warning to every UCCNC sample.
-- **Keep `noProbingReasons`** (Simplifier: a post without a controller cannot probe). Kept, because an owner's copy can
-  declare one, and the ShopBot precedent refuses by family.
+- **No `noProbingReasons`** (Simplifier, round 1; Skeptic, round 2): the NcStudio entry could not be reached, since the
+  comment lock refuses a declared controller first. `probeForBuild` is unchanged.
+
+## Rulings (round 2)
+
+- **The apostrophe-and-controller rule runs before the family guard** (Skeptic A).
+- **NcStudio copies stay in millimetres** (Skeptic B): the manual gives F only in mm/min.
+- **The arcs lock refuses `.absoluteIJ` too; mist comes from one table; the golden is read back in `.apostrophe` mode; the
+  error message depends on the fragment** (Skeptic E, G, F, I).
+- **The end-to-end apostrophe test uses a non-family id** (Auditor, Skeptic C).
+- **The reader's M0 segments and `P > 100` guess stay deferred** (Auditor, again). The "read back with no warnings" test proves
+  only that the program parses; previewing an imported multi-tool NcStudio file shows one tool, a known limitation filed as its
+  own issue.
+- **R6.1:** the auditor read the R6.1 copy on Weihong's storage and found it agrees on comments, dwell, M00 and H registers;
+  it times out from this machine, so R6 stays the cited source.
 - **The reader's M0 tool change does not start a new segment, and its `P > 100` dwell guess** (Auditor) are outside this
   change. Both already affect every M0 post and every millisecond post; the guess was ruled to stay in the previous batch.
 - **A text placeholder outside a comment is refused only in the editor, not at build** (Skeptic). This is outside this change:
