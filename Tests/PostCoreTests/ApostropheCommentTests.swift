@@ -109,6 +109,61 @@ import Testing
         #expect(GCodeReader.toolComments("T3 M6 ' b (a)", comments: .any)[1] == "b (a)")
     }
 
+    @Test func placeholdersFollowThePostsCommentStyle() {
+        func problems(_ line: String, _ style: PostProfile.CommentStyle) -> [String] {
+            PostDraftReport.placeholderProblems(line, template: .toolChange, label: "Tool change", style: style)
+        }
+        #expect(problems("' {TOOL_NAME}", .apostrophe).isEmpty)
+        #expect(problems("( {TOOL_NAME} )", .apostrophe).contains { $0.contains("must be inside a comment") })
+        for style in [PostProfile.CommentStyle.parentheses, .semicolon] {
+            #expect(problems("' {TOOL_NAME}", style).contains { $0.contains("must be inside a comment") }, "\(style)")
+        }
+        #expect(problems("( {TOOL_NAME} )", .parentheses).isEmpty && problems("; {TOOL_NAME}", .semicolon).isEmpty)
+    }
+
+    @Test func onlyTheApostropheBoundaryIsLocked() {
+        var avid = BuiltInPosts.avidMach4Inch
+        avid.id = "avid-pro6096-mach4-inch-custom-1"
+        avid.controller = nil
+        var toApostrophe = avid
+        toApostrophe.commentStyle = .apostrophe
+        #expect(toApostrophe.postProblem?.contains("keep the comment style") == true)
+        var toSemicolon = avid
+        toSemicolon.commentStyle = .semicolon
+        #expect(toSemicolon.postProblem == nil)
+        var carbide = BuiltInPosts.carbideMotionMM
+        carbide.id = "carbide-motion-mm-custom-1"
+        carbide.commentStyle = .parentheses
+        #expect(carbide.postProblem == nil)
+    }
+
+    @Test func anApostrophePostCannotDeclareAController() throws {
+        var mine = apostrophePost()
+        mine.id = "my-post"
+        mine.controller = .mach4
+        let p = try PostProfile.fromJSON(mine.toJSON())
+        let message = try #require(p.postProblem)
+        #expect(message.contains("' comments"))
+        #expect(throws: PostError.invalidPost(message)) { try TemplatePostProcessor(profile: p).post(PostFixtures.postJob()) }
+        #expect(PostDraftReport.make(p).problems.filter { $0.contains(message) }.count == 1)
+    }
+
+    @Test func anApostropheProgramWritesNoOtherComment() throws {
+        let p = apostrophePost { $0.toolChange = ["M5", "' Change to Tool: {TOOL_NAME}", "T{T} M6"] }
+        var job = PostFixtures.postJob()
+        job.toolpaths[0].pauseAfter = PauseStep(message: "Flip (side)")
+        job.toolpaths[0].moves.append(.dwell(seconds: 2))
+        job.job.twoSided = TwoSidedSetup()
+        #expect(Set(job.toolpaths.map(\.tool.number)).count >= 2)
+        let text = try TemplatePostProcessor(profile: p).post(job)
+        let lines = text.split(separator: "\n").map(String.init)
+        #expect(!text.contains("(") && !text.contains(";"))
+        #expect(lines.filter { $0.contains("'") }.allSatisfy { $0.hasPrefix("'") || $0.hasPrefix("' ") })
+        #expect(lines.contains { $0.hasPrefix("' Change to Tool:") })
+        let issues = GCodeValidator(profile: p, job: job.job, units: job.units).validate(gcode: text)
+        #expect(!issues.contains { $0.severity == .error }, "\(issues)")
+    }
+
     @Test func anApostrophePostNeedsSchemaFour() throws {
         #expect(apostrophePost().requiredSchemaVersion == 4)
         let both = apostrophePost {

@@ -277,15 +277,27 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         return dwellValues(seconds: seconds).filter { dwell.contains("{\($0.key)}") }.allSatisfy { (Double($0.value) ?? 1) != 0 }
     }
 
-    /// Why this post would write what its built-in family's controller misreads, or nil. Checked by the builder like
-    /// `dwellProblem`, so a copy read from a file, which never passes the editor, is covered:
+    /// Why this post would write what its controller misreads, or nil. Checked by the builder like `dwellProblem`, so a copy
+    /// read from a file, which never passes the editor, is covered. For every post:
+    /// - an apostrophe post declares no controller for touch-plate probing (Mach4 and GRBL are not documented to read `'`).
+    /// For a built-in family:
     /// - a family keeps its built-in's units words (a Syntec copy writing G20/G21 would be 25.4 times off on a 900M);
+    /// - a family keeps `'` comments if its built-in writes them, and does not take them up if it does not;
     /// - ShopBot runs only the first G word on a line (`BuiltInPosts.oneGWordIDs`);
     /// - a Syntec or Haas tool length line (`BuiltInPosts.approachToolLengthIDs`) is `G43`, `H{T}` and `Z{APPROACH_Z}`: it runs
     ///   at the tool change's unknown X Y, before the climb to the approach height, and without G43 H their M6 leaves the old
     ///   length in place.
     public var postProblem: String? {
+        if commentStyle == .apostrophe, controller != nil {
+            return "A post that writes ' comments cannot declare a controller for touch-plate tool changes: Mach4 and GRBL are "
+                + "not documented to read them."
+        }
         guard let family = BuiltInPosts.family(of: id), let builtIn = BuiltInPosts.profile(id: family) else { return nil }
+        if (commentStyle == .apostrophe) != (builtIn.commentStyle == .apostrophe) {
+            return builtIn.commentStyle == .apostrophe
+                ? "This controller reads only ' comments: keep the comment style ' …."
+                : "This controller is not documented to read ' comments: keep the comment style ( … ) or ; …."
+        }
         if unitsCodes != builtIn.unitsCodes {
             return builtIn.unitsCodes == .g70g71
                 ? "This controller reads G70/G71 for units (its manual lists no G20/G21): keep the units words G70/G71."

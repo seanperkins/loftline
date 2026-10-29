@@ -118,9 +118,11 @@ public struct PostDraftReport: Sendable {
         }
         for (template, label, lines) in templates {
             guard let template else { continue }
-            for line in lines { out += placeholderProblems(line, template: template, label: label) }
+            for line in lines { out += placeholderProblems(line, template: template, label: label, style: p.commentStyle) }
         }
         if let problem = p.dwellProblem { out.append(problem) }
+        // Said here once; the sample would otherwise fail with the same message.
+        if let problem = p.postProblem { out.append(problem) }
         if p.controller != nil, p.useToolLengthOffset {
             out.append("A post that declares a controller for touch-plate tool changes cannot use a tool length offset (G43).")
         }
@@ -128,15 +130,19 @@ public struct PostDraftReport: Sendable {
     }
 
     /// Every `{` opens an allowed `{NAME}` for the template, every `}` closes one; user text sits inside a comment, `{STOP}`
-    /// outside one.
-    static func placeholderProblems(_ line: String, template: Template, label: String) -> [String] {
+    /// outside one. A comment is what the post's controller reads as one (`GCodeParser.Comments`): `'` only for an apostrophe
+    /// post, `( … )` and `;` for the others.
+    static func placeholderProblems(_ line: String, template: Template, label: String,
+                                    style: PostProfile.CommentStyle) -> [String] {
         var out: [String] = []
         let chars = Array(line)
         var i = 0, open = 0, semicolon = false
         while i < chars.count {
             let c = chars[i]
-            // A `;` starts a comment only outside parentheses (as the parser reads it).
-            if c == "(" { open += 1 } else if c == ")" { open = max(0, open - 1) } else if c == ";", open == 0 { semicolon = true }
+            // A `;` (or `'`) starts a comment only outside parentheses (as the parser reads it).
+            if style == .apostrophe {
+                if c == "'" { semicolon = true }
+            } else if c == "(" { open += 1 } else if c == ")" { open = max(0, open - 1) } else if c == ";", open == 0 { semicolon = true }
             if c == "}" { out.append("\(label): a \"}\" that closes no placeholder in \"\(line)\"."); i += 1; continue }
             guard c == "{" else { i += 1; continue }
             var j = i + 1, name = ""
