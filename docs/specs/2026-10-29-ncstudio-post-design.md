@@ -1,103 +1,151 @@
 # NcStudio post, with apostrophe comments
 
-Status: draft, revision 1. Issue: #109 (NcStudio / Weihong); engine gap #99 item 5 (the `'` comment style). Follows
-`2026-10-28-shopbot-syntec-haas-posts-design.md` (merged at ee676be). RichAuto (#112) and OpenSBP (#113) are not in this batch.
+Status: draft, revision 2 (round 1 answered: see "Rulings" at the end). Issue: #109 (NcStudio / Weihong); engine gap #99
+item 5 (the `'` comment style). Follows `2026-10-28-shopbot-syntec-haas-posts-design.md` (merged at ee676be). RichAuto (#112)
+and OpenSBP (#113) are not in this batch.
 
 ## Goal
 
 One new built-in post, `ncstudio-mm`, and the engine option it needs that a template cannot express: comments that start with a
 single quotation mark and run to the end of the line. Every existing post's output, golden file and sample stays
-byte-identical, and every existing post is validated exactly as today.
+byte-identical, and every post that does not use the new style is validated exactly as today.
 
-## Sources and their weight
+## Source
 
-| Fact | Source | Weight |
-|---|---|---|
-| "A comment in a program is started with a single quotation mark" | NcStudio Programming Manual, 6th ed. R6.1 (quoted in #109) | primary, to recheck |
-| `G04 P` is milliseconds, no decimal point, no `X` form ("P_: the dwell time, with unit ms") | same | primary, to recheck |
-| I/J are start-relative only when the controller parameter "Arc Increment" is Yes; a program cannot set it (no `G90.1`/`G91.1`) | same, and the NK105 manual | primary, to recheck |
-| `G20`/`G21`, `G54`–`G59`, `G43 H00`–`H07`, `M30`, `M8`, line numbers allowed | same | primary, to recheck |
-| `G94` errors and is skipped | a Fusion user's forum post | community |
-| `.nc` | Techno HD II manual: "Only a G-code file with an "nc" extension with show." | primary |
+NcStudio Programming Manual, 6th edition, R6 (Weihong, 2016.03), read from the copy at
+`ncstudio.ru/wa-data/public/site/doc/10/NcStudio-programming-manual-6th-edition.pdf` (Weihong's own site resets every connection
+from this machine). #109 cited R6.1; nothing below depends on a difference between the two.
 
-Weihong's site resets every connection from this machine (curl, WebFetch and a headless browser, 2026-10-29), so the R6.1
-quotes come from the #109 research. **Gate:** the post (P2) is not encoded until each "to recheck" row is read again in the
-manual itself (Sean is asked for the PDF); the engine part (E1) does not depend on it. E1 adds no built-in that uses
-`.apostrophe`, so it can merge on its own; if the manual has not arrived when E1 is reviewed, E1 merges alone and P2 waits.
-P2's values are never filled from the #109 quotes as a stopgap.
+| Fact | Manual |
+|---|---|
+| Comments | §3.11.3: "A comment in a program is started with a single quotation mark … content behind the single quotation mark does not work until the end of line." The PDF prints `’`; Autodesk's `ncstudio.cps` writes an ASCII `'`, which the post writes. No other comment form is described. |
+| Dwell | G04: "P_: the dwell time, with unit "ms"", example `G04 P1000 ’dwell for 1000ms`; the canned cycles add "with no decimal point". No range is given. |
+| Arc centres | G02/G03: "When I, J, K incremental mode is true, the coordinates of circle center is relative to the start point of the arc, otherwise, relative to the coordinates of workpiece origin." The mode is not a program word (no `G90.1`/`G91.1` in the index). |
+| Units, feed | `G20/G21` or `G70/G71`; "Command F … Its unit is mm/min." (no inch feed) |
+| M codes | M00 stop, M01 optional stop, M02, M03/M04/M05, M08 coolant on, M09 coolant off, M30 "End of program, and return to program top". No M06, no M07. |
+| Tool length | `G43 H_` with "H00~H07"; its example is `G43 G0 Z10 H1`. |
+| Others | G00, G01, G17, G40, G49, G53, G54–G59, G90, T, S. No G94 in the index. |
+| `.nc` | Techno HD II manual: "Only a G-code file with an "nc" extension with show." |
 
 ## E1. Apostrophe comments (#99 item 5)
 
 - `PostProfile.CommentStyle` gains `case apostrophe` (raw value `"apostrophe"`). `comment(_:)` writes `' ` + the text, plain
-  ASCII (`asciiOnly`), with `(`/`)` as `[`/`]` as in the other styles. A `'` inside the text stays: the comment already runs to
-  the end of the line.
-- **Parser.** `GCodeParser.parse(_:comments:)` takes a `GCodeParser.Comments`:
-  - `.standard` (the default, today's rules): `( … )` and `;` to the end of the line.
-  - `.apostrophe`: `'` to the end of the line, and nothing else. `(`, `)` and `;` are not comments, so they are reported as
-    unrecognised text (an error in the validator), because NcStudio is not documented to read them.
-  - `.any`: all three, for the previewer. As with `;` today, a `'` or `;` opens a comment only at parenthesis depth 0, and the
-    first of them on the line ends the code: `(Bob's 1/4" bit) T2 M6` is `T2 M6`; `T2 ' (note` is `T2`.
-  - `PostProfile.parserComments` gives `.apostrophe` for an apostrophe post, else `.standard`. Every caller that has a post
-    passes it: `GCodeValidator`, `PostDraftReport` (the sample run and its stop checks), `ToolChangeZ`, `postProblem`.
-- **Reader.** `GCodeReader.read` parses with `.any` and its tool-name scan reads a `'` comment too. Its callers (the file
-  preview, `DeepestCut` on an exported program) do not know the dialect; without this a `' T2 3mm` comment would read as a tool
-  change. A file holding a `'` used to give "unrecognised text" warnings in the preview; it now reads it as a comment.
-- **Writer.** `GCodeWriter.append` does not number a line that starts with `'`.
-- **Messages.** `defaultPause(for: .apostrophe)` is `["M5", "' {MESSAGE}", "{STOP}"]`; `ProgramBuilder.message` writes
-  `' <text>`. These two and `comment(_:)` are the only places PostCore writes a comment of its own (checked: every other
-  literal `(` in `Sources/PostCore` is in a built-in's template or in an error message); the probe sequence writes its notes
-  through `message`, and probing refuses for NcStudio (P2) anyway.
-- **Editor.** The draft report's placeholder scan takes the post's style: for `.apostrophe` only a `'` opens a comment, so
-  `( {TOOL_NAME} )` in an apostrophe post is "text outside a comment". The Comments picker gains `' …`.
-- **Schema.** `currentSchemaVersion` becomes 4; `requiredSchemaVersion` is 4 for an apostrophe post (an older LoftLine would
-  fail to decode the style, so it must refuse the file with its "newer LoftLine" message instead). Otherwise unchanged.
+  ASCII (`asciiOnly`), `(`/`)` as `[`/`]` as in the other styles. A `'` inside the text stays: the comment runs to the end of
+  the line, and `asciiOnly` leaves no line break.
+- `CommentStyle.message(_ text: String) -> String` is the one place a message line is formed: `(MSG, text)`, `; text` or
+  `' text`. `defaultPause(for:)` uses `message("{MESSAGE}")` and `ProgramBuilder.message` uses it with the safe text, so the
+  two copies of the choice become one.
+- **Parser.** `GCodeParser.parse(_:comments:)` takes a `GCodeParser.Comments`, with **no default**, so the compiler finds every
+  caller:
+  - `.standard` (today's rules): `( … )`, and `;` at parenthesis depth 0 to the end of the line.
+  - `.apostrophe`: `'` to the end of the line, and nothing else. `(`, `)` and `;` are garbage.
+  - `.any`: all three. `'` and `;` open a comment only at depth 0, and the first of them ends the code:
+    `(Bob's 1/4" bit) T2 M6` is `T2 M6`; `T2 ' (note` is `T2`.
+  - `PostProfile.parserComments` gives `.apostrophe` for an apostrophe post, else `.standard`. Callers with a post pass it:
+    `GCodeValidator`, `PostDraftReport.runSample` (and so its stop checks), `ToolChangeZ.setsZ`, `postProblem`,
+    `DeepestCut` (through the reader, below). `ProbeSequenceChecker` parses a fixed `G17 G40 …` line with no comment and
+    passes `.standard`. Tests pass `.standard` where they parse today.
+- **The validator.** In `.apostrophe` mode a garbage fragment is an **error**: "This controller reads only `'` comments:
+  '<text>' would be sent to it as code." Garbage stays a warning for every other post.
+- **Reader.** `GCodeReader.read` gains `comments:` (default `.any`): the file preview does not know the dialect and passes
+  nothing; `DeepestCut.find` passes the post's `parserComments`, so the export sheet's figure reads the program as the validator
+  does. Its tool-name scan (`toolComments`) takes the first comment opener on the line at depth 0 under the same mode.
+- **Writer.** `GCodeWriter.append` does not number a line that starts with `'` after trimming.
+- **The editor.** `placeholderProblems` takes the post's style: under `.apostrophe` only a `'` at depth 0 opens a comment, so
+  `( {TOOL_NAME} )` is text outside a comment there; under the others a `'` opens nothing, so `' {TOOL_NAME}` is text outside a
+  comment there. The Comments picker gains `' …`.
+- **Who may use it.** `postProblem` refuses:
+  - a family copy whose style is `.apostrophe` when its built-in's is not, and the reverse ("This controller reads … comments:
+    keep the comment style …"), as it already does for the units words;
+  - an apostrophe post that declares a controller for touch-plate probing (Mach4 and GRBL are not documented to read `'`). The
+    draft report gives the same message.
+- **Schema.** `currentSchemaVersion` becomes 4; `requiredSchemaVersion` is 4 for an apostrophe post, tested before the other
+  returns (the NcStudio post also has a millisecond dwell). An older LoftLine checks the version before decoding
+  (`SnapshotDecoding`), so it refuses the file as "made with a newer LoftLine" rather than as malformed.
+
+E1 adds no built-in that uses `.apostrophe`; it can merge alone.
 
 ## P2. The `ncstudio-mm` post
 
 | field | value | why |
 |---|---|---|
-| name, extension | "NcStudio (mm)", `nc` | Techno |
-| units | mm, `G21` | inch feed is not understood (#109): no inch post |
-| comments | `.apostrophe` | E1 |
-| preamble | `G90`, `G40`, `G49`, `G54` | each in the manual; no `G94` (errors), no `G90.1`/`G91.1` (not in the manual), no `G17` (arcs are lines) |
-| tool change | `M5`, `' Change to Tool: {TOOL_NAME}`, `M0` | the editions disagree on `M6` (R6.1 has none; Techno errors above T10) |
-| tool length | off | `G43` takes only `H00`–`H07` |
+| id, name, extension | `ncstudio-mm`, "NcStudio (mm)", `nc` | Techno |
+| units, decimals | mm, `G21`, 3 decimals, feed 0 decimals | F is mm/min; no inch post |
+| comments, header | `.apostrophe`, header comments on | E1 |
+| preamble | `G90`, `G40`, `G49`, `G54` | each in the manual; no `G94`, no `G17` (arcs are lines) |
+| tool change | `M5`, `' Change to Tool: {TOOL_NAME}`, `M0` | no M06 in the manual (Techno's later firmware allows `M6 T1`–`T10`) |
+| tool length | off; template `G0 G43 Z{APPROACH_Z} H{T}` | the manual's own form moves Z on the same line |
 | spindle | `M3 S{S}`, 3 s dwell, 0–24,000 rpm | the controller's own limit is a parameter |
 | dwell | `G4 P{MILLISECONDS}` | manual |
-| arcs | `.linearize`, 0.01 mm | "Arc Increment" is unknown and cannot be set by the program |
-| footer | `othermillFooter` (`G0 Z{HOME_Z}`, `M5`, `G0 X{HOME_X} Y{HOME_Y}`, `M30`) | `M30` documented |
-| line numbers | off | allowed, not needed |
-| limits, rapid, feed | generic mm envelope, 5080 mm/min | no built-in machine (dealer figures only) |
+| arcs | `.linearize`, 0.01 mm, helical arcs off (lines anyway) | the I/J mode is a controller setting |
+| footer | `othermillFooter` (`G0 Z{HOME_Z}`, `M5`, `G0 X{HOME_X} Y{HOME_Y}`, `M30`) | manual |
+| line numbers, modal | off, on | as the other mm posts |
+| limits | `genericMMLimits`, rapid 5080, feed 5080 mm/min | no built-in machine (dealer figures only) |
 
-Family rules (by `BuiltInPosts.family(of:)`, so an edited or duplicated copy keeps them), in `DialectChecks` at export:
+Family rules (by `BuiltInPosts.family(of:)`, so an edited or duplicated copy keeps them):
 
-- **Mist coolant is an error:** "NcStudio documents M8 but not M7: use Air (M8) or turn coolant off for …". Air writes M8.
-- **A tool length offset turned on** in a copy is an error for any tool outside T1–T7: "NcStudio's G43 takes H00 to H07 …".
-  T0 with the offset on is refused too (H00 applies no length, as on Syntec/Haas).
-- **Probing refuses** for the family: a new `BuiltInPosts.noProbingReasons: [String: String]` (ShopBot's message moves into it
-  unchanged; NcStudio's: "NcStudio's probing commands are not documented here: touch-plate tool changes cannot be written for
-  it."). `ProgramBuilder.probeForBuild` reads it in place of the `oneGWordIDs` test.
+- **At build (`postProblem`):** the comment lock above; arcs stay `.linearize` ("NcStudio's I/J mode is a controller setting
+  the program cannot set: keep arcs as lines"); the family joins `approachToolLengthIDs`, so a copy that turns the offset on
+  keeps `G0 G43 Z{APPROACH_Z} H{T}`.
+- **At export (`DialectChecks`):**
+  - Mist is an error: "NcStudio documents M8 but not M7: use Air (M8) or turn coolant off for …". Air writes M8, then M9.
+  - With the offset on, a tool numbered outside 1–7 is an error: "NcStudio's G43 takes H00 to H07, and H00 applies no
+    length: renumber …". One range rule; NcStudio does not join `noToolZeroIDs` (it writes no T word).
+- **Probing:** `BuiltInPosts.noProbingReasons: [String: String]` replaces the `oneGWordIDs` test in `probeForBuild` (ShopBot's
+  message moves into it unchanged; NcStudio's: "NcStudio's probing commands are not documented here: touch-plate tool changes
+  cannot be written for it."). A built-in NcStudio post declares no controller, so it is refused already; the rule covers a
+  copy, and the comment lock refuses a declared controller too.
+- **The editor's sample** gives the NcStudio family Air, not mist (`PostSampleJob`), so its sample posts clean.
 
 ## Testing
 
-- E1, each by a test that fails first: the parser in all three modes (`'` comment; `(`/`;` as garbage in `.apostrophe`; a
-  `'` inside parentheses in `.standard` stays a comment's text; `(Bob's 1/4" bit) T2 M6` in `.any` reads `T2 M6`); `comment(_:)`; an unnumbered `'` line with line numbers on;
-  the default pause and the builder's message; the draft report's scan (`' {TOOL_NAME}` passes, `( {TOOL_NAME} )` fails in an
-  apostrophe post and passes in the others); schema 4 on write, and a version-4 file refused by a reader that knows only 3;
-  the reader skipping `' T2 X5` and naming the tool from a `'` comment.
-- A post that is the Avid post with `.apostrophe` and its tool change's comment written `' Change to Tool: {TOOL_NAME}` is
-  posted and validated with a job holding two tools, a pause, a toolpath dwell and a second side: no `(` or `;` anywhere,
-  every comment starts with `'`, no errors.
-- P2: goldens (both Z-zero modes; mm only), samples (`samples/expected/ncstudio-mm/`), the validator passes them, the family
-  rules (mist, TLO T8 and T0, probing) including on a `-custom-1` copy.
+Each by a test that fails first:
+
+- Parser: all three modes, the `.any` precedence cases, a `'` inside parentheses in `.standard` staying comment text.
+- Validator: garbage in `.apostrophe` is an error, still a warning in `.standard`; a post read from JSON with `.apostrophe` and
+  `pause = ["M5", "(MSG, {MESSAGE})", "{STOP}"]` is refused at export.
+- `comment(_:)`, `CommentStyle.message`, `defaultPause`; an unnumbered `'` line (bare and with leading spaces) with line
+  numbers on.
+- `placeholderProblems`: `' {TOOL_NAME}` passes and `( {TOOL_NAME} )` fails in an apostrophe post; `' {TOOL_NAME}` fails in a
+  parentheses or semicolon post.
+- `postProblem`: an Avid copy switched to `.apostrophe` refused, an NcStudio copy switched to `.parentheses` refused, an
+  apostrophe post with a controller refused, an NcStudio copy with `.incrementalIJ` refused, an NcStudio copy's offset line
+  without the approach Z refused.
+- `ToolChangeZ.setsZ` on an apostrophe post whose tool change is `' then M6 by hand` and `M0`: it still warns.
+- Schema: `ncstudio-mm` and any apostrophe post stamp 4; a version-4 file is refused as newer by a reader that knows 3.
+- Reader: `' T2 X5` skipped; a tool name read from a `'` comment; `DeepestCut` with an apostrophe post.
+- An Avid post with `.apostrophe` (and its tool change's comment as `'`) posted with two tools, a pause, a dwell and a second
+  side: no `(` or `;` anywhere, every comment starts with `'`, no errors.
+- P2: goldens in both Z-zero modes; `samples/expected/ncstudio-mm/`; the golden read back by `GCodeReader` with no warnings;
+  the family rules (mist refused, Air allowed with M8 and M9, offset T7 allowed, T8 and T0 refused, probing refused), each also
+  on a `-custom-1` copy.
 - Every existing golden and sample byte-identical; `scripts/build.sh` and `scripts/test.sh` green.
 
 ## Docs
 
-DECISIONS (`apostrophe-comments`, `ncstudio-post`), PARITY (`io-post-processors`), HelpTopics (the comment styles), TESTING
-(owner check: `( )` comments, "Arc Increment", `M6`, an air cut), README's post list. #109 gets the safety facts and the owner
-checks that stay open.
+DECISIONS (`apostrophe-comments`, `ncstudio-post`), PARITY (`io-post-processors`), HelpTopics (the comment styles; NcStudio
+in the post list and among the posts that stop with M0), the doc comments that list comment styles or stop-only posts,
+TESTING (owner checks: the ASCII `'`, `( )` comments, the I/J mode setting, M0 waiting for Cycle Start, an F on a G00 line, an
+air cut), README's post list. #109 gets the safety facts and the owner checks that stay open.
 
 ## Out of scope
 
-An inch post; `M6` tool changes; arcs as G2/G3; built-in machines; RichAuto (#112) and OpenSBP (#113).
+An inch post; `M6` tool changes; arcs as G2/G3 or R; built-in machines; a dwell cap (none documented); RichAuto (#112) and
+OpenSBP (#113).
+
+## Rulings (round 1)
+
+- **Keep three parser modes** (Simplifier: treat `'` like `;` everywhere). Declined: the validator would then pass a `'`
+  comment in a Mach4 or GRBL program, which those controllers are not documented to read, and that weakens a check.
+- **Garbage is an error only in `.apostrophe`** (all four seats). Existing posts keep their warning.
+- **Lock the style per family; refuse `.apostrophe` with a declared controller** (Skeptic).
+- **Lock NcStudio's arcs to lines** (Auditor).
+- **The sample gets Air for NcStudio** (Auditor). Running `DialectChecks` in the editor's sample is not added: it would add
+  UCCNC's units warning to every UCCNC sample.
+- **Keep `noProbingReasons`** (Simplifier: a post without a controller cannot probe). Kept, because an owner's copy can
+  declare one, and the ShopBot precedent refuses by family.
+- **The reader's M0 tool change does not start a new segment, and its `P > 100` dwell guess** (Auditor) are outside this
+  change. Both already affect every M0 post and every millisecond post; the guess was ruled to stay in the previous batch.
+- **A text placeholder outside a comment is refused only in the editor, not at build** (Skeptic). This is outside this change:
+  it applies to every comment style today. It is filed as its own issue.
+- **The manual gate is met**: the R6 copy confirms each row, and the post is no longer blocked.
