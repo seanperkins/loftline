@@ -116,6 +116,8 @@ private let newPosts = [
     NewPost(id: "haas-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: fanucPreamble,
             toolChange: ["M5", "(\(endMillChange))", "T1 M6", "G0 G43 Z5.080 H1"],
             footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M30", "%"]),
+    NewPost(id: "ncstudio-mm", unitsCode: "G21", zWord: "G0 Z5.080", preamble: ["G90", "G40", "G49", "G54"],
+            toolChange: ["M5", "' \(endMillChange)", "M0"], footerTail: ["G0 Z20.320", "M5", "G0 X0.000 Y0.000", "M30"]),
 ]
 
 private func contains(_ lines: [String], run: [String]) -> Bool {
@@ -173,6 +175,9 @@ private let newPostNumbers = [
                  x: 48, y: 48, z: 6, spoilboard: 0.05, rapid: 360, feed: 240, minRPM: 0, maxRPM: 24000, arcTolerance: 0.0005)]
   + genericController("syntec", "Syntec", mmFeedDecimals: 1, rapid: (1500, 38100), feed: (1500, 38100))
   + genericController("haas", "Haas", mmFeedDecimals: 1, rapid: (710, 18034), feed: (650, 16510))
+  + [PostNumbers(id: "ncstudio-mm", name: "NcStudio (mm)", ext: "nc", units: .millimeter, decimals: 3, feedDecimals: 0,
+                 x: 1219.2, y: 1219.2, z: 152.4, spoilboard: 1.27, rapid: 5080, feed: 5080, minRPM: 0, maxRPM: 24000,
+                 arcTolerance: 0.01)]
 
 /// MASSO, UCCNC and Centroid run on many machines: the posts carry the LinuxCNC posts' generic envelope, which a machine replaces.
 private func genericController(_ id: String, _ name: String, mmFeedDecimals: Int, rapid: (Double, Double) = (200, 5080),

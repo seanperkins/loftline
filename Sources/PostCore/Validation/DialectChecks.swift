@@ -3,7 +3,8 @@ import Foundation
 
 /// Built-in controllers' own limits, checked at export beside `ToolChangeZ`, by built-in family (`BuiltInPosts.family(of:)`), so
 /// an edited or duplicated copy keeps them: coolant on a controller without it (#105, #114), MASSO's tool numbers and its lack
-/// of G43 (#107), UCCNC's profile units (#108), Centroid's dwell range (#103), Haas's longest dwell and T0 on Syntec and Haas (#110, #111).
+/// of G43 (#107), UCCNC's profile units (#108), Centroid's dwell range (#103), Haas's longest dwell, T0 on Syntec and Haas
+/// (#110, #111), and NcStudio's missing M7 and H00-H07 (#109).
 public enum DialectChecks {
     public static let uccncUnitsWarningPrefix = "UCCNC takes units from its profile"
     static let massoIDs: Set<String> = [BuiltInPosts.massoG3Inch.id, BuiltInPosts.massoG3MM.id]
@@ -29,6 +30,17 @@ public enum DialectChecks {
         if let reason = BuiltInPosts.noCoolantReasons[family] {
             let cooled = posting.filter { $0.coolant != nil }.map(\.name)
             if !cooled.isEmpty { error("\(reason): turn coolant off for \(unique(cooled)).") }
+        }
+        if let reason = BuiltInPosts.noMistReasons[family] {
+            let misted = posting.filter { $0.coolant == .mist }.map(\.name)
+            if !misted.isEmpty { error("\(reason): use Air (M8) or turn coolant off for \(unique(misted)).") }
+        }
+        if BuiltInPosts.ncstudioIDs.contains(family), profile.useToolLengthOffset {
+            // H00 applies no length, and the manual lists H00 to H07.
+            let wrong = posting.map(\.tool.number).filter { !(1...7).contains($0) }
+            if !wrong.isEmpty {
+                error("NcStudio's G43 takes H00 to H07, and H00 applies no length: renumber \(unique(wrong.map { "T\($0)" })).")
+            }
         }
         if massoIDs.contains(family) {
             // MASSO gives T0 to the dry-run laser and numbers past 100 to other heads.

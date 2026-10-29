@@ -284,9 +284,11 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// - a family keeps its built-in's units words (a Syntec copy writing G20/G21 would be 25.4 times off on a 900M);
     /// - a family keeps `'` comments if its built-in writes them, and does not take them up if it does not;
     /// - ShopBot runs only the first G word on a line (`BuiltInPosts.oneGWordIDs`);
-    /// - a Syntec or Haas tool length line (`BuiltInPosts.approachToolLengthIDs`) is `G43`, `H{T}` and `Z{APPROACH_Z}`: it runs
-    ///   at the tool change's unknown X Y, before the climb to the approach height, and without G43 H their M6 leaves the old
-    ///   length in place.
+    /// - a Syntec, Haas or NcStudio tool length line (`BuiltInPosts.approachToolLengthIDs`) is `G43`, `H{T}` and
+    ///   `Z{APPROACH_Z}`: it runs at the tool change's unknown X Y, before the climb to the approach height, and without G43 H
+    ///   the new tool's length is not applied;
+    /// - NcStudio (`BuiltInPosts.ncstudioIDs`) stays in millimetres (it reads F in mm/min) with arcs as lines (its I/J mode is a
+    ///   controller setting).
     public var postProblem: String? {
         if commentStyle == .apostrophe, controller != nil {
             return "A post that writes ' comments cannot declare a controller for touch-plate tool changes: Mach4 and GRBL are "
@@ -308,6 +310,12 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
                 + [spindleOn, dwell] + footer + pauseLines
             if lines.contains(where: { GCodeParser.parse($0, comments: parserComments).blocks.contains { $0.values("G").count > 1 } }) {
                 return "ShopBot runs only the first G word on a line: write one G word per line."
+            }
+        }
+        if BuiltInPosts.ncstudioIDs.contains(family) {
+            if units != .millimeter { return "NcStudio reads F in mm/min whatever G20 says: keep the post in millimetres." }
+            if arcOutput != .linearize {
+                return "NcStudio's I/J mode is a controller setting the program cannot set: keep arcs as lines."
             }
         }
         if useToolLengthOffset, BuiltInPosts.approachToolLengthIDs.contains(family) {

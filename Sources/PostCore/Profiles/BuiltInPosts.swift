@@ -288,11 +288,23 @@ public enum BuiltInPosts {
         return p
     }()
 
+    /// NcStudio (#109; NcStudio Programming Manual, 6th ed. R6): `'` comments (the only kind it documents), arcs as lines (I/J
+    /// are start-relative only when the controller's incremental mode is on, which the program cannot set), M0 for a tool change
+    /// (no M06 in the manual), `G4 P` in milliseconds, M8 but no M7, F in mm/min (so no inch post). Its `G43` takes H00-H07 and
+    /// moves Z on the same line in the manual's example: off here, and a copy that turns it on keeps the approach-height form.
+    public static let ncstudioMM = PostProfile(
+        id: "ncstudio-mm", name: "NcStudio (mm)", version: "1.0",
+        fileExtension: "nc", units: .millimeter, commentStyle: .apostrophe, decimals: 3, feedDecimals: 0,
+        preamble: ["G90", "G40", "G49", "G54"], toolChange: ["M5", "' Change to Tool: {TOOL_NAME}", "M0"],
+        toolLengthOffset: fanucToolLength, spindleDwellSeconds: 3, dwell: "G4 P{MILLISECONDS}", minRPM: 0, maxRPM: 24000,
+        arcOutput: .linearize, arcTolerance: 0.01, helicalArcs: false, footer: othermillFooter,
+        limits: genericMMLimits, rapidRate: 5080, maxFeed: 5080)
+
     public static let all: [PostProfile] = [avidMach4Inch, avidMach4MM, genericGRBLMM,
                                             genericGRBLInch, linuxCNCInch, linuxCNCMM, othermillInch, othermillMM,
                                             onefinityBBInch, onefinityBBMM, carbideMotionInch, carbideMotionMM,
                                             massoG3Inch, massoG3MM, uccncInch, uccncMM, centroidInch, centroidMM,
-                                            shopbotGCodeInch, syntecInch, syntecMM, haasInch, haasMM]
+                                            shopbotGCodeInch, syntecInch, syntecMM, haasInch, haasMM, ncstudioMM]
 
     /// The built-in a post belongs to: its own id when that is a built-in's, or the built-in a duplicate was made from
     /// (Duplicate names a copy `<built-in id>-custom-<n>`, `PostProfileStore.newID`), so a copy keeps its controller's rules.
@@ -317,13 +329,18 @@ public enum BuiltInPosts {
     /// Built-in families whose controller runs only the first G word on a line (ShopBot): the probe sequence's multi-G lines
     /// cannot be written for them, so probing refuses.
     public static let oneGWordIDs: Set<String> = [shopbotGCodeInch.id]
-    /// Built-in families whose tool length line must move to `Z{APPROACH_Z}` (Syntec, Haas): it runs at the tool change's
+    /// Built-in families whose tool length line must move to `Z{APPROACH_Z}` (Syntec, Haas, NcStudio): it runs at the tool change's
     /// unknown X Y, before the climb to the approach height (`PostProfile.postProblem`).
-    public static let approachToolLengthIDs: Set<String> = [syntecInch.id, syntecMM.id, haasInch.id, haasMM.id]
+    public static let approachToolLengthIDs: Set<String> = [syntecInch.id, syntecMM.id, haasInch.id, haasMM.id, ncstudioMM.id]
+    /// The NcStudio family (#109): `'` comments, arcs as lines and millimetres are kept by every copy (`PostProfile.postProblem`).
+    public static let ncstudioIDs: Set<String> = [ncstudioMM.id]
     /// Built-in families where T0 selects no tool and G43 H0 applies no length (Syntec, Haas).
     public static let noToolZeroIDs: Set<String> = [syntecInch.id, syntecMM.id, haasInch.id, haasMM.id]
     /// Built-in families whose controller has no G43 (MASSO), so a Tool Length Offset line is skipped, never applied.
     public static let noToolLengthOffsetIDs: Set<String> = [massoG3Inch.id, massoG3MM.id]
+    /// Built-in families whose controller has flood (M8) but no mist (M7), with the reason export gives; the editor's sample
+    /// runs them with Air.
+    public static let noMistReasons: [String: String] = [ncstudioMM.id: "NcStudio documents M8 but not M7"]
     /// Built-in families whose controller has no coolant, with the reason export gives.
     public static let noCoolantReasons: [String: String] = {
         let othermill = "The Othermill has no coolant, and its G-code reference lists M7, M8 and M9 as unsupported"

@@ -69,7 +69,7 @@ import Testing
                                            "othermill-mm", "onefinity-bb-inch", "onefinity-bb-mm", "carbide-motion-inch",
                                            "carbide-motion-mm", "masso-g3-inch", "masso-g3-mm", "uccnc-inch", "uccnc-mm",
                                            "centroid-inch", "centroid-mm", "shopbot-gcode-inch", "syntec-inch", "syntec-mm",
-                                           "haas-inch", "haas-mm"])
+                                           "haas-inch", "haas-mm", "ncstudio-mm"])
         #expect(MachineResolver.orderedPosts(BuiltInPosts.all, machine: nil).compatible.count == BuiltInPosts.all.count)
     }
 
