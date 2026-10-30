@@ -258,6 +258,12 @@ import Testing
         refusedAtExport(try filePost { $0.toolChange = ["M5", "} {TOOL_NAME}", "M0"] }, "Tool change: {TOOL_NAME} \(Self.text)")
     }
 
+    /// The renderer writes an unmatched `{` and reads on from the next character, so the name after it is still substituted.
+    @Test func aPlaceholderAfterAnUnmatchedBraceIsStillRefused() throws {
+        #expect(TemplateRenderer(values: ["TOOL_NAME": "X5 Y5"]).render("{FOO{TOOL_NAME}") == "{FOOX5 Y5")
+        refusedAtExport(try filePost { $0.toolChange = ["M5", "{FOO{TOOL_NAME}", "M0"] }, "Tool change: {TOOL_NAME} \(Self.text)")
+    }
+
     @Test func aLineBreakEndsTheComment() throws {
         let p = try filePost { $0.toolChange = ["M5", "(\nG0 {TOOL_NAME})", "M0"] }
         let message = "Tool change: {TOOL_NAME} \(Self.text)"
