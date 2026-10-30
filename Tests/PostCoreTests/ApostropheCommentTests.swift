@@ -6,11 +6,12 @@ import Testing
 
 /// The `'` comment style NcStudio reads (#109, #99 item 5).
 @Suite struct ApostropheCommentTests {
-    /// The Avid mm post's fields under an id no built-in family claims.
+    /// The Avid mm post's fields under an id no built-in family claims, its tool-change comment written with `'`.
     func apostrophePost(_ change: (inout PostProfile) -> Void = { _ in }) -> PostProfile {
         var p = BuiltInPosts.avidMach4MM
         p.id = "my-apostrophe-post"
         p.commentStyle = .apostrophe
+        p.toolChange = ["M5", "' Change to Tool: {TOOL_NAME}", "T{T} M6"]
         change(&p)
         return p
     }
@@ -79,9 +80,8 @@ import Testing
         let p = try PostProfile.fromJSON(apostrophePost { $0.pause = ["M5", "(MSG, {MESSAGE})", "{STOP}"] }.toJSON())
         var job = PostFixtures.postJob()
         job.toolpaths[0].pauseAfter = PauseStep(message: "Flip")
-        let text = try TemplatePostProcessor(profile: p).post(job)
-        let v = GCodeValidator(profile: p, job: job.job, units: job.units)
-        #expect(v.validate(gcode: text).contains { $0.severity == .error })
+        let message = "Pause: {MESSAGE} is text and must be inside a comment, or it could write G-code words."
+        #expect(throws: PostError.invalidPost(message)) { try TemplatePostProcessor(profile: p).post(job) }
     }
 
     @Test func anM6InsideAnApostropheCommentIsNoToolChange() {

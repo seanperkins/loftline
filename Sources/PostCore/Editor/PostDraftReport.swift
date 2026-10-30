@@ -70,10 +70,7 @@ public struct PostDraftReport: Sendable {
         if p.fileExtension.isEmpty || !p.fileExtension.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) {
             out.append("The file extension may hold only letters and digits.")
         }
-        let templates: [(Template?, String, [String])] = [
-            (.prelude, "Program start", p.prelude ?? []), (.preamble, "Preamble", p.preamble), (.footer, "Footer", p.footer), (.toolChange, "Tool change", p.toolChange),
-            (.toolLengthOffset, "Tool length offset", [p.toolLengthOffset]), (.spindleOn, "Spindle on", [p.spindleOn]),
-            (.pause, "Pause", p.pause ?? []), (.dwell, "Dwell", [p.dwell]),
+        let templates: [(Template?, String, [String])] = templateLines(p).map { ($0.0, $0.0.label, $0.1) } + [
             (nil, "Spindle off", [p.spindleOff]), (nil, "Rapid", [p.rapid]), (nil, "Linear", [p.linear]),
             (nil, "Arc CW", [p.arcCW]), (nil, "Arc CCW", [p.arcCCW]),
         ]
@@ -129,30 +126,44 @@ public struct PostDraftReport: Sendable {
         return out
     }
 
+    /// The template lines a post writes, labelled for its problems: the editor and the build (`PostProfile.placeholderProblem`)
+    /// scan the same ones. The pause is the one written (`pauseLines`, the default when the post has none).
+    static func templateLines(_ p: PostProfile) -> [(Template, [String])] {
+        [(.prelude, p.prelude ?? []), (.preamble, p.preamble), (.footer, p.footer), (.toolChange, p.toolChange),
+         (.toolLengthOffset, [p.toolLengthOffset]), (.spindleOn, [p.spindleOn]), (.pause, p.pauseLines), (.dwell, [p.dwell])]
+    }
+
     /// Every `{` opens an allowed `{NAME}` for the template, every `}` closes one; user text sits inside a comment, `{STOP}`
     /// outside one. A comment is what the post's controller reads as one (`GCodeParser.Comments`): `'` only for an apostrophe
-    /// post, `( … )` and `;` for the others.
+    /// post, `( … )` and `;` for the others; a line break ends it, as the parser reads the written line.
+    /// `unsafeOnly` (the build) keeps only user text outside a comment and `{STOP}` inside one: a stray brace or a name the
+    /// template cannot use is written as typed, the post author's own text.
     static func placeholderProblems(_ line: String, template: Template, label: String,
-                                    style: PostProfile.CommentStyle) -> [String] {
+                                    style: PostProfile.CommentStyle, unsafeOnly: Bool = false) -> [String] {
         var out: [String] = []
         let chars = Array(line)
         var i = 0, open = 0, semicolon = false
         while i < chars.count {
             let c = chars[i]
+            if c == "\n" || c == "\r" || c == "\r\n" { open = 0; semicolon = false; i += 1; continue }
             // A `;` (or `'`) starts a comment only outside parentheses (as the parser reads it).
             if style == .apostrophe {
                 if c == "'" { semicolon = true }
             } else if c == "(" { open += 1 } else if c == ")" { open = max(0, open - 1) } else if c == ";", open == 0 { semicolon = true }
-            if c == "}" { out.append("\(label): a \"}\" that closes no placeholder in \"\(line)\"."); i += 1; continue }
+            if c == "}" {
+                if !unsafeOnly { out.append("\(label): a \"}\" that closes no placeholder in \"\(line)\".") }
+                i += 1; continue
+            }
             guard c == "{" else { i += 1; continue }
             var j = i + 1, name = ""
             while j < chars.count, chars[j].isASCII, chars[j].isUppercase || chars[j] == "_" { name.append(chars[j]); j += 1 }
             guard j < chars.count, chars[j] == "}", !name.isEmpty else {
-                out.append("\(label): a \"{\" that is not a placeholder in \"\(line)\"."); i += 1; continue
+                if !unsafeOnly { out.append("\(label): a \"{\" that is not a placeholder in \"\(line)\".") }
+                i += 1; continue
             }
             let inComment = open > 0 || semicolon
             if !(placeholders[template] ?? []).contains(name) {
-                out.append("\(label) cannot use {\(name)}.")
+                if !unsafeOnly { out.append("\(label) cannot use {\(name)}.") }
             } else if textPlaceholders.contains(name), !inComment {
                 out.append("\(label): {\(name)} is text and must be inside a comment, or it could write G-code words.")
             } else if name == "STOP", inComment {

@@ -1,6 +1,6 @@
 # Text placeholders outside a comment, refused at build
 
-Status: revision 3 (round 1 and the revision 2 verification answered: see "Rulings" at the end). Issue: #125 (found in the NcStudio spec review, #109).
+Status: approved, revision 3 (round 1 and the revision 2 verification answered: see "Rulings" at the end). Issue: #125 (found in the NcStudio spec review, #109).
 
 ## Problem
 

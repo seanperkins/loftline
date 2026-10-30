@@ -12,7 +12,8 @@ public enum PostError: Error, Equatable, Sendable {
     case probe(String)
     /// A dwell in the named toolpath is longer than `PostProfile.maxDwellSeconds`.
     case dwellTooLong(toolpath: String, seconds: Double)
-    /// The post's dwell would be written in the wrong unit (`PostProfile.dwellProblem`); the message says why.
+    /// The post would write what its controller misreads (`PostProfile.dwellProblem`, `postProblem`, `placeholderProblem`); the
+    /// message says why.
     case invalidPost(String)
 }
 

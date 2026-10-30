@@ -341,6 +341,21 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         return (word.first!, String(word[word.index(word.startIndex, offsetBy: 2)..<word.index(before: m.upperBound)]))
     }
 
+    /// Why this post would write user text (a tool, job, post or pause name) where its controller reads code, or a stop where it
+    /// reads a comment, or nil (#125). The editor's own rule (`PostDraftReport.placeholderProblems`), checked by the builder
+    /// like `dwellProblem`, since a post file or a project copy never passes the editor.
+    public var placeholderProblem: String? {
+        for (template, lines) in PostDraftReport.templateLines(self) {
+            for line in lines {
+                if let problem = PostDraftReport.placeholderProblems(line, template: template, label: template.label,
+                                                                     style: commentStyle, unsafeOnly: true).first {
+                    return problem
+                }
+            }
+        }
+        return nil
+    }
+
     /// Why this post's dwell would be written in the wrong unit, or nil. The editor lists it; the builder refuses to post with
     /// it, since a post file or a project copy never passes the editor.
     public var dwellProblem: String? {

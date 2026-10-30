@@ -204,4 +204,77 @@ import Testing
         refused({ $0.version = "M3 S18000"; $0.preamble.append("(note;ignored) {POST_VERSION}") },
                 "user text after a semicolon that sits inside a closed comment")
     }
+
+    // MARK: Refused at build (#125): a post that never passes the editor
+
+    /// A post read back from a file, as one in the posts folder or a project's copy is.
+    func filePost(_ change: (inout PostProfile) -> Void, base: PostProfile = BuiltInPosts.avidMach4Inch) throws -> PostProfile {
+        var p = base
+        p.id = "my-post"
+        change(&p)
+        return try PostProfile.fromJSON(p.toJSON())
+    }
+
+    func refusedAtExport(_ p: PostProfile, _ message: String, sourceLocation: SourceLocation = #_sourceLocation) {
+        #expect(p.placeholderProblem == message, sourceLocation: sourceLocation)
+        #expect(throws: PostError.invalidPost(message), sourceLocation: sourceLocation) {
+            try TemplatePostProcessor(profile: p).post(PostFixtures.postJob())
+        }
+        #expect(PostDraftReport.make(p).problems.filter { $0 == message }.count == 1, sourceLocation: sourceLocation)
+    }
+
+    static let text = "is text and must be inside a comment, or it could write G-code words."
+
+    @Test func aFilePostWithToolNameOnACodeLineIsRefusedAtExport() throws {
+        refusedAtExport(try filePost { $0.toolChange = ["M5", "{TOOL_NAME}", "M0"] }, "Tool change: {TOOL_NAME} \(Self.text)")
+    }
+
+    @Test func aStopInsideACommentIsRefusedAtExport() throws {
+        refusedAtExport(try filePost { $0.pause = ["M5", "(MSG, {MESSAGE} {STOP})"] }, "Pause: {STOP} inside a comment stops nothing.")
+    }
+
+    @Test func spindleOnTextIsRefusedAtExport() throws {
+        refusedAtExport(try filePost { $0.spindleOn = "M3 S{S} {TOOL_NAME}" }, "Spindle on: {TOOL_NAME} \(Self.text)")
+    }
+
+    @Test func anUnwrittenToolLengthLineIsStillScanned() throws {
+        let p = try filePost { $0.useToolLengthOffset = false; $0.toolLengthOffset = "G43 H{T} {TOOL_NAME}" }
+        refusedAtExport(p, "Tool length offset: {TOOL_NAME} \(Self.text)")
+    }
+
+    @Test func parenthesesAreNoCommentInAnApostrophePost() throws {
+        let p = try filePost({ $0.commentStyle = .apostrophe; $0.toolChange = ["M5", "({TOOL_NAME})", "M0"] },
+                             base: BuiltInPosts.avidMach4MM)
+        refusedAtExport(p, "Tool change: {TOOL_NAME} \(Self.text)")
+    }
+
+    @Test func namesATemplateCannotUseStillExport() throws {
+        let p = try filePost { $0.preamble = ["G90", "{FOO} {TOOL_NAME}"] }
+        #expect(p.placeholderProblem == nil)
+        #expect(throws: Never.self) { try TemplatePostProcessor(profile: p).post(PostFixtures.postJob()) }
+    }
+
+    @Test func aStrayBraceDoesNotHideThePlaceholder() throws {
+        refusedAtExport(try filePost { $0.toolChange = ["M5", "} {TOOL_NAME}", "M0"] }, "Tool change: {TOOL_NAME} \(Self.text)")
+    }
+
+    @Test func aLineBreakEndsTheComment() throws {
+        let p = try filePost { $0.toolChange = ["M5", "(\nG0 {TOOL_NAME})", "M0"] }
+        let message = "Tool change: {TOOL_NAME} \(Self.text)"
+        #expect(p.placeholderProblem == message)
+        #expect(throws: PostError.invalidPost(message)) { try TemplatePostProcessor(profile: p).post(PostFixtures.postJob()) }
+    }
+
+    @Test func commentedTextPostsInEveryStyle() throws {
+        let lines: [(PostProfile.CommentStyle, String)] = [(.parentheses, "({TOOL_NAME})"), (.semicolon, "; {TOOL_NAME}"),
+                                                           (.semicolon, "({TOOL_NAME})"), (.apostrophe, "' {TOOL_NAME}")]
+        for (style, line) in lines {
+            let p = try filePost({ $0.commentStyle = style; $0.toolChange = ["M5", line, "M0"] }, base: BuiltInPosts.avidMach4MM)
+            #expect(p.placeholderProblem == nil, "\(style) \(line)")
+        }
+    }
+
+    @Test func noBuiltInHasAPlaceholderProblem() {
+        for p in BuiltInPosts.all { #expect(p.placeholderProblem == nil, "\(p.id)") }
+    }
 }
