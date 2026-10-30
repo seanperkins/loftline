@@ -251,6 +251,21 @@ import Testing
         #expect(r.text != nil)
         #expect(r.issues.contains { $0.severity == .error && $0.message.contains("material top") })
     }
+
+    /// #119: a program past the bed is one error per axis (the written program's), and Save Anyway still has a program.
+    @Test func aCutPastTheBedIsOneErrorAndSaveAnywayWrites() throws {
+        let doc = LoftLineDocument(project: project(), toolLibrary: AppTestSupport.library())
+        let op = profile(doc.project, depth: 0.1, tabs: false)   // the second rectangle reaches past X7
+        doc.perform("Add") { $0.operations.append(op) }
+        doc.calculateNow([op.id])
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
+        var small = BuiltInPosts.avidMach4Inch
+        small.limits.xTravel = 5.5
+        let r = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: small, jobName: "T")
+        #expect(r.text != nil)
+        #expect(r.issues.filter { $0.severity == .error && $0.message.hasPrefix("X travel") }.count == 1, "\(r.issues)")
+        #expect(!r.issues.contains { $0.message.hasPrefix("Y travel") })
+    }
 }
 
 /// A tool named by the library's own naming is never reported as a mismatch against its own diameter.

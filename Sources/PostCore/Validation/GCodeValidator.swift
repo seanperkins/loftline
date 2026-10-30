@@ -33,13 +33,16 @@ public struct GCodeValidator: Sendable {
         self.profile = profile; self.job = job; self.units = units
     }
 
+    /// The opening of the warning that the stock plus the highest Z is more than the Z travel (#119).
+    public static let zEnvelopePrefix = "The stock plus the highest Z"
+
     /// Issues sorted errors first.
     public static func errors(in issues: [GCodeIssue]) -> [GCodeIssue] { issues.filter { $0.severity == .error } }
 
     // MARK: Toolpaths
 
     public func validate(toolpaths: [Toolpath]) -> [GCodeIssue] {
-        var check = MotionChecker(profile: profile, job: job, jobUnits: units, units: units)
+        var check = MotionChecker(profile: profile, job: job, jobUnits: units, units: units, checksTravel: false)
         var pos: Vec3?
         var previous: Toolpath?
         // Two different tools with one T number post as one tool: the controller sees no change
@@ -118,7 +121,7 @@ public struct GCodeValidator: Sendable {
     public func validate(gcode: String) -> [GCodeIssue] {
         let parsed = GCodeParser.parse(gcode, comments: profile.parserComments)
         var gUnits: LengthUnit?
-        var check = MotionChecker(profile: profile, job: job, jobUnits: units, units: profile.units)
+        var check = MotionChecker(profile: profile, job: job, jobUnits: units, units: profile.units, checksTravel: true)
         var carried = IssueCollector()
         for g in parsed.garbage {
             if profile.parserComments == .apostrophe {
@@ -201,7 +204,7 @@ public struct GCodeValidator: Sendable {
                         let f = (gUnits ?? profile.units).factor(to: u)
                         x = x.map { $0 * f }; y = y.map { $0 * f }; z = z.map { $0 * f }
                         feed = feed.map { $0 * f }
-                        check = MotionChecker(profile: profile, job: job, jobUnits: units, units: u)
+                        check = MotionChecker(profile: profile, job: job, jobUnits: units, units: u, checksTravel: true)
                         check.issues = old.issues
                         check.carryExtents(from: old, scale: f)
                     }
@@ -223,7 +226,7 @@ public struct GCodeValidator: Sendable {
                     // validator cannot see, so the depth checks below say nothing about it.
                     nonMotion = true
                     carried.add("coordinate-shift", .warning, line: b.line,
-                                "G\(NumberFormat.compact(g, maxDecimals: 1)) changes the coordinate system; depth checks no longer apply")
+                                "G\(NumberFormat.compact(g, maxDecimals: 1)) changes the coordinate system; depth and travel checks no longer apply")
                 default: break
                 }
             }

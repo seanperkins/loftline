@@ -10,23 +10,19 @@ import Foundation
 public enum OthermillSetup {
     public static let postIDs: Set<String> = [BuiltInPosts.othermillInch.id, BuiltInPosts.othermillMM.id]
 
-    public static let zEnvelopeWarningPrefix = "The stock plus the highest Z"
     public static let limitsWarningPrefix = "The travel, feed and speed checks used"
     /// The warnings a program that is otherwise fine can carry (the samples check accepts these for the Othermill posts).
-    public static let warningPrefixes = [zEnvelopeWarningPrefix, limitsWarningPrefix]
+    public static let warningPrefixes = [limitsWarningPrefix]
 
     /// The spindle range both Othermill machines span.
     static let rpmRange = 7000.0...26000.0
 
+    /// Where the program goes and the stock plus the highest Z are checked for every post by the validator (#119).
     /// - Parameters:
     ///   - job: the side being exported (a two-sided job's bottom has its own Z zero).
-    ///   - units: the document's units; `job` and every move are in them.
-    ///   - moves: every commanded move, in machine coordinates: the toolpaths after lift-overs, and the move home.
-    ///   - toolpaths: the program's toolpaths (coolant is `DialectChecks`').
+    ///   - units: the document's units; `job` is in them.
     ///   - profile: the post as it is posted (a machine's numbers applied).
-    ///   - approachHeight: the raised approach height above the material top after a tool change, when a clamp needs one.
-    public static func issues(job: JobSetup, units: LengthUnit, moves: [Toolpath], toolpaths: [Toolpath], profile: PostProfile,
-                              approachHeight: Double?) -> [GCodeIssue] {
+    public static func issues(job: JobSetup, units: LengthUnit, profile: PostProfile) -> [GCodeIssue] {
         guard let family = BuiltInPosts.family(of: profile.id), postIDs.contains(family),
               let builtIn = BuiltInPosts.profile(id: family) else { return [] }
         let eps = units == .inch ? 0.0005 : 0.01
@@ -48,29 +44,7 @@ public enum OthermillSetup {
                   + "(\(f(d.x)), \(f(d.y)) \(u)) in Job Setup.")
         }
 
-        let toMoves = profile.units.factor(to: units)
         let limits = profile.limits
-        let (xTravel, yTravel, zTravel) = (limits.xTravel * toMoves, limits.yTravel * toMoves, limits.zTravel * toMoves)
-        let extent = extents(moves)
-        if let e = extent {
-            if e.maxX > xTravel + eps {
-                error("A move reaches X\(f(e.maxX)) \(u), beyond the X travel \(f(xTravel)) \(u) measured from the stock's "
-                      + "front-left corner.")
-            }
-            if e.maxY > yTravel + eps {
-                error("A move reaches Y\(f(e.maxY)) \(u), beyond the Y travel \(f(yTravel)) \(u) measured from the stock's "
-                      + "front-left corner.")
-            }
-        }
-
-        let coords = MachineCoordinates(job: job)
-        let above = max(job.safeZ, job.homeZ, approachHeight ?? 0, (extent?.maxZ).map { $0 - coords.materialTopZ } ?? 0)
-        if job.thickness + above > zTravel + eps {
-            warning("\(zEnvelopeWarningPrefix) the program asks for (\(f(job.thickness)) + \(f(above)) = "
-                    + "\(f(job.thickness + above)) \(u)) is more than the Z travel \(f(zTravel)) \(u): lower Home Z and Safe Z in "
-                    + "Job Setup, and check clamp heights.")
-        }
-
         let toBuiltIn = builtIn.units.factor(to: profile.units)
         let postEps = eps * units.factor(to: profile.units)   // lengths, and feeds per minute, in the post's units
         let own = builtIn.limits
@@ -86,29 +60,5 @@ public enum OthermillSetup {
                     + "\(g(profile.minRPM))–\(g(profile.maxRPM)) rpm): choose the Othermill machine in Job Setup.")
         }
         return out
-    }
-
-    /// The largest X, Y and Z any move reaches, arcs by their points.
-    static func extents(_ toolpaths: [Toolpath]) -> (maxX: Double, maxY: Double, maxZ: Double)? {
-        var maxX = -Double.infinity, maxY = -Double.infinity, maxZ = -Double.infinity
-        func see(_ p: Vec3) { maxX = max(maxX, p.x); maxY = max(maxY, p.y); maxZ = max(maxZ, p.z) }
-        for tp in toolpaths {
-            var at: Vec3?
-            for m in tp.moves {
-                switch m {
-                case .rapid(let p), .linear(let p, _):
-                    see(p); at = p
-                case .arcCW(let p, let c, _), .arcCCW(let p, let c, _):
-                    let cw: Bool = { if case .arcCW = m { return true } else { return false } }()
-                    if let a = at {
-                        for q in ArcGeometry.points(from: a, to: p, center: c, clockwise: cw, tolerance: 1e-4) { see(q) }
-                    }
-                    see(p); at = p
-                case .dwell:
-                    break
-                }
-            }
-        }
-        return maxX.isFinite ? (maxX, maxY, maxZ) : nil
     }
 }
