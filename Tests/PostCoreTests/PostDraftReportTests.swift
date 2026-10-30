@@ -283,4 +283,61 @@ import Testing
     @Test func noBuiltInHasAPlaceholderProblem() {
         for p in BuiltInPosts.all { #expect(p.placeholderProblem == nil, "\(p.id)") }
     }
+
+    // MARK: Stops checked at export (#128)
+
+    /// A post read back from a file under an id no built-in family claims, as a posts-folder file or a project copy is.
+    func stopPost(_ change: (inout PostProfile) -> Void, base: PostProfile = BuiltInPosts.avidMach4Inch) throws -> PostProfile {
+        var p = base
+        p.id = "my-stop-post"
+        change(&p)
+        return try PostProfile.fromJSON(p.toJSON())
+    }
+
+    static let pauseFinding = "The pause does not stop (no M0 before the next move): check that the pause lines contain {STOP} outside a comment."
+
+    @Test func aPauseThatNeverStopsIsASampleStopProblem() throws {
+        #expect(PostDraftReport.sampleStopProblem(try stopPost { $0.pause = ["M5", "(MSG, {MESSAGE})"] }) == Self.pauseFinding)
+    }
+
+    @Test func aToolChangeThatNeverStopsIsASampleStopProblem() throws {
+        let p = try stopPost { $0.toolChange = ["M5", "(Change to Tool: {TOOL_NAME})"] }
+        #expect(PostDraftReport.sampleStopProblem(p)?.hasPrefix("The tool change before the first tool neither stops") == true)
+    }
+
+    @Test func literalStopsAreNotAProblem() throws {
+        let p = try stopPost { $0.toolChange = ["M5", "M0"]; $0.pause = ["M5", "(MSG, {MESSAGE})", "M0"] }
+        #expect(PostDraftReport.sampleStopProblem(p) == nil)
+    }
+
+    @Test func forgedMarkersInThePreludeDoNotHideMissingStops() throws {
+        let p = try stopPost {
+            $0.prelude = ["M0", "(Toolpath: Sample A [)", "(Pause after toolpath: Sample A)", "M0", "(Toolpath: Sample B [)", "M0",
+                          "(Toolpath: Sample C [)"]
+            $0.toolChange = ["M5", "(Change to Tool: {TOOL_NAME})"]
+            $0.pause = ["M5", "(MSG, {MESSAGE})"]
+        }
+        #expect(PostDraftReport.sampleStopProblem(p)
+                == "The sample program's toolpath comments appear more than once; a post line may not repeat them.")
+        #expect(!PostDraftReport.make(p).canSave)
+    }
+
+    @Test func aBlockDeleteStopIsNoStop() throws {
+        #expect(PostDraftReport.sampleStopProblem(try stopPost { $0.toolChange = ["M5", "/M0"] }) != nil)
+        #expect(PostDraftReport.sampleStopProblem(try stopPost { $0.pause = ["M5", "(MSG, {MESSAGE})", "/M0"] }) == Self.pauseFinding)
+    }
+
+    @Test func aPostNamedLikeAMarkerIsNotRefused() throws {
+        #expect(PostDraftReport.sampleStopProblem(try stopPost { $0.name = "Toolpath: Sample A [x]" }) == nil)
+    }
+
+    @Test func aPostTheBuilderRefusesHasNoSampleStopProblem() throws {
+        #expect(PostDraftReport.sampleStopProblem(try stopPost { $0.toolChange = ["M5", "{TOOL_NAME}", "M0"] }) == nil)
+    }
+
+    @Test func aTouchPlateMachineStillNeedsAToolChangeThatStops() throws {
+        let p = ProbeSequenceBuilderTests.profile(try stopPost { $0.toolChange = ["M5", "(Change to Tool: {TOOL_NAME})"] })
+        #expect(p.toolChangeProbe != nil)
+        #expect(PostDraftReport.sampleStopProblem(p) != nil)
+    }
 }

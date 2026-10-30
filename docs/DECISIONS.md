@@ -1107,3 +1107,13 @@
   spot needs no extra counting: the moves after the probe are visited at its X Y. After `G10`/`G92`-type shifts the warning
   says depth and travel checks no longer apply. The Othermill's own XY bound and Z warning (#114) are replaced by these; it
   keeps its Z zero, origin, datum and machine-size checks.
+- **stops-at-export — a post that never stops is refused at export (#128).** `GCodeExporter.export` posts the editor's two-tool
+  sample with the post (`PostDraftReport.sampleStopProblem`, the plain sample exactly as the editor posts it) and refuses the
+  export with the first `stopProblems` finding, prefixed with where it comes from and where to fix it. It is a check of the
+  post, not the job: a post whose pause never stops is refused even for a job with no pause, and a touch-plate machine (whose
+  builder never writes the post's tool change) still refuses a post whose tool change never stops, as the editor does. Not
+  in `ProgramBuilder.build`, through which the sample itself is posted. A sample the builder refuses gives no finding: the
+  real job then reports that refusal. `stopProblems` now needs each builder marker exactly once, as a comment that begins
+  with it (a post line cannot move the windows it checks, and a post named like a marker is not refused), and gives no credit
+  to a stop on a block-delete line. Motion inside a template before its stop (a lift, or a descent) is the author's code,
+  checked by the validator like any move, not by this rule.

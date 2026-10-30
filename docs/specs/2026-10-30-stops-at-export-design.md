@@ -1,6 +1,6 @@
 # A post that never stops, refused at export
 
-Status: revision 3 (round 1 and the revision 2 verification answered: see "Rulings"). Issue: #128 (found in the #125 spec review).
+Status: approved, revision 3 (round 1 and the revision 2 verification answered: see "Rulings"). Issue: #128 (found in the #125 spec review).
 
 ## Problem
 

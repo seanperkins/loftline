@@ -266,6 +266,35 @@ import Testing
         #expect(r.issues.filter { $0.severity == .error && $0.message.hasPrefix("X travel") }.count == 1, "\(r.issues)")
         #expect(!r.issues.contains { $0.message.hasPrefix("Y travel") })
     }
+
+    func exportOneTool(_ post: PostProfile) -> GCodeExportResult {
+        let doc = LoftLineDocument(project: project(), toolLibrary: AppTestSupport.library())
+        let op = profile(doc.project, depth: 0.1, tabs: false)
+        doc.perform("Add") { $0.operations.append(op) }
+        doc.calculateNow([op.id])
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
+        return GCodeExporter.export(project: doc.project, toolpaths: tps, profile: post, jobName: "T")
+    }
+
+    /// #128: a post whose pause never stops is refused at export, even for a one-tool job with no pause.
+    @Test func aPostWhosePauseNeverStopsIsRefusedAtExport() throws {
+        var p = BuiltInPosts.avidMach4Inch
+        p.id = "my-stop-post"
+        p.pause = ["M5", "(MSG, {MESSAGE})"]
+        let r = exportOneTool(try PostProfile.fromJSON(p.toJSON()))
+        #expect(r.text == nil)
+        let message = try #require(r.errorMessage)
+        #expect(message.hasPrefix("The post \"\(p.name)\" cannot be used: posting the post editor's two-tool sample, the pause does not stop"), "\(message)")
+        #expect(message.hasSuffix("Fix it in Toolpaths ▸ Post Processors."), "\(message)")
+    }
+
+    @Test func aPostTheBuilderRefusesKeepsTheBuildersMessage() throws {
+        var p = BuiltInPosts.avidMach4Inch
+        p.id = "my-stop-post"
+        p.toolChange = ["M5", "{TOOL_NAME}", "M0"]
+        let r = exportOneTool(try PostProfile.fromJSON(p.toJSON()))
+        #expect(r.text == nil && r.errorMessage?.contains("{TOOL_NAME} is text") == true, "\(r.errorMessage ?? "")")
+    }
 }
 
 /// A tool named by the library's own naming is never reported as a mismatch against its own diameter.

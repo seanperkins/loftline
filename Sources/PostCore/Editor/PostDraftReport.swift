@@ -50,9 +50,7 @@ public struct PostDraftReport: Sendable {
         r.problems = staticProblems(draft)
         guard r.problems.isEmpty else { return r }
         let plain = PostSampleJob.widened(draft)
-        var plainDraft = plain
-        plainDraft.toolChangeProbe = nil
-        r.program = r.runSample(plainDraft, job: PostSampleJob.job(for: draft), label: "")
+        r.program = r.runSample(plainSample(draft), job: PostSampleJob.job(for: draft), label: "")
         if let controller = draft.controller {
             var probing = plain
             probing.toolChangeProbe = .on(ToolChangeProbe.defaults(controller: controller, units: plain.units, limits: plain.limits))
@@ -60,6 +58,23 @@ public struct PostDraftReport: Sendable {
                                          label: "With touch-plate tool changes: ")
         }
         return r
+    }
+
+    /// The post as its plain sample is posted: limits widened to the sample, the post's own tool change (no touch plate).
+    private static func plainSample(_ post: PostProfile) -> PostProfile {
+        var p = PostSampleJob.widened(post)
+        p.toolChangeProbe = nil
+        return p
+    }
+
+    /// The first stop problem of the post's plain sample (`stopProblems`), or nil, including when the sample cannot be posted:
+    /// the builder refuses it only for a post-level problem, which the real job then reports itself. The export checks it
+    /// (#128), since a post file or a project copy never passes the editor; it cannot be checked in `ProgramBuilder.build`,
+    /// through which the sample itself is posted.
+    public static func sampleStopProblem(_ post: PostProfile) -> String? {
+        let sample = plainSample(post)
+        guard let text = try? TemplatePostProcessor(profile: sample).post(PostSampleJob.job(for: post)) else { return nil }
+        return stopProblems(text: text, parsed: GCodeParser.parse(text, comments: sample.parserComments)).first
     }
 
     // MARK: Static rules
@@ -215,13 +230,22 @@ public struct PostDraftReport: Sendable {
 
     /// Each tool change stops (`M0`) or selects that tool (`T<n>` then `M6`), and every `T` in it names that tool; the pause
     /// stops with `M0` before the next X/Y or feed move. Checked in the parsed program: template text cannot show it.
+    /// The builder's markers must each occur once, as a comment that begins with them, so no post line can move the windows
+    /// checked (#128); a stop on a block-delete line is no stop, since a controller with Block Delete on skips it.
     static func stopProblems(text: String, parsed: GCodeParser.Result) -> [String] {
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        func line(containing s: String) -> Int? { lines.firstIndex { $0.contains(s) }.map { $0 + 1 } }
+        let openers = CharacterSet(charactersIn: "(;' ")
+        func markerLines(_ s: String) -> [Int] {
+            lines.indices.filter { lines[$0].trimmingCharacters(in: openers).hasPrefix(s) }.map { $0 + 1 }
+        }
         let n = PostSampleJob.names
-        guard let aLine = line(containing: "Toolpath: \(n.a) ["), let bLine = line(containing: "Toolpath: \(n.b) ["),
-              let cLine = line(containing: "Toolpath: \(n.c) ["), let pauseLine = line(containing: "Pause after toolpath: \(n.a)")
+        let found = ["Toolpath: \(n.a) [", "Toolpath: \(n.b) [", "Toolpath: \(n.c) [", "Pause after toolpath: \(n.a)"].map(markerLines)
+        if found.contains(where: { $0.count > 1 }) {
+            return ["The sample program's toolpath comments appear more than once; a post line may not repeat them."]
+        }
+        guard let aLine = found[0].first, let bLine = found[1].first, let cLine = found[2].first, let pauseLine = found[3].first
         else { return ["The sample program is missing its toolpath comments; check the comment style."] }
+        let skippable = Set(parsed.blockDeleteLines)
         var out: [String] = []
         func isCut(_ b: GCodeBlock) -> Bool {
             b.values("G").contains { [1, 2, 3].contains($0) } && (b.value("X") != nil || b.value("Y") != nil || b.value("Z") != nil)
@@ -234,9 +258,10 @@ public struct PostDraftReport: Sendable {
             // Compared as numbers: a typed T word can be huge or fractional, which no Int conversion may see.
             let n = Double(tool)
             if window.contains(where: { $0.values("T").contains { $0 != n } }) { return false }
-            if window.contains(where: { $0.has("M", 0) }) { return true }
-            guard let t = window.firstIndex(where: { $0.values("T").contains { $0 == n } }) else { return false }
-            return window[t...].contains { $0.has("M", 6) }
+            let live = window.filter { !skippable.contains($0.line) }
+            if live.contains(where: { $0.has("M", 0) }) { return true }
+            guard let t = live.firstIndex(where: { $0.values("T").contains { $0 == n } }) else { return false }
+            return live[t...].contains { $0.has("M", 6) }
         }
         if !changeIsSafe(from: 0, to: aLine, tool: PostSampleJob.tool1.number) {
             out.append("The tool change before the first tool neither stops (M0) nor selects that tool (T\(PostSampleJob.tool1.number) then M6).")
@@ -249,7 +274,7 @@ public struct PostDraftReport: Sendable {
         let firstMove = afterPause.firstIndex { b in
             b.value("X") != nil || b.value("Y") != nil || b.values("G").contains { [1, 2, 3].contains($0) }
         } ?? afterPause.endIndex
-        if !afterPause[..<firstMove].contains(where: { $0.has("M", 0) }) {
+        if !afterPause[..<firstMove].contains(where: { $0.has("M", 0) && !skippable.contains($0.line) }) {
             out.append("The pause does not stop (no M0 before the next move): check that the pause lines contain {STOP} outside a comment.")
         }
         _ = isCut
