@@ -1091,3 +1091,19 @@
   ends a comment, as the parser reads it. The build refuses only those two findings: a stray brace or a name the template
   cannot use is written as typed (the author's own text, flagged by the parser as unrecognized), so hand-written posts that
   export today keep exporting. A pause or tool change with no stop at all is still found only by the editor's sample.
+- **travel-checks-all-machines — where the program goes, and the Z envelope, on every post (#119).** The program's X0 Y0 is
+  where the operator sets the work zero, so it is a point the machine reaches; every move is measured from it. A program fits
+  only if the zero and every move fit one travel-sized window: `max(maxX, 0) − min(minX, 0) ≤ X travel` (and Y), an error. That
+  is the bound for every XY origin without a table: lower left, the farthest move; upper right, the farthest move to the left;
+  centre, the span; a datum offset, the zero point and the moves together. The stock is not in the window (a sheet larger than
+  the bed overhangs it; Check Toolpaths warns), the zero is (cutting part of an oversized sheet means putting the zero within
+  reach; tiled G-code zeroes each tile at its corner). Z: the stock plus the highest Z, and any cut below the stock
+  (`maxZ − min(minZ, material bottom)`), more than the Z travel is a warning (stick-out and gantry clearance decide whether
+  the tip must reach the spoilboard), not added when the program's own Z span is already the `travel-Z` error. Both run in
+  `MotionChecker.finish()` on the written program only (`checksTravel`), which holds the move home, lift-overs, the raised
+  approach and the touch-plate clearance; the toolpath pass keeps every per-move rule and no longer compares spans, so one
+  error per axis reaches the export sheet. A posted program's first Z-only rapid is visited at X0 Y0 (the validator's `?? 0`
+  for an unknown X Y), which had made most posts check the window by accident; the rule no longer rests on that. The touch-off
+  spot needs no extra counting: the moves after the probe are visited at its X Y. After `G10`/`G92`-type shifts the warning
+  says depth and travel checks no longer apply. The Othermill's own XY bound and Z warning (#114) are replaced by these; it
+  keeps its Z zero, origin, datum and machine-size checks.
