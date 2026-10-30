@@ -1,6 +1,6 @@
 # A post that never stops, refused at export
 
-Status: draft, revision 1. Issue: #128 (found in the #125 spec review).
+Status: revision 2 (round 1 answered: see "Rulings"). Issue: #128 (found in the #125 spec review).
 
 ## Problem
 
@@ -14,41 +14,64 @@ it cannot judge a missing stop, which depends on the posted program (a literal `
 
 ## Change
 
-1. **The editor's check, on its own sample, at export.** `PostDraftReport.stopProblem(_ post: PostProfile) -> String?`
-   (public): posts the editor's sample job (`PostSampleJob.job(for:)`) with the post as the editor posts it (`PostSampleJob.
-   widened`, `toolChangeProbe` nil), parses it with the post's comments, and returns the first `stopProblems` finding, or nil.
-   A sample that cannot be posted returns nil: the export posts the real job next and reports that failure itself.
-2. **`GCodeExporter.export` refuses** a post with a stop problem before it posts, beside the touch-off spot refusal:
-   `The post "<name>" cannot be used: <finding>` (the `invalidPost` wording). A refusal, not an error with Save Anyway: the
-   editor refuses to save such a post, and a program that cuts through its own pause or with the wrong bit is not one to save
-   anyway. Every path that writes a program goes through `GCodeExporter.export` (the export sheet, Save All Toolpaths, Save
-   Tiled G-code, Check Toolpaths, `loftline-cli export`).
-3. The check is of the post, not the job: a post whose pause never stops is refused even for a job with no pause, as the
-   editor refuses it. The sample has two tools and a pause, so every template it uses is exercised.
-4. The touch-plate tool change is not checked here: the builder writes it, with its own stops, and `ProbeSequenceChecker`
-   checks it in every exported program.
+1. **The editor's check, on its own sample, at export.** `PostDraftReport.sampleStopProblem(_ post: PostProfile) -> String?`
+   (public). It posts the editor's sample job exactly as `make` posts its plain sample (one private helper, `plainSample(_:)`,
+   used by both: `PostSampleJob.widened`, `toolChangeProbe` nil, `PostSampleJob.job(for:)`), parses it with the post's
+   comments, and returns the first `stopProblems` finding, or nil.
+2. **A sample that cannot be posted returns nil.** The builder refuses it only for a post-level problem (`invalidPost`:
+   `dwellProblem`, `postProblem`, `placeholderProblem`) or a spindle range the sample's clamped speed cannot meet (min above
+   max); the real job fails the same way next and reports its own message.
+3. **Not in `ProgramBuilder.build`:** posting the sample goes through `build`, which would recurse. `GCodeExporter.export` is
+   the one place a program is written for the user (the export sheet, Save All Toolpaths, Save Tiled G-code, Check Toolpaths,
+   `loftline-cli export`; `TemplatePostProcessor.post` has no other caller outside the editor).
+4. **`GCodeExporter.export` refuses** before it posts: inside its `do`, it throws `PostError.invalidPost(message)` ahead of
+   `post(job)`, so the existing catch writes `The post "<name>" cannot be used: <message>`. The message says where the finding
+   comes from and where to fix it, since it names the sample's tools, not the job's:
+   `posting the post editor's two-tool sample, <finding> Fix it in Toolpaths ▸ Post Processors.`
+   A refusal, not an error with Save Anyway: the editor refuses to save such a post, and a program that cuts through its own
+   pause or with the wrong bit is not one to save anyway.
+5. **`stopProblems` reads the builder's markers once each.** It finds `Toolpath: Sample A [`, `… B [`, `… C [` and `Pause after
+   toolpath: Sample A` with `firstIndex`; a post's own lines (a prelude, a footer) could carry the same text and move the
+   windows it checks (auditor, round 1). Each marker must occur exactly once in the sample, or the finding is `The sample
+   program's toolpath comments appear more than once; a post line may not repeat them.` The editor gains the same rule.
+
+The check is of the post, not the job: a post whose pause never stops is refused even for a job with no pause, and a machine
+with touch-plate tool changes (whose builder never writes the post's tool change) still refuses a post whose tool change
+never stops, as the editor does. DECISIONS records both.
 
 ## Cost
 
-One sample post per export: a three-toolpath job of a few dozen moves. Check Toolpaths exports once per operation; that adds one
-sample per operation.
+One sample post per export (three toolpaths, a few dozen moves). Check Toolpaths exports once per operation and once for the
+whole job, so N + 1 samples; Save Tiled G-code one per tile. No memo: a sample posts in well under the time the real export
+takes.
 
 ## Tests
 
-`Tests/LoftLineAppTests/PreflightChecksTests.swift` (export) and `Tests/PostCoreTests/PostDraftReportTests.swift`:
+`Tests/PostCoreTests/PostDraftReportTests.swift` and `Tests/LoftLineAppTests/PreflightChecksTests.swift` (export). Posts are
+read with `fromJSON` under an id outside the built-in families.
 
-| Post (read with `fromJSON`, id outside the built-in families) | Expected |
+| Post | Expected |
 |---|---|
-| pause `["M5", "(MSG, {MESSAGE})"]` | `stopProblem` = the editor's pause message; export refused with it, `text` nil |
-| tool change `["M5", "(Change to Tool: {TOOL_NAME})"]` | refused: the first-tool message |
-| tool change `["M5", "T{T}"]` (selects, no M6) | refused |
-| tool change `["M5", "T1 M6"]` (a fixed T) | refused: the between-tools message |
-| tool change `["M5", "M0"]`, pause with a literal `M0` instead of `{STOP}` | posts |
-| every built-in post (machine applied) | `stopProblem == nil` |
-| a post whose sample cannot be posted (spindle range that refuses the sample's speed) | `stopProblem == nil`; the export reports its own error |
+| pause `["M5", "(MSG, {MESSAGE})"]` | `sampleStopProblem` = the editor's pause finding; export refused, `text` nil, message starts `The post "…" cannot be used: posting the post editor's two-tool sample,` and ends `Toolpaths ▸ Post Processors.` |
+| tool change `["M5", "(Change to Tool: {TOOL_NAME})"]` | refused: the first-tool finding |
+| tool change `["M5", "M0"]`, pause with a literal `M0` instead of `{STOP}` | `nil` |
+| a prelude with forged markers and `M0`s, tool change and pause that never stop | refused: the markers finding |
+| a post refused at build (tool change `["M5", "{TOOL_NAME}", "M0"]`, #125) | `nil`; the export refuses with the builder's placeholder message |
+| a machine with touch-plate tool changes and a tool change that never stops | refused |
+| a one-tool, no-pause job with a post whose pause never stops | refused (the post, not the job) |
 
-Goldens and samples unchanged: built-in posts all pass.
+The `T{T}` and fixed-`T` tool changes are already the editor's tests (`toolChangesMustStopOrChangeTheTool`); every built-in
+passes (`everyBuiltInIsClean`, the samples test). Goldens and samples unchanged.
 
 ## Docs
 
-DECISIONS `stops-at-export`. Help: none (the editor's message is the one shown).
+DECISIONS `stops-at-export`. Help: the post editor paragraph (`HelpTopics.swift`) says the stop rule is checked again at export.
+
+## Rulings
+
+- **Motion inside a tool-change template before its stop is not refused** (executor). It is the post author's own code,
+  written as typed; the validator checks those moves (depth, rapids). The check is that a stop or selection exists.
+- **A Z-only move between a pause's message and its stop is not "the next move"** (executor). That is the lift before the stop
+  (the Avid's own replaced-pause test writes `G0 Z{SAFE_Z}` first); counting it would refuse correct posts.
+- **The markers must be unique** (auditor): adopted, for the editor too.
+- **The refusal names the sample and where to fix the post** (skeptic M1).
