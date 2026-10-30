@@ -1,6 +1,6 @@
 # Text placeholders outside a comment, refused at build
 
-Status: revision 2 (round 1 answered: see "Rulings" at the end). Issue: #125 (found in the NcStudio spec review, #109).
+Status: revision 3 (round 1 and the revision 2 verification answered: see "Rulings" at the end). Issue: #125 (found in the NcStudio spec review, #109).
 
 ## Problem
 
@@ -23,6 +23,10 @@ turns `(`/`)` into `[`/`]`; it cannot stop a word. A tool named `X5 Y5` in a too
    rendered with exactly the names it may use, `PostDraftReport.placeholders`), so they cannot write a word, and the parser
    already reports a `{` as unrecognized text at export (an error in an apostrophe post, a warning otherwise). The editor calls it
    without the flag and reports exactly what it reports today.
+
+   The scan reads each physical line on its own: a line break (`\n`, `\r`) inside one template entry ends any comment, as
+   `GCodeParser` reads it (the writer keeps the break). `(\nG0 {TOOL_NAME})` is therefore refused: its second line puts the tool
+   name on a code line. The editor already refuses such a line for its control character; it may now also name the placeholder.
 2. **One list of the lines.** `PostDraftReport.templateLines(_ p: PostProfile) -> [(Template, [String])]`: the eight templates,
    labelled by `Template.label`, with the pause as written (`p.pauseLines`, which is the default pause when `pause` is nil).
    `staticProblems` builds its list from it plus the five fixed codes (`nil` template), so the editor and the build scan the
@@ -65,6 +69,7 @@ A refused row asserts `PostError.invalidPost(<exact message>)` at `TemplatePostP
 | Apostrophe post (id outside the built-in families) | tool change `["M5", "({TOOL_NAME})", "M0"]` | refused: parentheses are not a comment there |
 | Avid | preamble `["G90", "{FOO} {TOOL_NAME}"]` | posts: neither name is one the preamble can use, so both render as text the parser flags |
 | Avid | tool change `["M5", "} {TOOL_NAME}", "M0"]` | refused: a stray brace before the placeholder does not hide it |
+| Avid read with `fromJSON` | tool change `["M5", "(\nG0 {TOOL_NAME})", "M0"]` | refused: the line break ends the comment |
 | Every built-in post | | `placeholderProblem == nil` |
 
 **Existing tests that change.**
@@ -93,3 +98,12 @@ DECISIONS: one entry (`placeholders-at-build`). TESTING, PARITY: nothing.
   it renders as literal text.
 - **The no-stop check stays out** (skeptic m6): its template-only version would misjudge literal `M0` and `T{T} M6`; filed.
 - **Nested parentheses and `( … )` in `;` posts** (skeptic m4, m5): out of scope, listed above.
+
+## Rulings (verification of revision 2)
+
+- **A line break inside a template entry ends a comment in the scan** (auditor): the parser and writer already treat it as two
+  lines; the scanner now agrees. Test row added.
+- **Literal template text such as `{G0 X5}` is not refused** (executor): it is the post author's own code, written exactly as
+  typed, the same as a template line `G0 X5`; the exported program is still validated (`GCodeValidator`, the motion and travel
+  checks). This issue is about user text (tool, job, post and pause names) reaching a code line, which the author cannot see
+  when writing the template. Cost if wrong: a typo'd placeholder holding code words runs that code, as any template line does.
