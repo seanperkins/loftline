@@ -193,6 +193,11 @@ enum GCodeExporter {
         let job = PostJob(name: jobName, units: doc.units, job: doc.job, toolpaths: toolpaths,
                           approachHeight: approachHeight(document: doc))
         do {
+            // A post file or a project copy never passes the editor: its stops are checked on the editor's sample (#128).
+            if let finding = PostDraftReport.sampleStopProblem(profile) {
+                throw PostError.invalidPost("posting the post editor's two-tool sample, \(finding.prefix(1).lowercased() + finding.dropFirst()) "
+                                            + "Fix it in Toolpaths ▸ Post Processors.")
+            }
             let text = try TemplatePostProcessor(profile: profile).post(job)
             issues += validator.validate(gcode: text)
             return GCodeExportResult(text: text, issues: GCodeIssue.merged(issues), errorMessage: nil, toolpathCount: toolpaths.count,
