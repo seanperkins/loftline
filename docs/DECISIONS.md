@@ -46,7 +46,7 @@
 - **post** — Golden programs are inline raw-string literals in `PostGoldenTests.swift` (no test
   resources, so Package.swift stays untouched).
 - **post** — GCodeValidator rules (shared by toolpath and G-code checks via `MotionChecker`):
-  error = travel span > machine travel (arcs sampled via I/J), Z below material bottom minus
+  error = travel span > machine travel (since #119 the zero and the moves in one window: travel-checks-all-machines) (arcs sampled via I/J), Z below material bottom minus
   `limits.maxSpoilboardCut` (both Z-zero modes), XY rapid with Z below the material top, feed
   move below the material top with the spindle off, feed move without F or with F <= 0, S
   outside min/max RPM, arc start/end radius mismatch, arc without I/J/R. Warnings = XY rapid
@@ -953,7 +953,7 @@
   an XY origin other than the lower left, a non-zero datum offset (nil counts as zero, so tiles pass), a move or the move
   home past the X/Y travel measured from that corner, and coolant (one error naming the toolpaths); and warns when the stock
   plus the highest Z any move, Home Z, Safe Z or a raised approach reaches is more than the Z travel, and when the travel,
-  feed, rapid or spindle range checked against is bigger than the Othermill's. Errors, not a refusal: they keep Save Anyway
+  feed, rapid or spindle range checked against is bigger than the Othermill's. (Since #119 the X/Y bound and the Z warning are the validator's, for every post: travel-checks-all-machines.) Errors, not a refusal: they keep Save Anyway
   because the Z-zero convention is the vendor's documented default, not confirmed for imported G-code, and nothing in the
   post processor changes, so the post editor's sample (with Mist) and the golden loops still post every built-in. The posts
   are recognised by id, which a project's copy keeps, so a later edit to the built-in cannot switch the checks off for saved
