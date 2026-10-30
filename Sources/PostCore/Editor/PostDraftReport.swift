@@ -245,12 +245,22 @@ public struct PostDraftReport: Sendable {
         }
         guard let aLine = found[0].first, let bLine = found[1].first, let cLine = found[2].first, let pauseLine = found[3].first
         else { return ["The sample program is missing its toolpath comments; check the comment style."] }
-        let skippable = Set(parsed.blockDeleteLines)
+        // A `/` line, also after a line number (`N10 /M0`, which a numbering post writes), may be skipped by the controller.
+        let skippable = Set(parsed.blockDeleteLines).union(lines.indices.filter { i in
+            let body = lines[i].trimmingCharacters(in: .whitespaces)
+            let unnumbered = body.first.map { $0 == "N" || $0 == "n" } == true
+                ? body.dropFirst().drop { $0.isNumber }.drop { $0 == " " } : Substring(body)
+            return unnumbered.hasPrefix("/")
+        }.map { $0 + 1 })
         var out: [String] = []
         func isCut(_ b: GCodeBlock) -> Bool {
             b.values("G").contains { [1, 2, 3].contains($0) } && (b.value("X") != nil || b.value("Y") != nil || b.value("Z") != nil)
         }
-        let lastCutOfB = parsed.blocks.filter { $0.line > bLine && $0.line < cLine && isCut($0) }.last?.line ?? bLine
+        // B's own moves end where the tool change before C begins: its first M or T word (B has none: same tool, no pause), so a
+        // feed written in that tool change is not taken for B's last cut.
+        let changeStart = parsed.blocks.first { $0.line > bLine && $0.line < cLine && $0.words.contains { $0.letter == "M" || $0.letter == "T" } }?.line
+            ?? cLine
+        let lastCutOfB = parsed.blocks.filter { $0.line > bLine && $0.line < changeStart && isCut($0) }.last?.line ?? bLine
         // A modal G1 can make a cut without a G word; the builder states the motion word after any template line, so the
         // first cut of a toolpath always carries it.
         func changeIsSafe(from start: Int, to end: Int, tool: Int) -> Bool {

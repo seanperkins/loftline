@@ -327,6 +327,16 @@ import Testing
         #expect(PostDraftReport.sampleStopProblem(try stopPost { $0.pause = ["M5", "(MSG, {MESSAGE})", "/M0"] }) == Self.pauseFinding)
     }
 
+    @Test func aNumberedBlockDeleteStopIsNoStop() throws {
+        let p = try stopPost { $0.lineNumbers = true; $0.toolChange = ["M5", "/M0"] }
+        #expect(PostDraftReport.sampleStopProblem(p) != nil)
+    }
+
+    @Test func aFeedAfterTheStopInAToolChangeIsNotRefused() throws {
+        #expect(PostDraftReport.sampleStopProblem(try stopPost { $0.toolChange = ["M5", "M0", "G1 Z{SAFE_Z} F100"] }) == nil)
+        #expect(PostDraftReport.sampleStopProblem(try stopPost { $0.toolChange = ["M5", "T{T} M6", "G1 Z{SAFE_Z} F100"] }) == nil)
+    }
+
     @Test func aPostNamedLikeAMarkerIsNotRefused() throws {
         #expect(PostDraftReport.sampleStopProblem(try stopPost { $0.name = "Toolpath: Sample A [x]" }) == nil)
     }
