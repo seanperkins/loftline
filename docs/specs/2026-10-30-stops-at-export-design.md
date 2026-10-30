@@ -1,6 +1,6 @@
 # A post that never stops, refused at export
 
-Status: revision 2 (round 1 answered: see "Rulings"). Issue: #128 (found in the #125 spec review).
+Status: revision 3 (round 1 and the revision 2 verification answered: see "Rulings"). Issue: #128 (found in the #125 spec review).
 
 ## Problem
 
@@ -33,7 +33,12 @@ it cannot judge a missing stop, which depends on the posted program (a literal `
 5. **`stopProblems` reads the builder's markers once each.** It finds `Toolpath: Sample A [`, `… B [`, `… C [` and `Pause after
    toolpath: Sample A` with `firstIndex`; a post's own lines (a prelude, a footer) could carry the same text and move the
    windows it checks (auditor, round 1). Each marker must occur exactly once in the sample, or the finding is `The sample
-   program's toolpath comments appear more than once; a post line may not repeat them.` The editor gains the same rule.
+   program's toolpath comments appear more than once; a post line may not repeat them.` The editor gains the same rule. A
+   marker is a line whose comment text (after the comment opener `(`, `;` or `'` and spaces) begins with it, so the header's
+   `Post: <name>` does not count when a post's name holds the text (auditor, verification).
+6. **A block-delete stop is no stop.** A controller with Block Delete on skips a `/` line, so `stopProblems` gives no credit
+   for an `M0`, `T` or `M6` on one (`GCodeParser.Result.blockDeleteLines`): `["M5", "/M0"]` never stops (auditor,
+   verification). The editor gains the same rule.
 
 The check is of the post, not the job: a post whose pause never stops is refused even for a job with no pause, and a machine
 with touch-plate tool changes (whose builder never writes the post's tool change) still refuses a post whose tool change
@@ -59,6 +64,8 @@ read with `fromJSON` under an id outside the built-in families.
 | a post refused at build (tool change `["M5", "{TOOL_NAME}", "M0"]`, #125) | `nil`; the export refuses with the builder's placeholder message |
 | a machine with touch-plate tool changes and a tool change that never stops | refused |
 | a one-tool, no-pause job with a post whose pause never stops | refused (the post, not the job) |
+| tool change `["M5", "/M0"]`; pause `["M5", "(MSG, {MESSAGE})", "/M0"]` | refused (each) |
+| a post named `Toolpath: Sample A [` with stops that work | `nil` |
 
 The `T{T}` and fixed-`T` tool changes are already the editor's tests (`toolChangesMustStopOrChangeTheTool`); every built-in
 passes (`everyBuiltInIsClean`, the samples test). Goldens and samples unchanged.
