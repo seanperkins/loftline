@@ -385,7 +385,7 @@ enum HelpTopic: String, CaseIterable, Identifiable {
             """
         case .checkToolpaths:
             return """
-            Toolpaths ▸ Check Toolpaths… (⇧⌘K) checks every enabled toolpath and the combined program against the machine: travel limits, cuts into the spoilboard, rapids below the material, spindle speed range, and missing feeds. **Errors** must be fixed or explicitly accepted; **warnings** are worth a look.
+            Toolpaths ▸ Check Toolpaths… (⇧⌘K) checks every enabled toolpath and the combined program against the machine: travel limits (the zero you set and every move, the move home included, must fit within the machine's X and Y travel, whatever the XY origin; the stock plus the highest Z is checked against the Z travel), cuts into the spoilboard, rapids below the material, spindle speed range, and missing feeds. **Errors** must be fixed or explicitly accepted; **warnings** are worth a look.
             """
         case .exportGCode:
             return """

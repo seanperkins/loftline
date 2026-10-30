@@ -165,7 +165,8 @@ private func has(_ issues: [GCodeIssue], _ fragment: String, _ severity: GCodeIs
     let issues = v.validate(toolpaths: [bad])
     #expect(has(issues, "below the allowed depth"))
     #expect(has(issues, "Rapid XY move inside the material"))
-    #expect(has(issues, "X travel"))
+    // Travel is the written program's to check (#119): it holds every move, the move home included (TravelWindowTests).
+    #expect(!has(issues, "X travel"))
 }
 
 @Test(arguments: [ZZeroMode.materialTop, .spoilboard])

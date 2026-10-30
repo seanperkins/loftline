@@ -10,6 +10,9 @@ struct MotionChecker {
     let maxFeed: Double
     let units: LengthUnit
     let eps: Double
+    /// Compare the travel in `finish()`: only for the written program, which holds every move the machine makes (the move
+    /// home, lift-overs, the raised approach, the touch-plate clearance), so the toolpath pass leaves it to that one (#119).
+    let checksTravel: Bool
 
     var issues = IssueCollector()
     private var minP = Vec3(.infinity, .infinity, .infinity)
@@ -22,8 +25,9 @@ struct MotionChecker {
     private var hole: (xy: Vec2, z: Double)?
 
     /// `job` is in `jobUnits`; everything is converted to `units`.
-    init(profile: PostProfile, job: JobSetup, jobUnits: LengthUnit, units: LengthUnit) {
+    init(profile: PostProfile, job: JobSetup, jobUnits: LengthUnit, units: LengthUnit, checksTravel: Bool) {
         self.units = units
+        self.checksTravel = checksTravel
         coords = MachineCoordinates(job: job.scaled(by: jobUnits.factor(to: units)))
         let f = profile.units.factor(to: units)
         limits = MachineLimits(xTravel: profile.limits.xTravel * f, yTravel: profile.limits.yTravel * f,
@@ -133,14 +137,31 @@ struct MotionChecker {
         maxP = Vec3(other.maxP.x * f, other.maxP.y * f, other.maxP.z * f)
     }
 
-    /// Travel-extent checks; call once after all moves.
+    /// Travel checks; call once after all moves (#119, spec docs/specs/2026-10-30-travel-checks-design.md).
+    /// - X and Y: the program's zero (where the operator sets it, so a point the machine reaches) and every move fit one
+    ///   travel-sized window, whatever the XY origin: `max(maxX, 0) − min(minX, 0)`.
+    /// - Z: the program's own span is an error; the stock plus the highest Z (and any cut below the stock) is a warning, since
+    ///   whether the tip must reach the spoilboard depends on the bit's stick-out.
     mutating func finish() {
-        guard minP.x.isFinite else { return }
-        let spans = [("X", maxP.x - minP.x, limits.xTravel), ("Y", maxP.y - minP.y, limits.yTravel),
-                     ("Z", maxP.z - minP.z, limits.zTravel)]
-        for (axis, span, travel) in spans where span > travel + eps {
+        guard checksTravel, minP.x.isFinite else { return }
+        let u = units.abbreviation
+        for (axis, lo, hi, travel) in [("X", min(minP.x, 0), max(maxP.x, 0), limits.xTravel),
+                                       ("Y", min(minP.y, 0), max(maxP.y, 0), limits.yTravel)] where hi - lo > travel + eps {
             issues.add("travel-\(axis)", .error, line: nil,
-                       "\(axis) travel \(f(span)) \(units.abbreviation) exceeds the machine's \(axis) travel \(f(travel)) \(units.abbreviation)")
+                       "\(axis) travel \(f(hi - lo)) \(u) exceeds the machine's \(axis) travel \(f(travel)) \(u) (the program's zero "
+                           + "and its moves span \(axis)\(f(lo)) to \(axis)\(f(hi)))")
+        }
+        if maxP.z - minP.z > limits.zTravel + eps {
+            issues.add("travel-Z", .error, line: nil,
+                       "Z travel \(f(maxP.z - minP.z)) \(u) exceeds the machine's Z travel \(f(limits.zTravel)) \(u)")
+            return
+        }
+        let bottom = min(minP.z, coords.materialBottomZ)
+        if maxP.z - bottom > limits.zTravel + eps {
+            issues.add("z-envelope", .warning, line: nil,
+                       "\(GCodeValidator.zEnvelopePrefix) the program reaches (Z\(f(bottom)) to Z\(f(maxP.z)): \(f(maxP.z - bottom)) \(u)) "
+                           + "is more than the machine's Z travel \(f(limits.zTravel)) \(u): lower Home Z and Safe Z in Job Setup, and "
+                           + "check clamp and touch-plate heights.")
         }
     }
 }

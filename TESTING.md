@@ -184,7 +184,9 @@ report no errors for the sample. The status of every VCarve Pro feature is in `d
    the Z-zero mode, and check that they match the job you set up.
 2. Look at the toolpath display. The part should sit inside the material outline at the chosen
    origin. No moves should go off the bed (X 0–60 in, Y 0–96 in), and the lowest Z should be
-   what you expect. With Material-top zero, the deepest cut is −thickness minus any cut-through
+   what you expect. On a smaller machine the export refuses a program whose zero and moves do not fit one travel-sized
+   window, and warns when the stock plus the highest Z is more than the Z travel (#119): on the machine, check that the
+   zero you set leaves room for the farthest move in each direction, and that the stock clears the spindle at Home Z. With Material-top zero, the deepest cut is −thickness minus any cut-through
    allowance. With Spoilboard zero, it is about Z 0.
 
 **Air cut (always do this before the first real cut):**

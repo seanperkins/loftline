@@ -46,7 +46,7 @@
 - **post** — Golden programs are inline raw-string literals in `PostGoldenTests.swift` (no test
   resources, so Package.swift stays untouched).
 - **post** — GCodeValidator rules (shared by toolpath and G-code checks via `MotionChecker`):
-  error = travel span > machine travel (arcs sampled via I/J), Z below material bottom minus
+  error = travel span > machine travel (since #119 the zero and the moves in one window: travel-checks-all-machines) (arcs sampled via I/J), Z below material bottom minus
   `limits.maxSpoilboardCut` (both Z-zero modes), XY rapid with Z below the material top, feed
   move below the material top with the spindle off, feed move without F or with F <= 0, S
   outside min/max RPM, arc start/end radius mismatch, arc without I/J/R. Warnings = XY rapid
@@ -953,7 +953,7 @@
   an XY origin other than the lower left, a non-zero datum offset (nil counts as zero, so tiles pass), a move or the move
   home past the X/Y travel measured from that corner, and coolant (one error naming the toolpaths); and warns when the stock
   plus the highest Z any move, Home Z, Safe Z or a raised approach reaches is more than the Z travel, and when the travel,
-  feed, rapid or spindle range checked against is bigger than the Othermill's. Errors, not a refusal: they keep Save Anyway
+  feed, rapid or spindle range checked against is bigger than the Othermill's. (Since #119 the X/Y bound and the Z warning are the validator's, for every post: travel-checks-all-machines.) Errors, not a refusal: they keep Save Anyway
   because the Z-zero convention is the vendor's documented default, not confirmed for imported G-code, and nothing in the
   post processor changes, so the post editor's sample (with Mist) and the golden loops still post every built-in. The posts
   are recognised by id, which a project's copy keeps, so a later edit to the built-in cannot switch the checks off for saved
@@ -1091,3 +1091,19 @@
   ends a comment, as the parser reads it. The build refuses only those two findings: a stray brace or a name the template
   cannot use is written as typed (the author's own text, flagged by the parser as unrecognized), so hand-written posts that
   export today keep exporting. A pause or tool change with no stop at all is still found only by the editor's sample.
+- **travel-checks-all-machines — where the program goes, and the Z envelope, on every post (#119).** The program's X0 Y0 is
+  where the operator sets the work zero, so it is a point the machine reaches; every move is measured from it. A program fits
+  only if the zero and every move fit one travel-sized window: `max(maxX, 0) − min(minX, 0) ≤ X travel` (and Y), an error. That
+  is the bound for every XY origin without a table: lower left, the farthest move; upper right, the farthest move to the left;
+  centre, the span; a datum offset, the zero point and the moves together. The stock is not in the window (a sheet larger than
+  the bed overhangs it; Check Toolpaths warns), the zero is (cutting part of an oversized sheet means putting the zero within
+  reach; tiled G-code zeroes each tile at its corner). Z: the stock plus the highest Z, and any cut below the stock
+  (`maxZ − min(minZ, material bottom)`), more than the Z travel is a warning (stick-out and gantry clearance decide whether
+  the tip must reach the spoilboard), not added when the program's own Z span is already the `travel-Z` error. Both run in
+  `MotionChecker.finish()` on the written program only (`checksTravel`), which holds the move home, lift-overs, the raised
+  approach and the touch-plate clearance; the toolpath pass keeps every per-move rule and no longer compares spans, so one
+  error per axis reaches the export sheet. A posted program's first Z-only rapid is visited at X0 Y0 (the validator's `?? 0`
+  for an unknown X Y), which had made most posts check the window by accident; the rule no longer rests on that. The touch-off
+  spot needs no extra counting: the moves after the probe are visited at its X Y. After `G10`/`G92`-type shifts the warning
+  says depth and travel checks no longer apply. The Othermill's own XY bound and Z warning (#114) are replaced by these; it
+  keeps its Z zero, origin, datum and machine-size checks.
