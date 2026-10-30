@@ -1083,3 +1083,11 @@
   in a copy that turns it on, `G0 G43 Z{APPROACH_Z} H{T}` with T1–T7 (H00–H07, H00 applies none). A copy keeps `'`, mm and
   lines (`postProblem`). A user post or duplicate whose id was already `ncstudio-mm` or `ncstudio-mm-custom-<n>` joins the
   family and its rules, as Syntec and Haas ids did. No dwell cap (none documented), no built-in machine.
+- **placeholders-at-build — user text and stops checked when a program is built (#125).** The editor's placeholder rule now
+  also runs in `ProgramBuilder.build` (`PostProfile.placeholderProblem`, beside `dwellProblem` and `postProblem`), so a post
+  file, an imported post or a project's copy that puts `{TOOL_NAME}`, `{JOB_NAME}`, `{POST_NAME}`, `{POST_VERSION}` or
+  `{MESSAGE}` outside a comment, or `{STOP}` inside one, is refused at export with the editor's message. Both scan the same
+  lines (`PostDraftReport.templateLines`, the pause as written) with the post's comment style; a line break inside one entry
+  ends a comment, as the parser reads it. The build refuses only those two findings: a stray brace or a name the template
+  cannot use is written as typed (the author's own text, flagged by the parser as unrecognized), so hand-written posts that
+  export today keep exporting. A pause or tool change with no stop at all is still found only by the editor's sample.
