@@ -224,10 +224,10 @@ import Testing
 
     @Test func aProfileCanReplaceTheTemplate() throws {
         var p = BuiltInPosts.avidMach4Inch
-        p.pause = ["G0 Z{SAFE_Z}", "M5", "M117 {MESSAGE}", "{STOP}"]
+        p.pause = ["G0 Z{SAFE_Z}", "M5", "(MSG, {MESSAGE})", "{STOP}"]
         let lines = try post([cut("A", pause: PauseStep(message: "Hi")), cut("B", from: 4)], profile: p)
         let stop = try #require(index(of: "M0", in: lines))
-        #expect(lines[(stop - 3)...stop] == ["G0 Z0.2000", "M5", "M117 Hi", "M0"])
+        #expect(lines[(stop - 3)...stop] == ["G0 Z0.2000", "M5", "(MSG, Hi)", "M0"])
     }
 
     @Test func semicolonPostsGetASemicolonMessage() throws {
