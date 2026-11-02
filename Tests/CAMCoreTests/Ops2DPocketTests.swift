@@ -175,3 +175,18 @@ func ops2DPocketWarnsAboutRegionsTooNarrowForTheTool(strategy: PocketStrategy) t
     let (ok, _) = try pocket([F.rect(0, 0, 3, 3)]) { $0.strategy = strategy }
     #expect(ok.last?.metadata["warning"] == nil)
 }
+
+/// Issue #124: a ramp steeper than its maximum angle (here under the 0.5° floor) is reported once, last, on the
+/// finish toolpath; a clearance toolpath carries no second "warning" key for the editor to collide on.
+@Test func ops2DPocketWarnsOnceWhenARampCannotKeepItsAngle() throws {
+    let ramp = RampSettings(isEnabled: true, type: .smooth, length: 1, maxAngle: 0.2)
+    let (tps, _) = try pocket([F.rect(0, 0, 3, 3), F.rect(6, 0, 0.2, 3)]) {
+        $0.ramp = ramp
+        $0.clearanceToolID = F.bigEndMill.id
+    }
+    #expect(tps.count == 2)
+    let warning = tps.last?.metadata["warning"] ?? ""
+    #expect(warning.contains("1 region(s) too small for the tool"))
+    #expect(warning.hasSuffix(PassShaping.steepRampWarning(ramp)))
+    #expect(tps.first?.metadata["warning"] == nil)
+}
