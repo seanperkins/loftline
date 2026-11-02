@@ -594,7 +594,7 @@
 
 ## fix round 3 (keep-out home move, pass depth, tiled zones)
 
-- **fix round 3 — keep-out zones, the move home and tool changes.** The footer's move home is a fixed path, so `GCodeExporter.export` now models it: from the last toolpath's end, up to safe Z, then to Home Z if the footer uses `{HOME_Z}`, then across to home XY if it uses `{HOME_X}`/`{HOME_Y}` (Z first, as the built-in footers do; a custom footer that does something else is not modelled). This travel runs through both keep-out checks as a rapid-only "Move home (end of program)" toolpath, so a check-only zone or clamp taller than Home Z in the way is an error ("raise Home Z"). For lift-over zones, `KeepOutAvoidance.linkTravel` appends the lifted travel (up to the clearance height, across, down to Home Z at home) to the last toolpath, and the footer's own moves then go nowhere. The tool-change position is still unknown, but its first XY move no longer happens at safe Z when any keep-out zone or clamp (+ 2 × the 0.05 in / 1 mm clearance) is taller than safe Z: `PostJob.approachHeight` makes the post climb to that height after each M6 (and at the start), cross to the first point, and only then descend. This is a few seconds of extra Z travel per tool change and nothing when no zone is taller than safe Z.
+- **fix round 3 — keep-out zones, the move home and tool changes.** The footer's move home is a fixed path, so `GCodeExporter.export` now models it: from the last toolpath's end, up to safe Z, then to Home Z if the footer uses `{HOME_Z}`, then across to home XY if it uses `{HOME_X}`/`{HOME_Y}` (Z first, as the built-in footers do; since #132 the footer's own moves are walked instead, see `footer-travel`). This travel runs through both keep-out checks as a rapid-only "Move home (end of program)" toolpath, so a check-only zone or clamp taller than Home Z in the way is an error ("raise Home Z"). For lift-over zones, `KeepOutAvoidance.linkTravel` appends the lifted travel (up to the clearance height, across, down to Home Z at home) to the last toolpath, and the footer's own moves then go nowhere. The tool-change position is still unknown, but its first XY move no longer happens at safe Z when any keep-out zone or clamp (+ 2 × the 0.05 in / 1 mm clearance) is taller than safe Z: `PostJob.approachHeight` makes the post climb to that height after each M6 (and at the start), cross to the first point, and only then descend. This is a few seconds of extra Z travel per tool change and nothing when no zone is taller than safe Z.
 - **fix round 3 — non-positive pass depth.** A pass depth or tool stepdown of 0 or less is now an error ("Pass depth must be positive" / "Tool pass depth (stepdown) must be positive") in every operation that paces passes from it (profile, pocket, fluting, prism, moulding roughing, 3D flute, 3D roughing), via `DepthSettings.validatePassDepth`. `passDepths` itself is bounded at 10 000 passes so the forms' pass preview can never hang, and the pass-depth and tool-database fields show a red note for a value of 0 or less. A zig-zag ramp's length is floored at drop / tan(max angle) / 2 (two legs at the max angle; the smooth ramp floors at drop / tan the same way) and capped at 200 legs per pass. Cancelling a running generator mid-operation (a cancel flag threaded through every generator) was not done: no known input now produces unbounded work, and it would touch all sixteen generators; Stop still takes effect between operations.
 - **fix round 3 — tiled export.** Each tile's project also moves `Document.keepOutZones` into the tile frame (clamp layers were already moved with the shapes), so keep-out checks and lift-over links line up with the clipped toolpaths in every tile.
 
@@ -1162,8 +1162,8 @@
   `G28 X0 Y0` ending raises nothing, and a Z-only rapid from an unknown height that ends below the material top now warns
   `rapid-plunge` (it used to need a known start), so forgetting Z does not switch that check off. An incremental move on a
   forgotten axis resolves from 0; every G91 block already warns. G28/G30 with another motion code (or each
-  other) on one block with axis words is an error. Bare G28/G30 are unchanged; the stored position, G28.1/G30.1 and keep-out
-  zones on a custom footer's intermediate move are not modelled.
+  other) on one block with axis words is an error. Bare G28/G30 are unchanged; the stored position and G28.1/G30.1 are not modelled. A custom
+  footer's intermediate move is checked against keep-out zones and clamps since #132 (`footer-travel`).
 - **duplicate-ids — ids in a project are unique (#123).** A project finds operations, shapes, layers, models, keep-out
   zones and tools by id, taking one match, so two items on one id post whichever comes first (a disabled 0.2 in drill and
   an enabled 0.02 in one on one id posted 0.2 in). The app could write an operation clash itself: Duplicate on a merged
@@ -1186,3 +1186,20 @@
   as before, with no warning: LoftLine's own probe sequence re-enters with an explicit Z, so nothing it writes is drawn
   stale, and a note on every probed program would be noise. The validator still keeps the old Z after `G53` (a possible
   false alarm, never a missed one).
+- **footer-travel — the export walks the footer's own moves (#132).** The move home used to be modelled from the
+  footer's `{HOME_*}` tokens, Z first, so a custom footer's literal moves (a `G28 X6 Y6` intermediate move, a `G0 X0 Y0`,
+  XY before Z) were not checked against keep-out zones or clamps. `FooterTravel.model` renders the footer through the
+  builder's own values (`ProgramBuilder.renderedFooter`, which `build` posts) and walks it with an allowlist: G0 moves
+  (G90/G91), the motion mode the builder leaves (G0 after its retract, else the last move's), a G28/G30 intermediate
+  move, quiet codes (G4, G17, G40, G80, G90.1, G91.1, G94, the post's units code, M2-M5, M7-M9, M30, F/S/T/N/P). Anything
+  else (G1, arcs, G53, a bare G28, G43/G49, G92, work offsets, canned cycles, M0/M1/M6/M98, unparsed text, a `/` line)
+  stops the walk, and so does the G28/G30 after its intermediate move: the stored position is unknown, and keeping the
+  last Z there could miss a collision. When the walk stops early and the job has zones or clamps, the export warns
+  (`Keep-out zones and clamps are not checked from the footer's line "…" on`), a warning and not an error because the
+  common cause is the machine's own reference return. G1 stops rather than being walked because lift-over routing turns
+  every modelled move into a rapid. The move home is marked `KeepOut.asWrittenKey`, so `KeepOut.violations` checks it
+  without the climb to safe Z it assumes for the program's own XY rapids (footer lines are written verbatim; Home Z
+  below safe Z in a project not edited through Job Setup was missed). Lift-over routing needs no extra rule: the export
+  re-models the footer from the lifted route's end, so a footer that moves again on replay is what gets checked.
+  Built-in footers give the same points and the same output (pinned in `keepOutHomeLiftIsPinned`). Spec:
+  `docs/specs/2026-11-02-footer-travel-design.md`.
