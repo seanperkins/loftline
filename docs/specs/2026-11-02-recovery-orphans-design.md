@@ -1,53 +1,66 @@
 # A recovery copy is found even without its metadata (issue #123, item 2)
 
-Status: draft, revision 1
+Status: approved, revision 2 (after debate:all round 1)
 
 ## Problem
 
-`RecoveryStore.write` writes the project (`<id>.loftline`) and then its metadata (`<id>.json`).
-`entries()` finds copies only through `.json` files. Two ways to lose one:
-- a crash, a full disk or an error between the two writes;
-- a `.json` that cannot be read.
-
-Either way the `.loftline` copy of unsaved work is never offered. `RecoveryPrompt` says "Nothing to recover",
-and the copy stays in the folder unseen.
+`RecoveryStore.write` writes the project (`<id>.loftline`), then its metadata (`<id>.json`). `entries()` finds
+copies only through the `.json` files. So a `.loftline` whose `.json` is missing or unreadable is never offered.
+That happens after a crash, a full disk or an error between the two writes. `RecoveryPrompt` then says
+"Nothing to recover", and the unsaved work sits in the folder unseen.
 
 ## Design
 
-1. **`write` writes the metadata first, then the project.**
-   - If the second write fails, the metadata has no project, and `entries()` already skips an entry whose
-     project is missing.
-   - Rewriting a dirty document's copy replaces each file atomically, and the project file is never
-     removed in between.
-2. **`entries()` also lists every `<uuid>.loftline` in the folder that has no readable `<uuid>.json`.** For
-   such a copy:
-   - `id` comes from the file name. A file name that is not a UUID is skipped.
-   - `name` is the project's document name, read with `LoftLineProject.decode(from:)`. If that fails, or the
-     name is empty, it is `"Unsaved document"`.
-   - `savedAt` is the file's modification date, or `.distantPast`.
-   - It is sorted with the rest, newest first.
+1. **`entries()` makes one pass over the copies, not over the metadata.** For each regular file `<stem>.loftline`
+   in the folder (not the Archive subfolder, not directories, not hidden files):
+   - **The id.** It is `UUID(uuidString: stem)`, accepted only when its `uuidString == stem`. The app writes
+     upper-case names, and `projectURL(id)` rebuilds the path from the id, so any other name would be offered and
+     never cleared.
+   - **With metadata.** If `<id>.json` decodes to a `RecoveryEntry` whose `id` is that id, the entry is used as
+     written.
+   - **Without.** Otherwise the entry is `RecoveryEntry(id:, name: "Unsaved document", savedAt: <modification date>)`.
+     The project is not decoded here: this runs on the main thread at launch, and a large copy would stall every
+     launch until it is dealt with. It is decoded when the user recovers it, as every copy is (`opening(from:)`,
+     through `LoftLineDocument.init(configuration:)`).
+   - **Order.** Newest first, as today. A copy without a modification date sorts last.
+   - **No project, no entry.** A `.json` with no project is never visited, so the `fileExists` filter goes.
+2. **The write order stays: project, then metadata.** A crash between the two leaves real work, which the pass
+   above now finds.
+3. **`RecoveryCoordinator.tick` claims the id before writing.** `ownedIDs.insert(id)` moves before `store.write`.
+   - Otherwise, a metadata write that fails (a full disk) leaves an unowned `.loftline` for a document that is
+     still open. "Recover Unsaved Work…" would offer it, and its Discard would archive the live copy.
+   - A normal quit would not remove it, and the next launch would claim LoftLine did not quit normally.
+   - With the id owned, `discard` and `cleanUpOnQuit` remove whatever part was written.
 
-   Recovering it goes through `project(for:)` (`opening(from:)`) like any other entry, so a copy that cannot
-   be opened reports why, as today.
-3. **Nothing else changes.** `archive` and `remove` already move or delete both files, and ignore a missing
-   one.
+`archive` and `remove` already ignore a missing half (`try?`), so a copy with no `.json` is archived or removed
+like any other.
 
 ## Not in scope
 
-- **Atomic pairing of the two files** (one file with both). `entries()` tolerating either half missing is
-  enough.
+- **Pairing the two files atomically** (one file holding both). Tolerating a missing half is enough.
+- **A copy's name when its metadata is lost.** It is shown as "Unsaved document" with its time. The real name
+  appears once it is recovered.
 
 ## Tests (LoftLineAppTests, `RecoveryTests`)
 
-- **A copy with no `.json`** is listed: its id, the project's name, and the file's date.
-- **A copy whose `.json` is not JSON** is listed the same way, and is not listed twice.
-- **A copy that cannot be decoded and has no `.json`** is listed as "Unsaved document".
-- **A `.loftline` whose name is not a UUID** is ignored.
-- **Write order.** Make the project path unwritable by putting a directory at `<id>.loftline`, so the second
-  write fails. `write` throws, and `entries()` lists nothing for that id: the metadata is there with no
-  project.
-- **The existing `storeWritesListsAndRemoves` still passes.**
+**Listing:**
+- **No `.json`:** listed with its id, "Unsaved document" and the file's date.
+- **A `.json` that is not JSON:** listed the same way, once.
+- **A `.json` whose body names another id:** the copy is listed under its own id, as "Unsaved document".
+- **Ignored:**
+  - a lowercase-UUID `.loftline`;
+  - a `.loftline` that is a directory;
+  - a non-UUID `.loftline`;
+  - a hidden temporary file.
+- **A `.json` with no `.loftline`:** not listed.
+- **Sort order:** a copy without metadata sorts between two written entries by its date.
 
-## Docs
+**Archive and remove on a copy without metadata:**
+- `archive` moves it into the Archive.
+- `remove` deletes it.
 
-None beyond the code comments. This is a robustness fix with no user-facing setting.
+**`RecoveryCoordinator`:**
+- When the project write fails, because a directory sits at `<id>.loftline`, the id is still owned.
+- After the directory is removed and the document is saved, `discard` removes the stray `.json`.
+
+**Existing:** `storeWritesListsAndRemoves` and the `SaveConfirmationTests` recovery assertions still pass.
