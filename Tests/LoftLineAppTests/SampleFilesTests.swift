@@ -74,6 +74,13 @@ struct SampleFilesTests {
             }
             if case .pocket(var p) = op { p.params.depth.cutDepth = 0.125; op = .pocket(p) }
             if case .profile(var p) = op { p.params.tabs.isEnabled = true; op = .profile(p) }
+            // The lettering is wider than the 1/2 in 60° V-bit, which bottoms out at its full depth (0.433 in): say so
+            // as the flat depth, so the carve does as asked (the same program) and exports without the "wider than the
+            // V-bit" warning (#131).
+            if case .vcarve(var v) = op, let bit = library.tool(id: v.setup.toolID), let angle = bit.angle {
+                v.params.flatDepth = bit.radius / tan(angle / 2 * .pi / 180)
+                op = .vcarve(v)
+            }
             project.operations.append(op)
         }
         project = Self.withCopies(project, library: library)

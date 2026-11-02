@@ -180,6 +180,7 @@ enum GCodeExporter {
         issues += keepOutIssues(checked, document: doc)
         issues += LayoutChecks.toolpaths(toolpaths, job: doc.job, units: doc.units)
         issues += PreflightChecks.issues(project: project, toolpaths: toolpaths, units: doc.units)
+        issues += PreflightChecks.operationWarnings(toolpaths)
         issues += [ToolChangeZ.warning(toolpaths: toolpaths, profile: profile)].compactMap { $0 }
         issues += DialectChecks.issues(toolpaths: toolpaths, profile: profile)
         issues += OthermillSetup.issues(job: doc.job, units: doc.units, profile: profile)
