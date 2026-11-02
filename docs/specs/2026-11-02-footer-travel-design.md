@@ -1,6 +1,7 @@
 # The footer's travel is modelled from its moves (#132)
 
-Status: revision 2, after the round 1 panel (two GPT-6 seats, an Opus skeptic, a Sonnet simplifier).
+Status: revision 3, after the round 1 panel (two GPT-6 seats, an Opus skeptic, a Sonnet simplifier) and a
+verification pass.
 
 ## Problem
 
@@ -43,7 +44,9 @@ public struct FooterTravel: Sendable, Equatable {
 - The rendered lines are parsed with `GCodeParser.parse(_, comments: profile.parserComments)`. The walk runs in output
   units; `end` is converted in and every point out with `job.units.factor(to: profile.units)`.
 - Start: `(end.xy, max(end.z, safeZ))` (the builder's retract), G90 (the program's moves are absolute; a post with no
-  G90 already gets the validator's `no-absolute` warning), and no known motion mode.
+  G90 already gets the validator's `no-absolute` warning), and the motion mode the builder leaves: G0 when it writes
+  the retract (`end.z` below safe Z), otherwise the mode of the last toolpath's last move (G0 for a rapid, G1 for a
+  linear move, none for an arc).
 - `points` starts with the retract point when the walk records at least one move; otherwise it is empty, as today.
   A zero-length move is dropped.
 
@@ -51,10 +54,11 @@ public struct FooterTravel: Sendable, Equatable {
 
 | Block | Effect |
 |---|---|
-| G0/G1 with axis words (or axis words while G0/G1 is the motion mode) | A move to the resolved point (G90 absolute, G91 added to the current point) |
+| G0 with axis words (or axis words while G0 is the motion mode) | A move to the resolved point (G90 absolute, G91 added to the current point) |
+| G1 (or axis words while G1 is the motion mode) | The walk stops at this line: lift routing turns every modelled move into a rapid, which would replace a feed move |
 | G90, G91 | Sets the distance mode |
 | G28/G30 with axis words | A move to the resolved intermediate point, then the walk stops at this line (the machine then goes to a stored position LoftLine cannot see) |
-| M2, M30 | The walk ends; nothing after it runs |
+| M2, M30 | The walk ends after this block's own move (a controller runs a block's motion before it stops); nothing after it runs |
 | G4, G17, G40, G80, G90.1, G91.1, G94, the post's own units code (`profile.unitsCode`, so G20/G21 or G70/G71), M3, M4, M5, M7, M8, M9, and F, S, T, N words | No effect |
 | Anything else: G2/G3, a bare G28/G30, G53, G43/G49, G92, a work offset, a canned cycle, M0/M1, M6, M98, any other code; axis words with no known motion mode; a line with unparsed text; a block-delete (`/`) line | The walk stops at this line |
 
@@ -88,7 +92,10 @@ PostCore (`FooterTravelTests`):
 - a mm post on an inch job: points in inches;
 - `G53 G0 Z0`, G2, M6, M0, `/G0 Z1`, axis words before any G0/G1: each stops the walk at its line;
 - moves after M30 are not modelled and do not set `unmodelledFrom`;
-- `X1` after `G91` is incremental.
+- `X1` after `G91` is incremental;
+- `G0 X0 Y0 M30`: the move is recorded, then the walk ends;
+- a footer line `X0 Y0` after the builder's retract: a G0 move; after a last move that was linear at or above safe Z
+  (no retract written): the walk stops at it; `G1 X0 Y0`: the walk stops at it.
 
 CAMCore: a rapid-only toolpath marked as written, from Z below safe Z across a zone, is a violation; unmarked, it is
 not (today's behaviour).
