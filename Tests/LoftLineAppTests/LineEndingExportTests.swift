@@ -37,6 +37,28 @@ import Testing
         #expect(Array(bytes) == Array(try #require(r.fileText).utf8))
     }
 
+    /// Tiled export writes each tile with the post's line endings.
+    @Test func tiledMassoFilesAreCRLF() throws {
+        var d = Document(name: "Bench", job: JobSetup(width: 110, height: 24, thickness: 0.75))
+        d.add(AppTestSupport.rect(45, 8, 20, 6, layer: d.defaultLayerID))
+        var p = LoftLineProject(document: d)
+        p.operations = [OperationFactory.make(kind: .profile, project: p, library: .seeded, shapeIDs: [d.shapes[0].id])!]
+        let doc = LoftLineDocument(project: p, toolLibrary: AppTestSupport.library())
+        doc.calculateNow(doc.project.operations.map(\.id))
+        let tiles = TiledExport.files(project: doc.project, results: doc.results, profile: BuiltInPosts.massoG3Inch,
+                                      groupByTool: false, settings: TilingSettings(tileWidth: 60, tileHeight: 96))
+        #expect(tiles.count >= 2)
+        let dir = AppTestSupport.tempDir()
+        let urls = try GCodeFileSet(tiles: tiles).write(to: dir)
+        #expect(urls.count == tiles.count)
+        for url in urls {
+            let bytes = Array(try Data(contentsOf: url))
+            let lf = bytes.indices.filter { bytes[$0] == 10 }
+            #expect(!lf.isEmpty, "\(url.lastPathComponent)")
+            #expect(lf.allSatisfy { $0 > 0 && bytes[$0 - 1] == Self.cr }, "\(url.lastPathComponent)")
+        }
+    }
+
     /// The project's own copy posts (the copy wins): an old MASSO copy (LF, 1.0) keeps writing LF and is reported as
     /// differing from the installed post.
     @Test func anOldMassoCopyStaysLFAndIsReported() throws {

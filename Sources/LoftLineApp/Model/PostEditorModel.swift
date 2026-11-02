@@ -144,9 +144,10 @@ final class PostEditorModel: ObservableObject {
 
     // MARK: Text areas
 
-    /// A multi-line template from a text area: one G-code line per line, blank lines dropped.
+    /// A multi-line template from a text area: one G-code line per line, blank lines dropped. Splits on every line break
+    /// (Swift reads a pasted "\r\n" as one Character, so splitting on "\n" alone would keep it inside a line).
     static func lines(_ text: String) -> [String] {
-        text.split(separator: "\n", omittingEmptySubsequences: true).map { $0.trimmingCharacters(in: .whitespaces) }
+        text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
     }
 

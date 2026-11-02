@@ -298,6 +298,16 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         return dwellValues(seconds: seconds).filter { dwell.contains("{\($0.key)}") }.allSatisfy { (Double($0.value) ?? 1) != 0 }
     }
 
+    /// One line per template line: a line break inside one (a post read from JSON never passes the editor) would be counted
+    /// as two lines by the parser and as one by the stop check, and would break the file's line endings. Checked before the
+    /// dwell, so a broken dwell template is refused for its line break.
+    public var lineBreakProblem: String? {
+        let templates = (prelude ?? []) + preamble + toolChange + [toolLengthOffset, spindleOn, dwell, spindleOff, rapid, linear,
+                                                                   arcCW, arcCCW] + footer + (pause ?? [])
+        guard templates.contains(where: { $0.unicodeScalars.contains { $0 == "\r" || $0 == "\n" } }) else { return nil }
+        return "A template line contains a line break: put each line on its own line."
+    }
+
     /// Why this post would write what its controller misreads, or nil. Checked by the builder like `dwellProblem`, so a copy
     /// read from a file, which never passes the editor, is covered. For every post:
     /// - an apostrophe post declares no controller for touch-plate probing (Mach4 and GRBL are not documented to read `'`).
@@ -311,13 +321,7 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// - NcStudio (`BuiltInPosts.ncstudioIDs`) stays in millimeters (it reads F in mm/min) with arcs as lines (its I/J mode is a
     ///   controller setting).
     public var postProblem: String? {
-        // One line per template line: a line break inside one (a post read from JSON never passes the editor) would be
-        // counted as two lines by the parser and as one by the stop check, and would break the file's line endings.
-        let templates = (prelude ?? []) + preamble + toolChange + [toolLengthOffset, spindleOn, dwell, spindleOff, rapid, linear,
-                                                                   arcCW, arcCCW] + footer + (pause ?? [])
-        if templates.contains(where: { $0.unicodeScalars.contains { $0 == "\r" || $0 == "\n" } }) {
-            return "A template line contains a line break: put each line on its own line."
-        }
+        if let lineBreakProblem { return lineBreakProblem }
         if commentStyle == .apostrophe, controller != nil {
             return "A post that writes ' comments cannot declare a controller for touch-plate tool changes: Mach4 and GRBL are "
                 + "not documented to read them."

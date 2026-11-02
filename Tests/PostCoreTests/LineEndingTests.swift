@@ -63,7 +63,21 @@ import Testing
             p.id = "custom"
             edit(&p)
             #expect(p.postProblem == message, "\(name)")
-            #expect(throws: PostError.self, "\(name)") { try TemplatePostProcessor(profile: p).post(PostFixtures.postJob()) }
+            #expect(throws: PostError.invalidPost(message), "\(name)") {
+                try TemplatePostProcessor(profile: p).post(PostFixtures.postJob())
+            }
+        }
+    }
+
+    /// The line break is the reason given, even where the dwell check would also object to the broken template.
+    @Test func aDwellWithALineBreakIsRefusedForTheLineBreak() {
+        let message = "A template line contains a line break: put each line on its own line."
+        for builtIn in BuiltInPosts.all {
+            var p = builtIn
+            p.dwell = builtIn.dwell + "\nM30"
+            #expect(throws: PostError.invalidPost(message), "\(p.id)") {
+                try TemplatePostProcessor(profile: p).post(PostFixtures.postJob())
+            }
         }
     }
 }
