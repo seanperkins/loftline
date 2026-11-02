@@ -22,7 +22,8 @@ public struct RampSettings: Codable, Hashable, Sendable {
     public var type: RampType
     /// Horizontal ramp length (used by zigzag/smooth).
     public var length: Double
-    /// Maximum ramp angle in degrees (limits steepness when length is too short).
+    /// Maximum ramp angle in degrees (limits steepness when length is too short). Ramps are built at
+    /// 0.5° or more; a vector too short to keep the angle, or an angle under 0.5°, gets a warning.
     public var maxAngle: Double
 
     public init(isEnabled: Bool = false, type: RampType = .smooth, length: Double = 1.0, maxAngle: Double = 10) {

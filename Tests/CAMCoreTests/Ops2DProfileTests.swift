@@ -266,3 +266,58 @@ func ops2DProfileInsideLeadsNeverGougeThePart(type: LeadType) throws {
     guard let plunge = tp.moves.first(where: { !$0.isRapid })?.target else { Issue.record("no cut"); return }
     #expect(F.distanceToRectBoundary(plunge.xy, rect) > F.endMill.radius + 0.05)
 }
+
+// MARK: - Ramps steeper than their maximum angle (issue #124)
+
+private func polygon(radius r: Double, sides: Int = 64, center: Vec2 = Vec2(1, 1)) -> Path {
+    Path(points: (0..<sides).map { i in
+        let a = 2 * Double.pi * Double(i) / Double(sides)
+        return center + Vec2(r * cos(a), r * sin(a))
+    }, closed: true)
+}
+
+/// A loop 0.063 in round cut 0.125 per pass at 0.5 degrees needs 14.3 in of ramp; 200 laps give 12.6 in.
+@Test func ops2DProfileWarnsWhenATinyLoopCannotKeepTheRampAngle() throws {
+    let ramp = RampSettings(isEnabled: true, type: .spiral, length: 1, maxAngle: 0.5)
+    let (tp, _) = try profile([polygon(radius: 0.01)], side: .on, depth: 0.5) { $0.ramp = ramp }
+    #expect(tp.metadata["warning"]?.hasSuffix(PassShaping.steepRampWarning(ramp)) == true)
+}
+
+/// A 0.05 in open line at 0.5 degrees wants 287 zig-zag legs against the cap of 200.
+@Test func ops2DProfileWarnsWhenAShortOpenVectorCannotKeepTheRampAngle() throws {
+    let ramp = RampSettings(isEnabled: true, type: .zigzag, length: 1, maxAngle: 0.5)
+    let line = Path(points: [Vec2(1, 1), Vec2(1.05, 1)], closed: false)
+    let (tp, _) = try profile([line], side: .on, depth: 0.5) { $0.ramp = ramp }
+    #expect(tp.metadata["warning"]?.contains(PassShaping.steepRampWarning(ramp)) == true)
+}
+
+@Test func ops2DProfileWithoutASteepRampHasNoRampWarning() throws {
+    let (tp, _) = try profile([F.rect(0, 0, 4, 4)]) {
+        $0.ramp = RampSettings(isEnabled: true, type: .spiral, length: 1, maxAngle: 10)
+    }
+    #expect(tp.metadata["warning"] == nil)
+}
+
+/// The inside of a 3/8 in hole with a 1/4 in mill is 0.39 in round: one lap per 0.125 in pass went down at 17.7°.
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func ops2DProfileSpiralRampKeepsItsAngleOnASmallHole(mode: ZZeroMode) throws {
+    let (tp, ctx) = try profile([polygon(radius: 0.1875, sides: 96)], side: .inside, depth: 0.5, zZero: mode) {
+        $0.ramp = RampSettings(isEnabled: true, type: .spiral, length: 1, maxAngle: 10)
+    }
+    let c = ctx.coords
+    #expect(tp.metadata["warning"] == nil)
+    var cur: Vec3?
+    var ramped = false
+    for m in tp.moves {
+        if case .linear(let p, _) = m, let s = cur, p.z < s.z - 1e-9 {
+            let horizontal = s.xy.distance(to: p.xy)
+            if horizontal > 1e-9 {
+                ramped = true
+                #expect(atan((s.z - p.z) / horizontal) * 180 / .pi <= 10 + 1e-6)
+            }
+        }
+        cur = m.target ?? cur
+    }
+    #expect(ramped)
+    #expect(abs(tp.minZ! - c.z(depth: 0.5)) < 1e-9)
+}

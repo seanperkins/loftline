@@ -3,14 +3,6 @@ import Foundation
 import Testing
 @testable import CAMCore
 
-private func circle(radius r: Double, sides: Int = 96) -> ArcLengthChain {
-    let pts = (0..<sides).map { i -> Vec2 in
-        let a = 2 * Double.pi * Double(i) / Double(sides)
-        return Vec2(r * cos(a), r * sin(a))
-    }
-    return ArcLengthChain(Chain2D(points: pts, isClosed: true))
-}
-
 /// Issue #96. The smooth ramp ran at least `drop / tan(max angle)` along the loop but never more than one lap, so a
 /// loop shorter than that (the inside of a 1/2 in hole with a 1/4 in mill is 0.785 in round) went down steeper than
 /// the maximum angle: 17.7 degrees for a 0.25 in pass with a 10 degree limit. It now keeps going round.
@@ -20,14 +12,8 @@ func smoothRampNeverGoesDownSteeperThanTheMaximumAngle(radius: Double, drop: Dou
     let ramp = RampSettings(isEnabled: true, type: .smooth, length: 1, maxAngle: 10)
     let pass = PassShaping.pass(on: chain, s0: 0, fromDepth: 0, toDepth: drop, ramp: ramp)
     let pts = pass.pieces.flatMap { $0 }
-    let limit = tan(10 * Double.pi / 180)
-    var steepest = 0.0
-    for (a, b) in zip(pts, pts.dropFirst()) {
-        let run = a.xy.distance(to: b.xy)
-        guard run > 1e-12 else { continue }
-        steepest = max(steepest, abs(b.depth - a.depth) / run)
-    }
-    #expect(steepest <= limit + 1e-9, "ramps at \(atan(steepest) * 180 / .pi) degrees on a loop \(chain.length) round")
+    let steepest = steepestSlope(pass)
+    #expect(steepest <= tan(10 * Double.pi / 180) + 1e-9, "ramps at \(atan(steepest) * 180 / .pi) degrees on a loop \(chain.length) round")
     // It still arrives at the pass depth and then cuts one whole lap at that depth.
     #expect(abs(pts.last!.depth - drop) < 1e-12)
     let atDepth = zip(pts, pts.dropFirst()).filter { $0.depth > drop - 1e-12 && $1.depth > drop - 1e-12 }

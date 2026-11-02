@@ -57,7 +57,7 @@ public struct ProfileOperation: ToolpathOperation {
                                       fitArcs: params.preferArcs)
         let sourceStarts = closed.compactMap(\.first)
         let shapeLoops = shapes.map { s in s.paths.map { $0.flattened(tolerance: tol) } }
-        var tabNotes = TabNotes()
+        var cutNotes = CutNotes()
         // Each pass resolves manual anchors against its own loops: an anchor's tab sits where the
         // loop this toolpath would cut for the anchor's part passes it, at this pass's offset. The
         // part is the anchor's vector with every selected closed vector whose offset at that pass
@@ -117,7 +117,7 @@ public struct ProfileOperation: ToolpathOperation {
         }
         let rough = cutLoops(chains, passes: passes, from: home, tool: tool, wasteRegion: plan.wasteRegion,
                              sourceStarts: sourceStarts, shapeLoops: shapeLoops, ownLoops: ownLoops(at: roughOffset),
-                             context: context, builder: &builder, tabNotes: &tabNotes)
+                             context: context, builder: &builder, cutNotes: &cutNotes)
         var ignoredAnchors = rough.anchors?.ignored ?? 0
         var unheldOnRoughing = 0
         if let lastPass, let finishPlan {
@@ -135,7 +135,7 @@ public struct ProfileOperation: ToolpathOperation {
                                   // allowance beyond the tool radius clamps either offset at zero.
                                   roughing: (tabs: rough.placed, loops: plan.chains.map { ArcLengthChain($0) },
                                              allowance: max(roughOffset, 0) - max(finalOffset, 0)),
-                                  context: context, builder: &builder, tabNotes: &tabNotes)
+                                  context: context, builder: &builder, cutNotes: &cutNotes)
             ignoredAnchors = finish.anchors?.ignored ?? 0
             // An anchor the roughing pass could not place while the loop of its own vector was in
             // that pass's toolpath (its stretch filled by the larger offset while the loop survives
@@ -147,12 +147,12 @@ public struct ProfileOperation: ToolpathOperation {
         }
         var meta: [String: String] = [:]
         var warnings: [String] = []
-        if tabNotes.shortLoops > 0 {
-            warnings.append("\(tabNotes.shortLoops) loop(s) got fewer tabs than asked (too short, or anchors too close; "
-                + "fewest placed: \(tabNotes.fewest)); the part may come free")
+        if cutNotes.shortLoops > 0 {
+            warnings.append("\(cutNotes.shortLoops) loop(s) got fewer tabs than asked (too short, or anchors too close; "
+                + "fewest placed: \(cutNotes.fewest)); the part may come free")
         }
-        if tabNotes.lostOnLastPass > 0 {
-            warnings.append("tabs did not carry to the last pass on \(tabNotes.lostOnLastPass) loop(s); the part may come free")
+        if cutNotes.lostOnLastPass > 0 {
+            warnings.append("tabs did not carry to the last pass on \(cutNotes.lostOnLastPass) loop(s); the part may come free")
         }
         if unheldOnRoughing > 0 {
             warnings.append("\(unheldOnRoughing) tab anchor(s) hold only on the last pass; the roughing passes cut through there and the part may come free")
@@ -169,6 +169,7 @@ public struct ProfileOperation: ToolpathOperation {
         if params.side != .on && !open.isEmpty && openSide == .on {
             warnings.append("\(open.count) open vector(s) cut on the line (close them to cut \(params.side == .outside ? "outside" : "inside"))")
         }
+        if cutNotes.steepRamp { warnings.append(PassShaping.steepRampWarning(params.ramp)) }
         if !warnings.isEmpty { meta["warning"] = warnings.joined(separator: "; ") }
         return [Toolpath(name: setup.name, operationID: setup.id, kind: .profile, tool: tool,
                          moves: builder.finish(), metadata: meta)]
@@ -183,11 +184,13 @@ public struct ProfileOperation: ToolpathOperation {
         return lp
     }
 
-    /// What the tab layout could not do as asked: loops that got fewer tabs than asked (too short
-    /// to hold them apart, or manual anchors that overlapped) and the fewest any of them got, and
-    /// last-pass loops whose roughing loop had tabs that did not reach them.
-    private struct TabNotes {
+    /// What the cut could not do as asked: loops that got fewer tabs than asked (too short to hold
+    /// them apart, or manual anchors that overlapped) and the fewest any of them got; last-pass loops
+    /// whose roughing loop had tabs that did not reach them; and whether any pass's ramp went down
+    /// steeper than its maximum angle (issue #124).
+    private struct CutNotes {
         var shortLoops = 0, fewest = Int.max, lostOnLastPass = 0
+        var steepRamp = false
     }
 
     /// Orders `chains` (inner loops first) from `start` and cuts each through `passes`, resolving
@@ -201,7 +204,7 @@ public struct ProfileOperation: ToolpathOperation {
     private func cutLoops(_ chains: [Chain2D], passes: [Double], from start: Vec2, tool: Tool, wasteRegion: WasteSide,
                           sourceStarts: [Vec2], shapeLoops: [[[Vec2]]], ownLoops: (TabAnchor) -> TabAnchors.OwnLoops,
                           roughing: (tabs: [Vec2], loops: [ArcLengthChain], allowance: Double)? = nil, context: CAMContext,
-                          builder: inout ToolpathBuilder, tabNotes: inout TabNotes) -> (placed: [Vec2], anchors: TabAnchors.Resolution?) {
+                          builder: inout ToolpathBuilder, cutNotes: inout CutNotes) -> (placed: [Vec2], anchors: TabAnchors.Resolution?) {
         let tol = context.tolerance
         let startPoint = params.startPoint ?? .nearest
         var ordered = ProfileOrdering.ordered(chains, by: params.order ?? .nearest, from: start, shapeLoops: shapeLoops,
@@ -256,12 +259,12 @@ public struct ProfileOperation: ToolpathOperation {
                     }
                     centers = inherited
                     if inherited.isEmpty, roughing.tabs.contains(where: { p in roughLoops.contains { $0.project(p).distance <= within } }) {
-                        tabNotes.lostOnLastPass += 1
+                        cutNotes.lostOnLastPass += 1
                     }
                 }
             }
             placed += cut(chain, passes: passes, tool: tool, wasteRegion: wasteRegion, manualTabs: centers,
-                          layingOut: counts, builder: &builder, tolerance: tol, tabNotes: &tabNotes)
+                          layingOut: counts, builder: &builder, tolerance: tol, cutNotes: &cutNotes)
         }
         return (placed, resolved)
     }
@@ -271,7 +274,7 @@ public struct ProfileOperation: ToolpathOperation {
     /// loop is counted twice. Returns the material-frame centre of each tab used.
     private func cut(_ chain: Chain2D, passes: [Double], tool: Tool, wasteRegion: WasteSide, manualTabs: [Double]?,
                      layingOut: Bool, builder: inout ToolpathBuilder, tolerance tol: Double,
-                     tabNotes: inout TabNotes) -> [Vec2] {
+                     cutNotes: inout CutNotes) -> [Vec2] {
         let alc = ArcLengthChain(chain)
         guard alc.length > tol else { return [] }
         let start = params.depth.startDepth
@@ -283,6 +286,7 @@ public struct ProfileOperation: ToolpathOperation {
             for d in passes {
                 let pass = PassShaping.pass(on: forward ? alc : backward, s0: 0, fromDepth: prev, toDepth: d,
                                             ramp: params.ramp)
+                if pass.isSteeperThanMaxAngle { cutNotes.steepRamp = true }
                 builder.cutChain(pass.points)
                 prev = d
                 forward.toggle()
@@ -297,8 +301,8 @@ public struct ProfileOperation: ToolpathOperation {
                           cutDepth: params.depth.cutDepth)
             } ?? TabLayout(loopLength: alc.length, settings: params.tabs, toolDiameter: tool.diameter, cutDepth: params.depth.cutDepth)
             if layingOut, layout.centers.count < layout.requestedCount {
-                tabNotes.shortLoops += 1
-                tabNotes.fewest = min(tabNotes.fewest, layout.centers.count)
+                cutNotes.shortLoops += 1
+                cutNotes.fewest = min(cutNotes.fewest, layout.centers.count)
             }
             tabs = layout
         }
@@ -312,6 +316,7 @@ public struct ProfileOperation: ToolpathOperation {
             let isLast = k == passes.count - 1
             var pass = PassShaping.pass(on: alc, s0: s0, fromDepth: prev, toDepth: d, ramp: ramp,
                                         overcut: overcut, spiralFinish: isLast)
+            if pass.isSteeperThanMaxAngle { cutNotes.steepRamp = true }
             if let tabs { pass = tabs.apply(to: pass, chain: alc) }
             var pts = pass.points
             if useLeads {

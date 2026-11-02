@@ -28,6 +28,7 @@ public struct PocketOperation: ToolpathOperation {
         var toolpaths: [Toolpath] = []
         var restAfter: Double?
         var leftUncut = false
+        var steepRamp = false
         for (i, big) in clearanceTools.enumerated() {
             let planner = try makePlanner(region: region, tool: big, tolerance: tol)
             // The first tool clears everything; each later one only what the previous could not reach.
@@ -44,7 +45,9 @@ public struct PocketOperation: ToolpathOperation {
             if stageUncut { leftUncut = true }
             guard !groups.isEmpty else { continue }
             let label = clearanceTools.count == 1 ? "clearance" : "clearance \(i + 1)"
-            toolpaths.append(try emit(groups, planner: planner, tool: big, context: context, name: "\(setup.name) (\(label))"))
+            let clearance = try emit(groups, planner: planner, tool: big, context: context, name: "\(setup.name) (\(label))")
+            toolpaths.append(clearance.toolpath)
+            if clearance.steepRamp { steepRamp = true }
             // Later tools take everything this one reached as cleared, so a tool that left floor uncut
             // does not hand over (the floor it missed stays in the next tool's job, and is reported).
             if !stageUncut { restAfter = big.radius }
@@ -63,7 +66,9 @@ public struct PocketOperation: ToolpathOperation {
         guard !groups.isEmpty else {
             throw CAMError.invalidGeometry("The tool does not fit inside the selected vectors")
         }
-        var finish = try emit(groups, planner: planner, tool: tool, context: context, name: setup.name)
+        let emitted = try emit(groups, planner: planner, tool: tool, context: context, name: setup.name)
+        var finish = emitted.toolpath
+        if emitted.steepRamp { steepRamp = true }
         var warnings: [String] = []
         let missed = planner.unreachableComponents
         if missed > 0 { warnings.append("\(missed) region(s) too small for the tool") }
@@ -71,6 +76,9 @@ public struct PocketOperation: ToolpathOperation {
             warnings.append("floor the tool can reach is left uncut at this stepover; use a smaller stepover")
         }
         if skipped > 0 { warnings.append("\(skipped) clearance tool(s) ignored (each must be smaller than the one before and larger than the finish tool)") }
+        // Reported once, here: a second "warning" key on a clearance toolpath would collide in the
+        // operation editor's metadata list.
+        if steepRamp { warnings.append(PassShaping.steepRampWarning(params.ramp)) }
         if !warnings.isEmpty { finish.metadata["warning"] = warnings.joined(separator: "; ") }
         toolpaths.append(finish)
         return toolpaths
@@ -119,13 +127,15 @@ public struct PocketOperation: ToolpathOperation {
 
     /// Cuts every component through all depth passes, linking chains at depth when the
     /// connecting move stays inside the tool-centre region.
+    /// `steepRamp`: some pass's ramp went down steeper than its maximum angle (issue #124).
     private func emit(_ groups: [[Chain2D]], planner: PocketPlanner, tool: Tool, context: CAMContext,
-                      name: String) throws -> Toolpath {
+                      name: String) throws -> (toolpath: Toolpath, steepRamp: Bool) {
         try params.depth.validatePassDepth(toolStepdown: tool.stepdown)
         let passes = params.depth.passDepths(toolStepdown: tool.stepdown)
         guard !passes.isEmpty else { throw CAMError.invalidParameter("Cut depth must be deeper than start depth") }
         let tol = context.tolerance
         var builder = ToolpathBuilder(coords: context.coords, tool: tool, units: context.units, tolerance: tol)
+        var steepRamp = false
         let linker = RegionLinker(region: planner.centerRegion, maxLength: 2 * tool.diameter, tolerance: tol)
         for chains in groups {
             var prev = params.depth.startDepth
@@ -141,12 +151,13 @@ public struct PocketOperation: ToolpathOperation {
                         let cleared = k == 0 ? 0 : prev
                         let pass = PassShaping.pass(on: alc, s0: 0, fromDepth: k == 0 ? params.depth.startDepth : prev,
                                                     toDepth: d, ramp: params.ramp)
+                        if pass.isSteeperThanMaxAngle { steepRamp = true }
                         builder.cutChain(pass.points, clearedDepth: cleared)
                     }
                 }
                 prev = d
             }
         }
-        return Toolpath(name: name, operationID: setup.id, kind: .pocket, tool: tool, moves: builder.finish())
+        return (Toolpath(name: name, operationID: setup.id, kind: .pocket, tool: tool, moves: builder.finish()), steepRamp)
     }
 }

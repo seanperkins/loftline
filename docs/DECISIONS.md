@@ -1117,3 +1117,18 @@
   with it (a post line cannot move the windows it checks, and a post named like a marker is not refused), and gives no credit
   to a stop on a block-delete line. Motion inside a template before its stop (a lift, or a descent) is the author's code,
   checked by the validator like any move, not by this rule.
+- **ramp-angle-laps — every ramp keeps its maximum angle, or says it cannot (#124).** The spiral ramp took exactly one lap,
+  so a loop shorter than `drop / tan(max angle)` went down too steeply (17.7° for a 0.25 in pass inside a 1/2 in hole with a
+  1/4 in mill, against 10°). Spiral and smooth now share one descent length, `min(max(asked, drop / tan), 200 laps)`: the
+  spiral asks for one lap, so a loop long enough for one lap is ramped exactly as before, and a shorter loop goes round as
+  far as the angle needs, ending part-way round a lap. A profile chains its next pass from there; a pocket starts every pass
+  at the loop's start, so on a short loop it now retracts (safely, through `travel`) and re-enters between passes, as the
+  smooth ramp already did. Ramps add length rather than split a pass, which keeps the user's pass depths. Past the 200-lap or
+  200-leg caps, or with an angle under the 0.5° floor the ramp is built with, a ramp is steeper than asked: `ChainPass`
+  measures the slope it actually has against the angle the user typed (a ramp gentler than asked never warns), and the
+  profile or pocket gives one warning ("ramps go down steeper than the N° maximum angle on some passes …; use a plunge, a
+  steeper maximum angle, or a shallower pass depth"). A pocket reports it once, on its finish toolpath, so the operation
+  editor never lists two "warning" keys. A ramp on a toolpath projected onto a 3D model keeps its angle relative to the
+  surface. This supersedes the cam-2d ramp notes above (smooth `max(length, Δ/tan)`, zig-zag "within `length`", spiral "one
+  helical lap per pass"), the fix-round-3 note that zig-zag is capped at 200 legs (it now also warns there), and the #96
+  note that the spiral ramp was still unbounded.
