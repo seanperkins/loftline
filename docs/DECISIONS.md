@@ -1132,3 +1132,13 @@
   surface. This supersedes the cam-2d ramp notes above (smooth `max(length, Δ/tan)`, zig-zag "within `length`", spiral "one
   helical lap per pass"), the fix-round-3 note that zig-zag is capped at 200 legs (it now also warns there), and the #96
   note that the spiral ramp was still unbounded.
+- **operation-warnings-at-export — what an operation could not do as asked is a warning at export (#131).** Each toolpath's
+  `metadata["warning"]` (tabs that may let the part come free, vectors too small for the tool, a ramp steeper than its maximum
+  angle …) was shown only on the job sheet and in the operation editor. `GCodeExporter.export` now adds
+  `PreflightChecks.operationWarnings`: one warning per toolpath, `"Toolpath '<name>': <warning>"`, so Check Toolpaths (under
+  the operation, not repeated under the combined program), the export sheet and the CLI show it. Always a warning, never an
+  error: the operation already let it through, and it must not need Save Anyway. The string is not split on "; ", because a
+  sentence can contain one. Not part of `PreflightChecks.issues`, which the job sheet also calls and which would print each
+  warning a second time beside the step that already shows it. A cut deeper than the flutes shows twice on purpose: the
+  validator's error, which needs Save Anyway, and the operation's note, which rides in its warning string. The sign sample's
+  V-carve now states the V-bit's full depth as its flat depth, so it does as asked (the same program) and exports clean.

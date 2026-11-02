@@ -22,6 +22,19 @@ enum PreflightChecks {
             + modelsDeeperThanStock(project.document)
     }
 
+    // MARK: Operation warnings
+
+    /// What each operation could not do as asked (`metadata["warning"]`: tabs that may let the part come free,
+    /// vectors too small for the tool, a ramp steeper than its maximum angle …), one warning per toolpath in
+    /// order, the string whole (a sentence can contain "; "). Not part of `issues`: the job sheet calls that
+    /// and already prints these in each step's notes; `GCodeExporter.export` adds them (#131).
+    static func operationWarnings(_ toolpaths: [Toolpath]) -> [GCodeIssue] {
+        toolpaths.compactMap { tp in
+            guard let w = tp.metadata["warning"], !w.isEmpty else { return nil }
+            return GCodeIssue(severity: .warning, message: "Toolpath '\(tp.name)': \(w)")
+        }
+    }
+
     // MARK: Loose parts
 
     /// Profile toolpaths that cut closed vectors through the full thickness with tabs off. The last

@@ -295,6 +295,67 @@ import Testing
         let r = exportOneTool(try PostProfile.fromJSON(p.toJSON()))
         #expect(r.text == nil && r.errorMessage?.contains("{TOOL_NAME} is text") == true, "\(r.errorMessage ?? "")")
     }
+
+    // MARK: Operation warnings (#131)
+
+    func calculated(_ op: (LoftLineProject) -> AnyOperation, thickness: Double = 0.75) -> LoftLineDocument {
+        let doc = LoftLineDocument(project: project(thickness: thickness), toolLibrary: AppTestSupport.library())
+        let o = op(doc.project)
+        doc.perform("Add") { $0.operations.append(o) }
+        doc.calculateNow([o.id])
+        return doc
+    }
+
+    func exportAll(_ doc: LoftLineDocument) -> GCodeExportResult {
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
+        return GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+    }
+
+    @Test func operationWarningsAreOnePerToolpathInOrder() {
+        func tp(_ name: String, _ warning: String?) -> Toolpath {
+            Toolpath(name: name, kind: .profile, tool: endMill, spindleRPM: 18000, moves: [],
+                     metadata: warning.map { ["warning": $0] } ?? [:])
+        }
+        let issues = PreflightChecks.operationWarnings([tp("Clean", nil), tp("A", "x; y"), tp("B", "Profile 1: z")])
+        #expect(issues.map(\.message) == ["Toolpath 'A': x; y", "Toolpath 'B': Profile 1: z"])
+        #expect(issues.allSatisfy { $0.severity == .warning })
+    }
+
+    /// Tabs the loop cannot hold apart: "the part may come free" was on the job sheet only.
+    @Test func aTabWarningReachesExportAndCheckToolpathsOnce() throws {
+        let doc = calculated { p in
+            var op = profile(p, depth: 0.5, tabs: true)
+            if case .profile(var prof) = op { prof.params.tabs.countPerPath = 50; op = .profile(prof) }
+            return op
+        }
+        let r = exportAll(doc)
+        #expect(r.text != nil && r.errorMessage == nil)
+        #expect(!r.issues.contains { $0.severity == .error }, "\(r.issues)")
+        let tabIssues = r.issues.filter { $0.message.hasPrefix("Toolpath 'Cut': ") && $0.message.contains("got fewer tabs than asked") }
+        #expect(tabIssues.count == 1, "\(r.issues)")
+        #expect(tabIssues.first?.severity == .warning)
+
+        let report = ValidationReport.make(project: doc.project, results: doc.results, profile: BuiltInPosts.avidMach4Inch,
+                                           groupByTool: false)
+        let own = try #require(report.sections.first { $0.title == "Cut" })
+        #expect(own.issues.contains { $0.message.contains("got fewer tabs than asked") })
+        let combined = report.sections.first { $0.id == "combined" }?.issues ?? []
+        #expect(!combined.contains { $0.message.contains("got fewer tabs") })
+
+        let sheet = JobSheet.make(project: doc.project, results: doc.results, profile: BuiltInPosts.avidMach4Inch,
+                                  groupByTool: false, rapidRate: 600, settings: TimeEstimateSettings())
+        #expect(JobSheetHTML.render(sheet).components(separatedBy: "got fewer tabs than asked").count == 2)
+    }
+
+    /// The validator already makes a cut past the flutes an error; the operation's note about it rides along
+    /// in its warning (spec #131: the duplicate is kept on purpose).
+    @Test func aFluteOverrunIsAnErrorAndAWarning() {
+        let doc = calculated({ p in profile(p, depth: 1.2, tabs: true) }, thickness: 1.5)
+        let r = exportAll(doc)
+        #expect(r.issues.contains { $0.severity == .error && $0.message.contains("flute") }, "\(r.issues)")
+        #expect(r.issues.contains { $0.severity == .warning && $0.message.hasPrefix("Toolpath 'Cut': ") && $0.message.contains("flute") },
+                "\(r.issues)")
+    }
 }
 
 /// A tool named by the library's own naming is never reported as a mismatch against its own diameter.
