@@ -89,7 +89,9 @@ import Testing
         #expect(!doc.confirmSave())
     }
 
-    @Test(.timeLimit(.minutes(1))) func aPipeInTheFilesPlaceIsNotWaitedOn() throws {
+    /// No time limit here: this suite runs on the main actor, so in a full run a limit also counts the wait for other
+    /// main-actor tests (#130). That a pipe is never waited on is timed off the main actor, in `PipeReadTests`.
+    @Test func aPipeInTheFilesPlaceIsNotWaitedOn() throws {
         let url = AppTestSupport.tempDir().appendingPathComponent("pipe.loftline")
         #expect(mkfifo(url.path, 0o644) == 0)
         let doc = makeDoc()
@@ -418,5 +420,15 @@ import Testing
         try Data(repeating: 8, count: size).write(to: other)
         #expect(try #require(LoftLineDocument.regularFileDigest(at: other, ofSizes: [size])).digest != a.digest)
         #expect(LoftLineDocument.regularFileDigest(at: url, ofSizes: [size + 1]) == nil)   // other sizes are never read
+    }
+}
+
+/// The file read under `confirmSave` never blocks on a pipe put in the file's place (`O_NONBLOCK`). Timed here, off the
+/// main actor, so the limit measures only the read (#130).
+@Suite struct PipeReadTests {
+    @Test(.timeLimit(.minutes(1))) func aPipeIsRefusedAtOnce() {
+        let url = AppTestSupport.tempDir().appendingPathComponent("pipe.loftline")
+        #expect(mkfifo(url.path, 0o644) == 0)
+        #expect(LoftLineDocument.regularFileDigest(at: url, ofSizes: [0, 10, 1000]) == nil)
     }
 }
