@@ -32,8 +32,10 @@ import Testing
 
     @Test func aStoppedSpindleAndTBeforeM6Pass() {
         for profile in [Self.masso(), Self.masso(copy: true)] {
-            #expect(!Self.anyMasso(Self.issues("M5\nT1 M6\n", profile: profile)), "\(profile.id)")
-            #expect(!Self.anyMasso(Self.issues("M5\nT1\nM6\n", profile: profile)), "\(profile.id)")
+            for body in ["M5\nT1 M6\n", "M5\nT1\nM6\n", "N10 M5\nN20 T1 M6\n"] {
+                let found = Self.issues(body, profile: profile)
+                #expect(found.filter { $0.severity == .error }.isEmpty, "\(profile.id) \(body): \(found)")
+            }
         }
     }
 
@@ -44,6 +46,11 @@ import Testing
             let found = GCodeValidator(profile: post, job: job.job, units: job.units).validate(gcode: text)
             #expect(!Self.anyMasso(found), "\(post.id): \(found)")
         }
+    }
+
+    /// MASSO wants an M5 before M6, not just a spindle that was never started: a copy's preamble may change tools first.
+    @Test func anM6WithNoM5BeforeItIsAnError() {
+        #expect(Self.errors(Self.issues("T1 M6\n"), Self.spindle) == 1)
     }
 
     @Test func anM6WithTheSpindleRunningIsAnError() {
@@ -60,6 +67,17 @@ import Testing
     @Test func aToolChangeOnABlockDeleteLineIsAnError() {
         #expect(Self.errors(Self.issues("M5\n/T1 M6\n"), Self.blockDelete) == 1)
         #expect(Self.errors(Self.issues("/M5\nT1 M6\n"), Self.blockDelete) == 1)
+        // A numbering post writes the slash after the line number.
+        #expect(Self.errors(Self.issues("N10 /M5\nN20 T1 M6\n"), Self.blockDelete) == 1)
+        #expect(Self.errors(Self.issues("N10 M5\nN20 /T1 M6\n"), Self.blockDelete) == 1)
+    }
+
+    @Test func theParserReadsASlashAfterALineNumberAsBlockDelete() {
+        let parsed = GCodeParser.parse("N10 /M5\nn20/ T1 M6\nN30 G0 X1 Y2\n", comments: BuiltInPosts.massoG3Inch.parserComments)
+        #expect(parsed.blockDeleteLines == [1, 2])
+        #expect(parsed.blocks.map { $0.values("N") } == [[10], [20], [30]])
+        #expect(parsed.blocks[0].has("M", 5))
+        #expect(parsed.blocks[1].has("M", 6))
     }
 
     @Test func otherPostsKeepTheWarning() {

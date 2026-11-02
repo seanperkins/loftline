@@ -1235,7 +1235,10 @@
   for the MASSO family (`DialectChecks.massoIDs`), on the written program, so `{T}` is already a number and a probed tool
   change or an `M6` in any template is covered: an `M6` while the last spindle word was not `M5` is an error (instead of the
   `toolchange-spindle-on` warning); an `M6` needs a `T` earlier in its block or on an earlier line since the last `M6`; and an
-  `M5`, `T` or `M6` on a block-delete line is an error, since MASSO skips such a line with Block Delete on. The editor's
+  `M5`, `T` or `M6` on a block-delete line is an error, since MASSO skips such a line with Block Delete on. "Last spindle
+  word" means an `M5` must actually come first (a copy's preamble could change tools before any). `GCodeParser` now also
+  reads a `/` after a line number (`N10 /M5`, which a numbering post writes) as block delete, as the editor's stop check
+  already did. The editor's
   sample is validated, so such a draft cannot be saved; at export the errors are overridable like every `DialectChecks`
   error. Revision 1 of the spec also proposed MASSO's missing G43 and NcStudio's T1-T7 with G43: both were already
   `DialectChecks` export errors (#107, #109). No output changes. Spec: `docs/specs/2026-11-02-tool-change-rules-design.md`.

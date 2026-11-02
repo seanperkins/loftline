@@ -145,6 +145,8 @@ public struct GCodeValidator: Sendable {
         let masso = BuiltInPosts.family(of: profile.id).map(DialectChecks.massoIDs.contains) ?? false
         let blockDeleted = Set(parsed.blockDeleteLines)
         var pendingT = false
+        // The last spindle word (3, 4 or 5): MASSO wants an M5 before M6, not just a spindle never started.
+        var lastSpindleWord: Double?
         var absolute = true
         var sawAbsolute = false
         var motion: Int?
@@ -261,12 +263,12 @@ public struct GCodeValidator: Sendable {
                                 "M\(NumberFormat.compact(m, maxDecimals: 0)) is not a code this validator knows")
                 }
                 switch m {
-                case 3, 4: spindleOn = true
-                case 5: spindleOn = false
+                case 3, 4: spindleOn = true; lastSpindleWord = m
+                case 5: spindleOn = false; lastSpindleWord = m
                 case 0, 1: stop = Int(m)
                 case 6:
                     if masso {
-                        if spindleOn {
+                        if lastSpindleWord != 5 {
                             carried.add("masso-toolchange-spindle-on", .error, line: b.line,
                                         "MASSO needs the spindle stopped (M5) before M6.")
                         }
