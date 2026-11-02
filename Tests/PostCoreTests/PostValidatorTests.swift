@@ -508,5 +508,7 @@ func toolpathCheckRejectsARapidPastTheHoleBottom(mode: ZZeroMode) {
 
     @Test func aReferenceReturnAndAMotionCodeOnOneBlockIsAnError() {
         #expect(has(validate(program("G0 X1 Y1\nG1 G28 X1 F30")), "G28/G30 and a motion code on one block"))
+        #expect(has(validate(program("G0 X1 Y1\nG28 G30 X1")), "G28/G30 and a motion code on one block"))
+        #expect(!has(validate(program("G0 X1 Y1\nG1 G28")), "G28/G30 and a motion code on one block"))
     }
 }
