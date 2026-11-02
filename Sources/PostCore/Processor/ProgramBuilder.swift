@@ -91,7 +91,7 @@ struct ProgramBuilder {
 
         w.retract(to: coords.safeZ)
         coolantOff(&coolantOn, into: &w)
-        for line in render(profile.footer) { w.code(line) }
+        for line in renderedFooter() { w.code(line) }
         return w.lines.joined(separator: "\n") + "\n"
     }
 
@@ -105,6 +105,9 @@ struct ProgramBuilder {
         case .dwell(let s): return s.isFinite
         }
     }
+
+    /// The footer as posted, in output units; `FooterTravel` walks the same lines.
+    func renderedFooter() -> [String] { render(profile.footer) }
 
     private func fmt(_ v: Double) -> String { NumberFormat.fixed(v, decimals: profile.decimals) }
 

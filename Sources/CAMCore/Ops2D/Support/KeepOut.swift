@@ -12,6 +12,10 @@ public enum KeepOut {
         public var at: Vec2
     }
 
+    /// Metadata key marking travel that is written as it is (the post's footer, #132): a rapid from below safe Z goes
+    /// across where it starts, not after the climb the post adds before the program's own XY rapids.
+    public static let asWrittenKey = "travel as written"
+
     public static func violations(_ toolpaths: [Toolpath], zones: [KeepOutZone], coords: MachineCoordinates,
                                   margin: Double, tolerance: Double) -> [Violation] {
         let usable = zones.filter { $0.outline.count > 2 }
@@ -34,13 +38,14 @@ public enum KeepOut {
                 return (z, region, topZ, Rect2(points: region.flatMap { $0 }))
             }
             var reported = Set<UUID>()
+            let asWritten = tp.metadata[asWrittenKey] != nil
             for m in tp.moves {
                 guard let target = m.target else { continue }
                 defer { cur = target }
                 guard let from = cur else { continue }
                 // The post climbs to safe Z before an XY rapid from below it.
                 var pts = polyline(from: from, move: m, tolerance: tolerance)
-                if m.isRapid, from.z < coords.safeZ - 1e-9, from.xy.distance(to: target.xy) > 1e-9 {
+                if m.isRapid, !asWritten, from.z < coords.safeZ - 1e-9, from.xy.distance(to: target.xy) > 1e-9 {
                     let up = Vec3(from.xy, z: max(coords.safeZ, target.z))
                     pts = [from, up, Vec3(target.xy, z: up.z), target]
                 }
