@@ -118,6 +118,10 @@ struct MotionChecker {
     }
 
     mutating func rpm(_ s: Double, min lo: Double, max hi: Double, line: Int?) {
+        if !(s >= PostProfile.minSpindleRPM) {
+            issues.add("spindle-zero-speed", .error, line: line, "Spindle speed S0 leaves the spindle stopped")
+            return
+        }
         if s < lo - 1e-9 || s > hi + 1e-9 {
             issues.add("rpm-range", .error, line: line,
                        "Spindle speed S\(NumberFormat.compact(s, maxDecimals: 0)) outside \(NumberFormat.compact(lo, maxDecimals: 0))–\(NumberFormat.compact(hi, maxDecimals: 0)) RPM")

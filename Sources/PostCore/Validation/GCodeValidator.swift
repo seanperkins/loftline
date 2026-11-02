@@ -147,6 +147,9 @@ public struct GCodeValidator: Sendable {
         var feed: Double?
         var spindleOn = false
         var sawSpeed = false
+        // The speed in force (nil until a block sets S): a known speed below the floor leaves a started spindle stopped, so a
+        // cut under it is a cut with the spindle off. Unknown is not zero (ShopBot's plain M3 sets its speed at the router).
+        var speed: Double?
         var sawEnd = false
         var probeCheck: ProbeSequenceChecker?
         if case .on(let p)? = profile.toolChangeProbe {
@@ -265,7 +268,7 @@ public struct GCodeValidator: Sendable {
                 default: break
                 }
             }
-            if let s = b.value("S") { sawSpeed = sawSpeed || s > 0 }
+            if let s = b.value("S") { sawSpeed = sawSpeed || s > 0; speed = s }
             if (b.has("M", 3) || b.has("M", 4)), !sawSpeed, b.value("S") == nil {
                 carried.add("spindle-no-speed", .warning, line: b.line, "Spindle started (M3/M4) with no speed (S) set")
             }
@@ -273,6 +276,7 @@ public struct GCodeValidator: Sendable {
                 check.rpm(s, min: profile.minRPM, max: profile.maxRPM, line: b.line)
             }
             if let f = b.value("F") { feed = f }
+            let spindleRunning = spindleOn && (speed.map { $0 >= PostProfile.minSpindleRPM } ?? true)
 
             let bx = b.value("X"), by = b.value("Y"), bz = b.value("Z")
             // G28/G30 with axis words first rapid to that point in work coordinates (then the named axes go on to the
@@ -306,7 +310,7 @@ public struct GCodeValidator: Sendable {
                             && (!xyKnown || Vec2(x ?? 0, y ?? 0).distance(to: target.xy) > check.eps)
                         check.rapid(from: start, to: target, xyMove: xyMove, line: b.line)
                     case 1:
-                        check.feedMove(from: start, path: [target], feed: feed, spindleOn: spindleOn, line: b.line,
+                        check.feedMove(from: start, path: [target], feed: feed, spindleOn: spindleRunning, line: b.line,
                                        startKnown: xyKnown)
                     default:
                         var path = [target]
@@ -338,7 +342,7 @@ public struct GCodeValidator: Sendable {
                                                           tolerance: check.eps)
                             }
                         }
-                        check.feedMove(from: start, path: path, feed: feed, spindleOn: spindleOn, line: b.line,
+                        check.feedMove(from: start, path: path, feed: feed, spindleOn: spindleRunning, line: b.line,
                                        startKnown: xyKnown)
                     }
                     x = tx ?? x; y = ty ?? y; z = tz ?? z
