@@ -268,7 +268,10 @@ import Testing
         let p = try filePost { $0.toolChange = ["M5", "(\nG0 {TOOL_NAME})", "M0"] }
         let message = "Tool change: {TOOL_NAME} \(Self.text)"
         #expect(p.placeholderProblem == message)
-        #expect(throws: PostError.invalidPost(message)) { try TemplatePostProcessor(profile: p).post(PostFixtures.postJob()) }
+        // The builder refuses the line break itself first (#99 item 4).
+        #expect(throws: PostError.invalidPost("A template line contains a line break: put each line on its own line.")) {
+            try TemplatePostProcessor(profile: p).post(PostFixtures.postJob())
+        }
     }
 
     @Test func commentedTextPostsInEveryStyle() throws {

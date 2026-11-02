@@ -161,20 +161,20 @@ public enum BuiltInPosts {
     static let massoToolChange = ["M5", "(Change to Tool: {TOOL_NAME})", "T{T} M6"]
 
     public static let massoG3Inch = PostProfile(
-        id: "masso-g3-inch", name: "MASSO G3 (inch)", version: "1.0",
+        id: "masso-g3-inch", name: "MASSO G3 (inch)", version: "1.1",
         fileExtension: "nc", units: .inch, decimals: 4, feedDecimals: 1,
         preamble: massoPreamble, toolChange: massoToolChange, spindleOn: "S{S} M3",
         spindleDwellSeconds: 3, dwell: "G4 P{MILLISECONDS}", minRPM: 0, maxRPM: 24000,
         arcOutput: .incrementalIJ, arcTolerance: 0.0005, footer: othermillFooter,
-        limits: genericInchLimits, rapidRate: 200, maxFeed: 200)
+        limits: genericInchLimits, rapidRate: 200, maxFeed: 200, lineEnding: .crlf)
 
     public static let massoG3MM = PostProfile(
-        id: "masso-g3-mm", name: "MASSO G3 (mm)", version: "1.0",
+        id: "masso-g3-mm", name: "MASSO G3 (mm)", version: "1.1",
         fileExtension: "nc", units: .millimeter, decimals: 3, feedDecimals: 1,
         preamble: massoPreamble, toolChange: massoToolChange, spindleOn: "S{S} M3",
         spindleDwellSeconds: 3, dwell: "G4 P{MILLISECONDS}", minRPM: 0, maxRPM: 24000,
         arcOutput: .incrementalIJ, arcTolerance: 0.01, footer: othermillFooter,
-        limits: genericMMLimits, rapidRate: 5080, maxFeed: 5080)
+        limits: genericMMLimits, rapidRate: 5080, maxFeed: 5080, lineEnding: .crlf)
 
     /// UCCNC (#108): arcs as lines (the manual does not say whether I/J are incremental), M0 for a tool change (UCCNC can be
     /// set to ignore M6), dwell in milliseconds (its default). Units come from the UCCNC profile: export warns.

@@ -25,6 +25,22 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// The units words a controller reads. nil is G20/G21; Syntec's 900M reads G70/G71 instead (#110). One case only, so no
     /// file can spell out the default and a built-in recognised by value never drifts.
     public enum UnitsCodes: String, Codable, Sendable { case g70g71 }
+    /// The line endings of a program file (#99 item 4). nil is LF; MASSO's own post writes CRLF. One case only, like
+    /// `UnitsCodes`. Applied to the bytes written to disk: the program text stays LF in memory.
+    public enum LineEnding: String, Codable, Sendable {
+        case crlf
+
+        /// `program` (LF only) with a CR before every LF.
+        public func apply(_ program: String) -> String {
+            var out: [UInt8] = []
+            out.reserveCapacity(program.utf8.count + program.utf8.count / 16)
+            for b in program.utf8 {
+                if b == 10 { out.append(13) }
+                out.append(b)
+            }
+            return String(decoding: out, as: UTF8.self)
+        }
+    }
     public enum ArcOutput: String, Codable, Sendable {
         /// G2/G3 with I J relative to the arc start (Mach default, GRBL).
         case incrementalIJ
@@ -90,12 +106,15 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     public var prelude: [String]?
     /// The units words (nil = G20/G21).
     public var unitsCodes: UnitsCodes?
+    /// nil = LF.
+    public var lineEnding: LineEnding?
     /// The highest version of a post's JSON layout this LoftLine reads. A project or file whose copy has a higher version is
     /// refused, never read with fields or placeholders dropped. Raise it when a reader that drops a new field or placeholder
     /// could post different G-code (`controller` does not: without it a post cannot probe), and say in
     /// `requiredSchemaVersion` which content needs it. 2: `{MILLISECONDS}` in the dwell template. 3: `prelude`, `unitsCodes`,
-    /// `{DECIMAL_SECONDS}` or `{APPROACH_Z}`. 4: the `apostrophe` comment style (an older LoftLine cannot decode it).
-    public static let currentSchemaVersion = 4
+    /// `{DECIMAL_SECONDS}` or `{APPROACH_Z}`. 4: the `apostrophe` comment style (an older LoftLine cannot decode it). 5: CRLF
+    /// line endings (an older LoftLine would write LF).
+    public static let currentSchemaVersion = 5
     /// Always 1 in memory: a post is written with `requiredSchemaVersion` (`toJSON`, `snapshot`) and read back as 1, so the
     /// version never takes part in value equality (`BuiltInPosts.probeController` recognises a built-in by value).
     @SchemaVersion public var schemaVersion: Int = 1
@@ -112,7 +131,8 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
                 minRPM: Double, maxRPM: Double, rapid: String = "G0", linear: String = "G1",
                 arcCW: String = "G2", arcCCW: String = "G3", arcOutput: ArcOutput = .incrementalIJ,
                 arcTolerance: Double, helicalArcs: Bool = true, modal: Bool = true, footer: [String],
-                limits: MachineLimits, rapidRate: Double, maxFeed: Double, pause: [String]? = nil) {
+                limits: MachineLimits, rapidRate: Double, maxFeed: Double, pause: [String]? = nil,
+                lineEnding: LineEnding? = nil) {
         self.id = id; self.name = name; self.version = version; self.fileExtension = fileExtension
         self.units = units; self.commentStyle = commentStyle; self.lineNumbers = lineNumbers
         self.decimals = decimals; self.feedDecimals = feedDecimals; self.headerComments = headerComments
@@ -122,7 +142,7 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
         self.minRPM = minRPM; self.maxRPM = maxRPM; self.rapid = rapid; self.linear = linear
         self.arcCW = arcCW; self.arcCCW = arcCCW; self.arcOutput = arcOutput; self.arcTolerance = arcTolerance
         self.helicalArcs = helicalArcs; self.modal = modal; self.footer = footer; self.limits = limits
-        self.rapidRate = rapidRate; self.maxFeed = maxFeed; self.pause = pause
+        self.rapidRate = rapidRate; self.maxFeed = maxFeed; self.pause = pause; self.lineEnding = lineEnding
     }
 
     /// Spindle off, the message where the controller shows it (`CommentStyle.message`), then the stop.
@@ -207,6 +227,7 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// `{DECIMAL_SECONDS}` or `{APPROACH_Z}` (an older LoftLine drops the field or prints the placeholder), 2 for a dwell in
     /// milliseconds (it leaves `{MILLISECONDS}` in the text), else 1, which every LoftLine since `schemaVersion` reads.
     public var requiredSchemaVersion: Int {
+        if lineEnding == .crlf { return 5 }
         if commentStyle == .apostrophe { return 4 }
         let templates = (prelude ?? []) + preamble + toolChange + [toolLengthOffset, spindleOn, dwell] + footer + (pause ?? [])
         if prelude?.isEmpty == false || unitsCodes != nil
@@ -290,6 +311,13 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// - NcStudio (`BuiltInPosts.ncstudioIDs`) stays in millimeters (it reads F in mm/min) with arcs as lines (its I/J mode is a
     ///   controller setting).
     public var postProblem: String? {
+        // One line per template line: a line break inside one (a post read from JSON never passes the editor) would be
+        // counted as two lines by the parser and as one by the stop check, and would break the file's line endings.
+        let templates = (prelude ?? []) + preamble + toolChange + [toolLengthOffset, spindleOn, dwell, spindleOff, rapid, linear,
+                                                                   arcCW, arcCCW] + footer + (pause ?? [])
+        if templates.contains(where: { $0.unicodeScalars.contains { $0 == "\r" || $0 == "\n" } }) {
+            return "A template line contains a line break: put each line on its own line."
+        }
         if commentStyle == .apostrophe, controller != nil {
             return "A post that writes ' comments cannot declare a controller for touch-plate tool changes: Mach4 and GRBL are "
                 + "not documented to read them."

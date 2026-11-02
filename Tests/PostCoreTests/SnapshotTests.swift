@@ -18,7 +18,7 @@ import Testing
         var p = BuiltInPosts.avidMach4Inch
         p.id = "x"; p.name = "X"; p.version = "9.9"; p.lineNumbers = true; p.pause = ["M0"]; p.helicalArcs = false
         p.spindleDwellSeconds = 0.25; p.arcTolerance = 0.00123; p.footer = ["M30", "%"]
-        p.prelude = ["%", "O1000"]; p.unitsCodes = .g70g71
+        p.prelude = ["%", "O1000"]; p.unitsCodes = .g70g71; p.lineEnding = .crlf
         #expect(try PostProfile(snapshot: p.snapshot()) == p)
         #expect(try PostProfile.fromJSON(p.toJSON()) == p)
         let m = MachineDefinition(id: "m", name: "M", units: .millimeter, limits: BuiltInPosts.avidMach4MM.limits, postIDs: ["a", "b"],
@@ -29,18 +29,20 @@ import Testing
     @Test func schemaVersionIsAlwaysWritten() throws {
         // The built-ins that dwell in milliseconds need version 2 (an older LoftLine would print {MILLISECONDS}); the rest are 1.
         // Syntec and Haas need 3: a program wrapper, G70/G71, {DECIMAL_SECONDS} and {APPROACH_Z}.
-        let versionTwo: Set<String> = ["masso-g3-inch", "masso-g3-mm", "uccnc-inch", "uccnc-mm"]
+        let versionTwo: Set<String> = ["uccnc-inch", "uccnc-mm"]
         let versionThree: Set<String> = ["syntec-inch", "syntec-mm", "haas-inch", "haas-mm"]
         // NcStudio needs 4: its ' comments.
         let versionFour: Set<String> = ["ncstudio-mm"]
+        // MASSO needs 5: CRLF line endings (#99 item 4).
+        let versionFive: Set<String> = ["masso-g3-inch", "masso-g3-mm"]
         for p in BuiltInPosts.all {
-            let v = JSONValue.number(versionFour.contains(p.id) ? 4 : versionThree.contains(p.id) ? 3 : versionTwo.contains(p.id) ? 2 : 1)
+            let v = JSONValue.number(versionFive.contains(p.id) ? 5 : versionFour.contains(p.id) ? 4 : versionThree.contains(p.id) ? 3 : versionTwo.contains(p.id) ? 2 : 1)
             #expect(object(try p.snapshot())["schemaVersion"] == v, "\(p.id)")
             #expect(object(try JSONDecoder().decode(JSONValue.self, from: p.toJSON()))["schemaVersion"] == v, "\(p.id)")
         }
-        #expect(versionTwo.union(versionThree).union(versionFour).allSatisfy { BuiltInPosts.profile(id: $0) != nil })
+        #expect(versionTwo.union(versionThree).union(versionFour).union(versionFive).allSatisfy { BuiltInPosts.profile(id: $0) != nil })
         #expect(object(try BuiltInMachines.all[0].snapshot())["schemaVersion"] == .number(1))
-        #expect(PostProfile.currentSchemaVersion == 4 && MachineDefinition.currentSchemaVersion == 1)
+        #expect(PostProfile.currentSchemaVersion == 5 && MachineDefinition.currentSchemaVersion == 1)
     }
 
     /// The written version is what the content needs (#99 item 1): an older LoftLine would print `{MILLISECONDS}` literally.
