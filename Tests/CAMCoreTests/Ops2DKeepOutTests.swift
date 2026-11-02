@@ -40,3 +40,22 @@ func ops2DKeepOutFlagsCutsNearAZone(mode: ZZeroMode) throws {
     let low = KeepOutZone(name: "Low clamp", outline: square(3.5, 0.5, 1.5), height: 0.1)
     #expect(KeepOut.violations([tp], zones: [low], coords: ctx.coords, margin: 0.05, tolerance: 0.0005).isEmpty)
 }
+
+/// The footer's travel is written as it is: no climb to safe Z before an XY rapid from below it (#132).
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func keepOutChecksTravelMarkedAsWrittenWithoutTheClimb(zZero: ZZeroMode) {
+    let coords = MachineCoordinates(job: JobSetup(zZero: zZero, safeZ: 0.5))
+    let tool = Tool(name: "1/4", kind: .endMill, number: 1, diameter: 0.25, flutes: 2, stepdown: 0.1, stepover: 0.1,
+                    feedRate: 100, plungeRate: 30)
+    // 0.3 in tall, between X2 and X4; the travel crosses at 0.1 in above the material, below safe Z.
+    let zone = KeepOutZone(name: "Clamp", outline: [Vec2(2, 0), Vec2(4, 0), Vec2(4, 2), Vec2(2, 2)], height: 0.3)
+    let low = coords.z(aboveTop: 0.1)
+    var tp = Toolpath(name: "Home", kind: .profile, tool: tool,
+                      moves: [.rapid(to: Vec3(6, 1, low)), .rapid(to: Vec3(0, 1, low))])
+    let assumed = KeepOut.violations([tp], zones: [zone], coords: coords, margin: 0.05, tolerance: 0.0005)
+    #expect(assumed.isEmpty, "the program's own rapids climb first")
+    tp.metadata[KeepOut.asWrittenKey] = "1"
+    let written = KeepOut.violations([tp], zones: [zone], coords: coords, margin: 0.05, tolerance: 0.0005)
+    #expect(written.count == 1)
+    #expect(written.first?.isRapid == true)
+}
