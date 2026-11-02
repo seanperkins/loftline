@@ -1,6 +1,6 @@
 # The G-code preview follows an M0 tool change (issue #126)
 
-Status: approved, revision 2 (after debate:all round 1)
+Status: approved, revision 3 (after debate:all rounds 1 and 2)
 
 ## Problem
 
@@ -47,6 +47,9 @@ starts a new segment when its marker name is not nil. The marker name is decided
 - So does a new `stopToolNames(_ text:comments:headerNames:) -> [Int: String]`, which maps line to name for
   the marker lines.
 
+**Where a segment began.** `Segment` gains `startsAtToolChange: Bool`. It is true for every segment started by
+`M6`, a `T` word or a stop marker, and false for the segment the program starts in.
+
 **What a stop segment holds.**
 - `toolNumber` is nil: it still means "the T word in force".
 - `toolComment` is the bare name.
@@ -62,14 +65,15 @@ before the change.
 
 ### The preview label (`GCodePreviewModel`)
 
-**The tool number.** For a segment with no `toolNumber`, the number is the one header tool whose name equals
-the bare `toolComment`, from a new `GCodeReader.headerToolList`. That list keeps every header row, including
+**The tool.** For a segment with no `toolNumber`, use the one header row whose name equals the bare
+`toolComment`, from a new `GCodeReader.headerToolList`. It gives the number, name, kind and diameter. Segments
+with a `toolNumber` keep today's lookup by number. That list keeps every header row, including
 two tools that share a number. `headerTools` is built from it, last row wins, as today. If no header tool
 matches, or several match, there is no number.
 
 **The label:**
 - with a number: `T<n> – <name>`, as today;
-- with no number and a non-nil comment: `Tool change`, plus ` – <name>` when the name is not empty;
+- with no number, and `startsAtToolChange` true: `Tool change`, plus ` – <name>` when there is a name;
 - otherwise: `No tool change`, as today.
 
 This also renames an `M6` segment with no `T` from "No tool change – X" to "Tool change – X", which is what
@@ -107,7 +111,9 @@ it is.
 **LoftLineAppTests (`GCodePreviewModel`):**
 - The GRBL sample's labels are `T1 – …`, `T6 – …`, `T9 – …`, `T1 – …`.
 - A program with no header gives `Tool change – <name>`, and an empty name gives `Tool change`.
-- An `M6` program with no `T` gives `Tool change – <comment>`.
+- An `M6` program with no `T` gives `Tool change – <comment>`, and with no comment either it gives `Tool change`.
+- Two header rows share T1 (`Rough - End Mill` and `Drill - Drill`) with stop markers for each: the segments
+  are `T1 – Rough` (an end mill) and `T1 – Drill` (a drill).
 
 ## Docs
 
