@@ -1,6 +1,6 @@
 # Ids in a project are unique (issue #123, item 1)
 
-Status: approved, revision 2 (after debate:all round 1)
+Status: approved, revision 3 (after debate:all rounds 1 and 2)
 
 ## Problem
 
@@ -29,9 +29,11 @@ Files written that way may already exist.
 ### Operations: never written twice, and repaired on open
 
 Add `[AnyOperation].givingRepeatedIDsNewOnes()` in CAMCore, next to `MergeOperation`.
-- It walks the operations in order, merge children included (depth first).
-- It gives any operation whose id it has already seen a fresh `UUID()`. The first one keeps its id, and with it
-  its results, selection and variable links.
+- It first reserves the top-level ids in order, so a top-level operation always keeps its id, along with its
+  results, selection and variable links. A later top-level operation repeating an earlier top-level id gets a
+  fresh `UUID()`.
+- Then it walks the merge children, depth first, and gives a fresh `UUID()` to any child whose id is already
+  taken.
 - Nothing in a file refers to the later one, so changing its id changes nothing that was saved about it.
 
 It is used in three places:
@@ -56,7 +58,8 @@ finds. It checks, in this order:
 1. layers;
 2. shapes;
 3. placed models;
-4. the project's own `tools`.
+4. keep-out zones (deleting one of two zones on one id deletes both, and the clamp check goes with them);
+5. the project's own `tools`.
 
 A project tool that shares an id with a library tool is not a clash: the project's copy wins by design.
 
@@ -85,12 +88,13 @@ is unchanged, so clipart still reads.
 - `givingRepeatedIDsNewOnes`:
   - for `[A, B, A′]` (A′ with A's id), A keeps its id, A′ gets a new one, and B is untouched;
   - inside a merge, a child repeating a top-level id is re-identified;
-  - three items on one id leave the first alone.
+  - three items on one id leave the first alone;
+  - a merge's child A, then top-level A′ with the same id: A′ keeps the id and the child gets a new one.
 
 **LoftLineAppTests:**
 - **Duplicate on a merged toolpath, then split both:** every operation id at the top level is unique.
   - The same for merging a toolpath with its own duplicate, then splitting.
-- **The `ProjectOpeningTests.Bad` table** gains duplicate shapes, layers, models and tools, each with its
+- **The `ProjectOpeningTests.Bad` table** gains duplicate shapes, layers, models, keep-out zones and tools, each with its
   message fragment. They run through the document, recovery and job-template paths.
 - **Message details:** two clashing kinds at once report the earlier kind; three shapes on one id name the
   1st and 2nd; an unnamed shape reads `(unnamed)`.
