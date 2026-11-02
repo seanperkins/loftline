@@ -1242,3 +1242,17 @@
   sample is validated, so such a draft cannot be saved; at export the errors are overridable like every `DialectChecks`
   error. Revision 1 of the spec also proposed MASSO's missing G43 and NcStudio's T1-T7 with G43: both were already
   `DialectChecks` export errors (#107, #109). No output changes. Spec: `docs/specs/2026-11-02-tool-change-rules-design.md`.
+- **controller-settings — export reminds of the settings a program cannot set (#99 item 13).** No `assumes` field on a post:
+  the assumptions are per controller, so they are `DialectChecks` warnings, shown in the Export sheet and by the CLI at every
+  export, like UCCNC's units (#108). A header comment would change every sample's bytes and repeat the warning; a custom post
+  for another controller can carry its own note in its program-start or preamble comments. Of #99's list only four change how
+  a built-in program runs: Centroid's Parameter 2 bit 2 (milliseconds: the 3 s spin-up lasts 3 ms; new warning), UCCNC's
+  "Measure dwell in seconds" (3,000 s; added to the units warning), and GRBL's `$30` (S is scaled against it) and `$32` (laser
+  mode switches the spindle output off on every G0, so the next cut starts with no spin-up: GRBL's laser_mode.md; new warning
+  naming the program's Max RPM as the value `$30` must equal, not as the spindle's, since it may be the post's default). NcStudio's Arc
+  Increment (arcs are lines), Mach3's switches (no Mach3 post), grblHAL `$341` (the GRBL posts stop with `M0`) do not; a Mach4
+  set to millisecond dwells already needs its own post (see the MASSO/UCCNC/Centroid/NcStudio entry). The Centroid text names no fixed duration (a copy's dwell may differ). The machine editor gains
+  Min RPM and Max RPM (whole RPM, since S is written whole; 0 = the post's value; refused when the range that applies, an
+  unset field being each listed post's own, is empty), which the GRBL notes already told owners to set. The UI
+  harness cannot open the Settings window, so the fields are checked by `MachineRPMFieldTests` and the build. Spec:
+  `docs/specs/2026-11-02-controller-settings-design.md`.

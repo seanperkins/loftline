@@ -65,6 +65,47 @@ import Testing
         for (p, unit) in [(BuiltInPosts.uccncInch, "inches"), (BuiltInPosts.uccncMM, "millimetres")] {
             let w = DialectChecks.issues(toolpaths: [tooled(1)], profile: p).filter { $0.severity == .warning }
             #expect(w.count == 1 && w[0].message.hasPrefix(DialectChecks.uccncUnitsWarningPrefix) && w[0].message.contains(unit))
+            // Its dwell setting too (#99 item 13): with "Measure dwell in seconds" on, the 3 s spin-up lasts 3,000 s.
+            #expect(w.first?.message.contains("leave \"Measure dwell in seconds\" off (LoftLine writes G4 P in milliseconds)") == true)
+        }
+    }
+
+    func warnings(_ p: PostProfile) -> [String] {
+        DialectChecks.issues(toolpaths: [tooled(1)], profile: p).filter { $0.severity == .warning }.map(\.message)
+    }
+
+    func copy(_ p: PostProfile) -> PostProfile {
+        var c = p
+        c.id = p.id + "-custom-1"
+        return c
+    }
+
+    /// Centroid's Parameter 2 bit 2 turns the seconds dwell into milliseconds: the 3 s spin-up would last 3 ms (#99 item 13).
+    @Test func centroidWarnsOfItsDwellUnitSetting() {
+        for p in [BuiltInPosts.centroidInch, BuiltInPosts.centroidMM, copy(BuiltInPosts.centroidInch)] {
+            #expect(warnings(p) == ["CNC12 reads G4 P in seconds unless Parameter 2 bit 2 is set: check that it is clear, or every "
+                                    + "dwell lasts a thousandth as long (a 3 s spin-up, 3 ms)."], "\(p.id)")
+            #expect(warnings(p).allSatisfy { $0.hasPrefix(DialectChecks.centroidDwellWarningPrefix) })
+        }
+    }
+
+    /// GRBL scales S against $30, and laser mode ($32=1) turns the spindle off on every G0 (#99 item 13).
+    @Test func grblWarnsOfThirtyAndThirtyTwo() {
+        for p in [BuiltInPosts.genericGRBLInch, BuiltInPosts.genericGRBLMM, copy(BuiltInPosts.genericGRBLMM)] {
+            #expect(warnings(p) == ["GRBL scales S against $30, and in laser mode ($32=1) it switches the spindle output off on "
+                                    + "every G0, so the next cut starts with no spin-up: $30 must equal this program's Max RPM, "
+                                    + "30000 (set your spindle's top speed on a copy of the machine), and $32 must be 0."],
+                    "\(p.id)")
+            #expect(warnings(p).allSatisfy { $0.hasPrefix(DialectChecks.grblSettingsWarningPrefix) })
+        }
+        var machine = BuiltInPosts.genericGRBLMM
+        machine.maxRPM = 24000
+        #expect(warnings(machine).first?.contains("Max RPM, 24000 (") == true)
+    }
+
+    @Test func otherPostsGetNoSettingsWarning() {
+        for p in [BuiltInPosts.avidMach4Inch, BuiltInPosts.linuxCNCMM, BuiltInPosts.massoG3MM, BuiltInPosts.carbideMotionMM] {
+            #expect(warnings(p).isEmpty, "\(p.id)")
         }
     }
 

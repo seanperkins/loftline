@@ -7,9 +7,12 @@ import Foundation
 /// (#110, #111), and NcStudio's missing M7 and H00-H07 (#109).
 public enum DialectChecks {
     public static let uccncUnitsWarningPrefix = "UCCNC takes units from its profile"
+    public static let centroidDwellWarningPrefix = "CNC12 reads G4 P in seconds"
+    public static let grblSettingsWarningPrefix = "GRBL scales S against $30"
     static let massoIDs: Set<String> = [BuiltInPosts.massoG3Inch.id, BuiltInPosts.massoG3MM.id]
     static let uccncIDs: Set<String> = [BuiltInPosts.uccncInch.id, BuiltInPosts.uccncMM.id]
     static let centroidIDs: Set<String> = [BuiltInPosts.centroidInch.id, BuiltInPosts.centroidMM.id]
+    static let grblIDs: Set<String> = [BuiltInPosts.genericGRBLInch.id, BuiltInPosts.genericGRBLMM.id]
     /// CNC12's documented dwell range, seconds.
     static let centroidDwell = 0.01...327.67
     static let haasIDs: Set<String> = [BuiltInPosts.haasInch.id, BuiltInPosts.haasMM.id]
@@ -60,7 +63,24 @@ public enum DialectChecks {
         if uccncIDs.contains(family) {
             let units = profile.units == .inch ? "inches" : "millimetres"
             out.append(GCodeIssue(severity: .warning, message: "\(uccncUnitsWarningPrefix) and may ignore G20/G21: set the profile to "
-                                                              + "\(units) before running this program."))
+                                                              + "\(units) before running this program, and leave \"Measure dwell in "
+                                                              + "seconds\" off (LoftLine writes G4 P in milliseconds)."))
+        }
+        // Settings a program cannot set (#99 item 13): Centroid's Parameter 2 bit 2 makes P milliseconds, so the 3 s spin-up
+        // would last 3 ms; GRBL scales S against $30, and laser mode ($32=1) turns the spindle off on every G0.
+        if centroidIDs.contains(family) {
+            out.append(GCodeIssue(severity: .warning, message: "\(centroidDwellWarningPrefix) unless Parameter 2 bit 2 is set: check "
+                                                              + "that it is clear, or every dwell lasts a thousandth as long (a 3 s "
+                                                              + "spin-up, 3 ms)."))
+        }
+        if grblIDs.contains(family) {
+            // The Max RPM is the machine's when it sets one, else the post's default: say which value must match, not that
+            // it is the spindle's.
+            out.append(GCodeIssue(severity: .warning, message: "\(grblSettingsWarningPrefix), and in laser mode ($32=1) it switches the "
+                                                              + "spindle output off on every G0, so the next cut starts with no spin-up: "
+                                                              + "$30 must equal this program's Max RPM, "
+                                                              + "\(NumberFormat.fixed(profile.maxRPM, decimals: 0)) (set your spindle's top "
+                                                              + "speed on a copy of the machine), and $32 must be 0."))
         }
         if centroidIDs.contains(family) {
             let outside = posting.filter { tp in

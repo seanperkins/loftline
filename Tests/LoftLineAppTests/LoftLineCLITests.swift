@@ -299,6 +299,14 @@ import Testing
                 let expectedPrefixes = ["warning: This program changes tools"]
                     + (OthermillSetup.postIDs.contains(post.id) ? OthermillSetup.warningPrefixes.map { "warning: " + $0 } : [])
                     + (post.id.hasPrefix("uccnc") ? ["warning: " + DialectChecks.uccncUnitsWarningPrefix] : [])
+                    + (post.id.hasPrefix("centroid") ? ["warning: " + DialectChecks.centroidDwellWarningPrefix] : [])
+                    + (post.id.hasPrefix("generic-grbl") ? ["warning: " + DialectChecks.grblSettingsWarningPrefix] : [])
+                // A controller-settings reminder (#99 item 13) is printed, not just allowed.
+                for prefix in expectedPrefixes.dropFirst() where !prefix.contains("This program changes tools") {
+                    if !OthermillSetup.warningPrefixes.contains(where: { prefix.hasSuffix($0) }) {
+                        #expect(r.err.split(separator: "\n").contains { $0.hasPrefix(prefix) }, "\(post.id) \(name): \(prefix)")
+                    }
+                }
                 // A post that sets no speed (ShopBot's M3 is a switch) gets the validator's speed warning on every program.
                 let noSpeed = BuiltInPosts.noSpindleSpeedIDs.contains(post.id)
                 let other = r.err.split(separator: "\n").filter { line in

@@ -230,8 +230,8 @@ MASSO reads `P` in seconds here: stop and report it. Then: the `.nc` file loads 
 writes CRLF); start with the spindle well above the work; a two-tool job stops at `T2 M6` and the export warned to save one file
 per tool; tools are numbered T1–T100.
 
-**UCCNC:** before the first cut, set the UCCNC profile to the post's units (export reminds you) and check "Unknown g-codes" is
-"Don't run" while testing; time the spin-up dwell (about 3 s); check the tool change stops (`M0`) and the arcs, written as short
+**UCCNC:** before the first cut, set the UCCNC profile to the post's units and leave "Measure dwell in seconds" off (export
+reminds you of both), and check "Unknown g-codes" is "Don't run" while testing; time the spin-up dwell (about 3 s); check the tool change stops (`M0`) and the arcs, written as short
 lines, look right in UCCNC's toolpath view.
 
 **Centroid CNC12:** before the first cut, read Parameter 2 bit 2 (dwell in milliseconds): it must be off, or the 3 s spin-up is
@@ -256,8 +256,9 @@ spin-up dwell (`G4 P3000`, 3 s). Check `M0` waits for Cycle Start at each tool c
 writes M0 there; M01 needs a switch the manual does not describe). Check the rapid speed: the manual says an F on a G00 line
 sets the rapid rate, and the post writes none. Then air-cut.
 
-**GRBL machines (Genmitsu, LongMill):** check `$30` against the machine's Max RPM in LoftLine (duplicate the built-in machine
-to set it), and `$31` against its lowest speed, before trusting any S word.
+**GRBL machines (Genmitsu, LongMill, Generic GRBL):** check `$30` against the machine's Max RPM in LoftLine (duplicate the
+built-in machine and set Max RPM in Settings ▸ Machines), and `$31` against its lowest speed, before trusting any S word; check
+`$32=0` (laser mode switches the spindle output off on every G0, so the next cut starts with no spin-up). Export reminds you of `$30` and `$32`.
 
 **Othermill (Bantam Tools software):** the Othermill posts have not run on a machine. Each check below confirms something the
 post assumes (in brackets); stop and report if one does not hold.
