@@ -19,10 +19,20 @@
 # -- ARGS     everything after `--` goes to the app as launch arguments, which override a stored default for this run and
 #            write nothing. A value is a string unless it is XML, so a boolean takes '<false/>':
 #            `-- -preview3D.showToolpaths '<false/>'` (a plain `NO` is read as the string "NO" and the setting keeps its default)
-# Works inside a sandboxed agent shell (see swiftpm-env.sh); LOFTLINE_BUILD_FLAGS adds extra swift build flags.
+# Run it OUTSIDE an agent's Bash sandbox: inside one the app hangs before the harness starts, so the script refuses
+# (docs/UI-HARNESS.md). LOFTLINE_BUILD_FLAGS adds extra swift build flags. LOFTLINE_UI_TIMEOUT (seconds) caps a run;
+# the default is the scenario's watchdog plus a minute, and a run stopped by it exits 2 like the watchdog.
 set -euo pipefail
 cd "${0:A:h}/.."
 source scripts/swiftpm-env.sh
+
+# macOS refuses to nest one sandbox in another, so a failed probe means this shell is already sandboxed (the probe
+# swiftpm-env.sh uses). There the app cannot reach the HIServices XPC service and hangs with no output.
+if command -v sandbox-exec >/dev/null 2>&1 && ! sandbox-exec -p '(version 1)(allow default)' /usr/bin/true 2>/dev/null; then
+  echo "scripts/ui.sh: this shell is sandboxed, where the app hangs before the harness starts. Run it outside the" \
+    "sandbox (Claude Code: list it in sandbox.excludedCommands, see docs/UI-HARNESS.md)." >&2
+  exit 3
+fi
 
 scenario=""; out=""; extra=(); app_args=(); build=1
 while (( $# )); do
@@ -50,12 +60,29 @@ BIN="$(swift build "${SWIFTPM_FLAGS[@]}" -c debug --show-bin-path ${=LOFTLINE_BU
 mkdir -p "$out/home"
 out="${out:A}"
 echo "scenario: $scenario -> $out"
-# The app's exit status is the result (0 ok, 1 a failed step, 2 the watchdog); grep only filters.
+# The app's watchdog starts only once the harness does, so a hang before that (a sandboxed shell, a stuck launch) would
+# never end; this cap stops the app instead. A scenario's "timeout" key raises its watchdog, and the cap with it.
+watchdog=$(plutil -extract timeout raw -o - "$scenario" 2>/dev/null || echo 180)
+limit=${LOFTLINE_UI_TIMEOUT:-$(( ${watchdog%.*} + 60 ))}
+# The app's exit status is the result (0 ok, 1 a failed step, 2 the watchdog or the cap); grep only filters.
 set +e
 HOME="$out/home" CFFIXED_USER_HOME="$out/home" "$BIN" \
   --ui-scenario "${scenario:A}" --ui-out "$out" "${extra[@]}" "${app_args[@]}" \
-  -ApplePersistenceIgnoreState YES -NSQuitAlwaysKeepsWindows NO 2>&1 | grep '^\[harness\]'
-rc=${pipestatus[1]}
+  -ApplePersistenceIgnoreState YES -NSQuitAlwaysKeepsWindows NO > >(grep --line-buffered '^\[harness\]') 2>&1 &
+pid=$!
+trap 'kill $pid 2>/dev/null' INT TERM HUP
+waited=0; capped=0
+while kill -0 $pid 2>/dev/null; do
+  if (( waited >= limit )); then
+    echo "scripts/ui.sh: the app ran ${limit}s without finishing; stopping it" >&2
+    kill $pid 2>/dev/null; sleep 2; kill -9 $pid 2>/dev/null
+    capped=1; break
+  fi
+  sleep 1; (( waited++ ))
+done
+wait $pid; rc=$?
+(( capped )) && rc=2
+trap - INT TERM HUP
 set -e
 echo "--- outputs"; ls -1 "$out" | grep -v '^home$' || true
 (( rc == 0 )) || echo "harness failed with status $rc (see $out/harness.log)" >&2

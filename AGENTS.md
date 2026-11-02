@@ -68,7 +68,8 @@ changes as safety-critical:
 
 Run a harness scenario (`scripts/ui.sh <scenario> [--light|--dark] [--size WxH]`, see
 [docs/UI-HARNESS.md](docs/UI-HARNESS.md)) and look at the PNG and the `.ax.txt` tree instead of
-launching the app and driving it by hand. It runs in its own HOME, which keeps its tools and recovery files apart
+launching the app and driving it by hand. Run it outside the agent's Bash sandbox: inside it the app hangs, so the
+script refuses (docs/UI-HARNESS.md). It runs in its own HOME, which keeps its tools and recovery files apart
 from yours, but not its preferences (docs/UI-HARNESS.md). Add a scenario in `harness/scenarios/` for a state you need to see.
 
 ## Docs to keep current

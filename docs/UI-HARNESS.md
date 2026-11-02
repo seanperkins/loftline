@@ -42,7 +42,8 @@ your real tool library, recovery copies or window files. Preferences are the exc
 through a daemon that does not follow `HOME`, so a run reads and writes the real defaults domain of the debug binary
 (`LoftLine`, not `com.seanperkins.loftline`), including the one-time settings migration's copy of the old app's values. Set
 `LOFTLINE_NO_MIGRATION=1` to skip the migration, and use launch arguments after `--` instead of `defaults write` to
-change a setting for one run. A 90 s watchdog on its own thread ends a run that hangs once the harness has started.
+change a setting for one run. A 90 s watchdog on its own thread ends a run that hangs once the harness has started; `scripts/ui.sh` stops one
+that hangs before that (see the end of this page).
 
 ## Scenario format
 
@@ -125,8 +126,17 @@ controls (the inspector did, issue #42, and no longer does).
 
 In an agent shell with the Bash sandbox on, the app cannot reach the system's HIServices XPC service
 ("Connection Invalid error for service com.apple.hiservices-xpcservice" on stderr) and hangs with no output
-(no `harness.log`) until the watchdog ends it, even for the `empty` scenario. Run `scripts/ui.sh` outside the
-sandbox. Its own HOME does not isolate your preferences (see the start of this page).
+(no `harness.log`), even for the `empty` scenario. The app's watchdog starts only once the harness does, so it never
+ends such a run. `scripts/ui.sh` therefore refuses to start in a sandboxed shell (exit 3), and stops any run that goes
+a minute past its watchdog (exit 2; `LOFTLINE_UI_TIMEOUT` sets the cap in seconds). Run it outside the sandbox. For
+Claude Code, list it in `.claude/settings.local.json` (git-ignored), and call it without `cd` or an output redirect,
+either of which keeps a call in the sandbox:
+
+```json
+{ "sandbox": { "excludedCommands": ["scripts/ui.sh *", "/Users/sean/sites/loftline/.worktrees/*/scripts/ui.sh *"] } }
+```
+
+Its own HOME does not isolate your preferences (see the start of this page).
 
 The GIF is encoded from the frames with one palette per clip and no alpha channel (an alpha channel makes
 every frame a full frame and the file fifty times larger). ffmpeg from Homebrew is required.
