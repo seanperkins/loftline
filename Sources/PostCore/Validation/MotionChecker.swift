@@ -100,7 +100,7 @@ struct MotionChecker {
         }
         let low = ([start?.z].compactMap { $0 } + path.map(\.z)).min() ?? .infinity
         if !spindleOn, low < topZ - eps {
-            issues.add("spindle-off", .error, line: line, "Cutting move with the spindle off (no M3 before cutting)")
+            issues.add("spindle-off", .error, line: line, "Cutting move with the spindle off (no M3, or a speed of S0, before cutting)")
         }
         if startKnown, feed > 0, let s = start, low < s.z - eps,
            path.allSatisfy({ $0.xy.distance(to: s.xy) <= eps }) {

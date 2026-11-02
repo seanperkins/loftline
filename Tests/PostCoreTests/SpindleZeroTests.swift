@@ -16,7 +16,7 @@ import Testing
     }
 
     @Test(arguments: [0, 0.5, 0.99, Double.nan])
-    func everyPostRefusesASpeedThatPrintsAsS0(rpm: Double) {
+    func everyPostRefusesASpeedBelowOneRPM(rpm: Double) {
         for post in BuiltInPosts.all {
             #expect(throws: PostError.spindleStopped(toolpath: "Profile 1"), "\(post.id)") {
                 try TemplatePostProcessor(profile: post).post(Self.job(rpm: rpm))
@@ -49,10 +49,22 @@ import Testing
         }
     }
 
+    /// S set on an earlier block is the speed M3 starts at.
+    @Test func anM3AfterS0IsAStartAtS0() {
+        let found = Self.issues("S0\nM3\n")
+        #expect(Self.count(found, Self.zeroStart) == 1, "\(found)")
+        // A speed out of range is reported once, where it is set, not again at the M3.
+        let high = Self.issues("S99999\nM3\n")
+        #expect(Self.count(high, "Spindle speed S99999 outside") == 1, "\(high)")
+    }
+
     @Test func aCutAfterAStartAtS0IsACutWithTheSpindleOff() {
         let found = Self.issues("M3 S0\nG0 X1 Y1\nG1 Z-0.1 F30\nG1 X2 F60\n")
         #expect(Self.count(found, Self.zeroStart) == 1)
-        #expect(Self.count(found, Self.offCut) >= 1)
+        let cuts = found.filter { $0.message.hasPrefix(Self.offCut) }
+        #expect(!cuts.isEmpty)
+        // The message must not blame a missing M3: this program has one.
+        #expect(cuts.allSatisfy { !$0.message.contains("no M3 before") }, "\(cuts)")
     }
 
     @Test func aLaterS0StopsTheSpindleForTheCut() {

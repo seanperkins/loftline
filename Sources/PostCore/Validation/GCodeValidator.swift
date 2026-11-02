@@ -272,7 +272,12 @@ public struct GCodeValidator: Sendable {
             if (b.has("M", 3) || b.has("M", 4)), !sawSpeed, b.value("S") == nil {
                 carried.add("spindle-no-speed", .warning, line: b.line, "Spindle started (M3/M4) with no speed (S) set")
             }
-            if let s = b.value("S"), s > 0 || b.has("M", 3) || b.has("M", 4) {
+            let starts = b.has("M", 3) || b.has("M", 4)
+            if let s = b.value("S"), s > 0 || starts {
+                check.rpm(s, min: profile.minRPM, max: profile.maxRPM, line: b.line)
+            } else if starts, let s = speed, !(s >= PostProfile.minSpindleRPM) {
+                // M3 alone starts at the speed an earlier block set; only the floor is checked again (a range error was
+                // reported where that S was written).
                 check.rpm(s, min: profile.minRPM, max: profile.maxRPM, line: b.line)
             }
             if let f = b.value("F") { feed = f }

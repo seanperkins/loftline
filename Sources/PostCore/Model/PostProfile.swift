@@ -282,9 +282,10 @@ public struct PostProfile: Codable, Hashable, Identifiable, Sendable {
     /// The longest dwell a program may hold (spin-up or toolpath): an hour. Beyond it `{MILLISECONDS}` could print `INF`.
     public static let maxDwellSeconds = 3600.0
 
-    /// The lowest spindle speed a program may run: `S` is written with no decimals and `%.0f` rounds 0.5 down, so anything
-    /// lower prints as `S0`, which GRBL, Buildbotics and the other RPM controllers read as a stopped spindle (#99 item 10).
-    /// Judge it as `!(rpm >= minSpindleRPM)` so NaN fails too.
+    /// The lowest spindle speed a program may run. `S` is written with no decimals and `%.0f` rounds half to even, so 0.5 and
+    /// less print as `S0`, which GRBL, Buildbotics and the other RPM controllers read as a stopped spindle (#99 item 10); the
+    /// floor is 1, not just above 0.5, since a speed below 1 RPM is no real speed. Judge it as `!(rpm >= minSpindleRPM)` so NaN
+    /// fails too.
     public static let minSpindleRPM = 1.0
 
     /// The dwell template's values: `{SECONDS}` (3 s → `3`), `{MILLISECONDS}` (3 s → `3000`; whole, `%.0f`), for a
