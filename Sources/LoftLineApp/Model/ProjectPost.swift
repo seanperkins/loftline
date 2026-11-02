@@ -277,8 +277,11 @@ extension LoftLineProject {
     static func opening(from data: Data) throws -> LoftLineProject {
         do {
             try ProjectPost.rejectNullCopies(in: data)
-            let project = try LoftLineProject.decode(from: data)
+            var project = try LoftLineProject.decode(from: data)
             try ProjectPost.validate(project)
+            try ProjectPost.rejectDuplicateIDs(in: project)
+            // A file written before #123 can repeat an operation id (a duplicated merge, split): repaired, not refused.
+            project.operations = project.operations.givingRepeatedIDsNewOnes()
             return project
         } catch {
             throw ProjectOpenError(error)
@@ -300,5 +303,38 @@ struct ProjectOpenError: Error, LocalizedError, Equatable {
         case LoftLineIOError.unsupportedFormat(let m), LoftLineIOError.malformed(let m): message = m
         default: message = error.localizedDescription
         }
+    }
+}
+
+extension ProjectPost {
+    /// Refuses a project in which two layers, shapes, placed models, keep-out zones or carried tools share an id (#123):
+    /// lookups take the first match, so which item an operation means would be an accident. The app never writes these
+    /// twice. (Operations are repaired instead; see `givingRepeatedIDsNewOnes`.)
+    static func rejectDuplicateIDs(in project: LoftLineProject) throws {
+        let doc = project.document
+        let kinds: [(plural: String, items: [(id: UUID, name: String)])] = [
+            ("layers", doc.layers.map { ($0.id, $0.name) }),
+            ("shapes", doc.shapes.map { ($0.id, $0.name) }),
+            ("models", doc.models.map { ($0.id, $0.name) }),
+            ("keep-out zones", (doc.keepOutZones ?? []).map { ($0.id, $0.name) }),
+            ("tools", project.tools.map { ($0.id, $0.name) }),
+        ]
+        for kind in kinds {
+            var first: [UUID: Int] = [:]
+            for (i, item) in kind.items.enumerated() {
+                guard let j = first[item.id] else { first[item.id] = i; continue }
+                func describe(_ k: Int) -> String {
+                    let name = kind.items[k].name
+                    return "the \(ordinal(k + 1)) " + (name.isEmpty ? "(unnamed)" : "(\"\(name)\")")
+                }
+                throw LoftLineIOError.malformed("Two \(kind.plural) share the id \(item.id.uuidString): \(describe(j)) and "
+                    + "\(describe(i)). Every item in a project needs its own id; change or remove one of them.")
+            }
+        }
+    }
+
+    private static func ordinal(_ n: Int) -> String {
+        let suffix = (11...13).contains(n % 100) ? "th" : [1: "st", 2: "nd", 3: "rd"][n % 10] ?? "th"
+        return "\(n)\(suffix)"
     }
 }

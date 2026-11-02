@@ -10,6 +10,8 @@ import Testing
 @Suite struct ProjectOpeningTests {
     enum Bad: CaseIterable {
         case newerPost, newerMachine, malformedMachine, nullPost, nullMachine
+        // #123: two items on one id.
+        case duplicateLayers, duplicateShapes, duplicateModels, duplicateZones, duplicateTools
 
         /// The file's bytes and a fragment of the message the user must be shown.
         func make() throws -> (data: Data, message: String) {
@@ -27,6 +29,20 @@ import Testing
             case .newerMachine: p.machineSnapshot = newer(p.machineSnapshot); message = "made with a newer LoftLine. Update LoftLine to open it."
             case .malformedMachine: p.machineSnapshot = .object(["id": .string("only")]); message = "copy of its machine"
             case .nullPost, .nullMachine: break
+            case .duplicateLayers:
+                p.document.layers.append(p.document.layers[0]); message = "Two layers share the id"
+            case .duplicateShapes:
+                let s = AppTestSupport.rect(1, 1, 2, 1, layer: p.document.defaultLayerID)
+                p.document.shapes += [s, s]; message = "Two shapes share the id"
+            case .duplicateModels:
+                let m = PlacedModel(name: "M", mesh: Mesh3D())
+                p.document.models += [m, m]; message = "Two models share the id"
+            case .duplicateZones:
+                let z = KeepOutZone(name: "Clamp", outline: [Vec2(0, 0), Vec2(1, 0), Vec2(1, 1)], height: 0.5)
+                p.document.keepOutZones = [z, z]; message = "Two keep-out zones share the id"
+            case .duplicateTools:
+                let t = ToolLibrary.seeded.tools[0]
+                p.tools = [t, t]; message = "Two tools share the id"
             }
             var obj = try #require(JSONSerialization.jsonObject(with: p.encoded()) as? [String: Any])
             if self == .nullPost { obj["postSnapshot"] = NSNull(); message = "copy of its post is empty" }
