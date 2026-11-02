@@ -277,7 +277,7 @@ public struct GCodeValidator: Sendable {
             let bx = b.value("X"), by = b.value("Y"), bz = b.value("Z")
             // G28/G30 with axis words first rapid to that point in work coordinates (then the named axes go on to the
             // stored position, which this validator cannot see): checked as a G0 to it, without changing the modal
-            // motion, and the position is left there (#129). Without axis words they are not motion here.
+            // motion; the named axes are unknown afterwards (#129). Without axis words they are not motion here.
             let reference = b.values("G").contains { $0 == 28 || $0 == 30 }
             if reference, bx != nil || by != nil || bz != nil,
                b.values("G").filter({ [0, 1, 2, 3, 28, 30].contains($0) }).count > 1 {
@@ -342,6 +342,12 @@ public struct GCodeValidator: Sendable {
                                        startKnown: xyKnown)
                     }
                     x = tx ?? x; y = ty ?? y; z = tz ?? z
+                    // The named axes then go on to the stored position, which this validator cannot see.
+                    if reference {
+                        if bx != nil { x = nil }
+                        if by != nil { y = nil }
+                        if bz != nil { z = nil }
+                    }
                 } else {
                     carried.add("no-motion-mode", .warning, line: b.line, "Axis words without a motion mode (G0/G1/G2/G3)")
                 }

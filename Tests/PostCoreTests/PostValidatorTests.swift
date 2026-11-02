@@ -506,6 +506,17 @@ func toolpathCheckRejectsARapidPastTheHoleBottom(mode: ZZeroMode) {
         #expect(!has(issues, "without a feed rate"))
     }
 
+    /// The named axes go on to the stored position, which the validator cannot see: they are unknown afterwards, so a
+    /// later rapid across at depth is judged as one from an unknown place, not from the intermediate point (#129 review).
+    @Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+    func theReturnedAxesAreUnknownAfterwards(mode: ZZeroMode) {
+        let across = validate(program("G0 X1 Y1\nG28 X2\nG1 Z\(z(0.1, mode)) F30\nG0 X2", safe: z(-0.2, mode)), zZero: mode)
+        #expect(has(across, "Rapid XY move inside the material"), "\(across)")
+        // Z forgotten too: a rapid down into the stock from an unknown height is still a rapid plunge.
+        let down = validate(program("G0 X1 Y1\nG28 Z\(z(-0.5, mode))\nG0 Z\(z(0.1, mode))", safe: z(-0.2, mode)), zZero: mode)
+        #expect(has(down, "Rapid plunge", .warning), "\(down)")
+    }
+
     @Test func aReferenceReturnAndAMotionCodeOnOneBlockIsAnError() {
         #expect(has(validate(program("G0 X1 Y1\nG1 G28 X1 F30")), "G28/G30 and a motion code on one block"))
         #expect(has(validate(program("G0 X1 Y1\nG28 G30 X1")), "G28/G30 and a motion code on one block"))

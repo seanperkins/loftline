@@ -1,6 +1,6 @@
 # The validator checks a G28/G30 intermediate point (issue #129)
 
-Status: approved, revision 3 (after debate:all rounds 1 and 2)
+Status: approved, revision 3 (after debate:all rounds 1 and 2); amended after the branch review: the named axes are unknown after the return, and a Z rapid from an unknown height into the stock warns rapid-plunge (see DECISIONS g28-intermediate-point)
 
 ## Problem
 
