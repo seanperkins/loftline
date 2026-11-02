@@ -1217,3 +1217,14 @@
   such a post or project rather than write LF. `samples/expected/** -text` in `.gitattributes` keeps git from
   normalising the MASSO samples, and the CLI samples test compares bytes. The next release's feed should set
   `gcodeChanged` (MASSO output changes). Spec: `docs/specs/2026-11-02-line-endings-design.md`.
+- **spindle-zero — no program starts or cuts with the spindle at S0 (#99 item 10).** `S` is the RPM written with `%.0f`,
+  which rounds half to even, so any speed below 1 (0.5 included) printed `S0`, and 18 of the 24 built-in posts have
+  `minRPM: 0`; GRBL, Buildbotics and the other RPM controllers read `S0` as a stopped spindle, so the bit plunged without
+  turning. One floor, `PostProfile.minSpindleRPM = 1`, judged as `!(rpm >= 1)` so NaN fails too: the builder refuses such a
+  toolpath (`PostError.spindleStopped`, "<toolpath> has no spindle speed (below 1 RPM): set the tool's spindle speed."), the
+  app's tool warning says "The spindle speed must be at least 1 RPM.", and the validator reports `M3`/`M4` at a speed below it
+  as one error (`spindle-zero-speed`, instead of a range error) and treats a cut under a known speed below it, set on the
+  `M3` block, later or on the cut itself, as a cut with the spindle off. An unknown speed is not zero, so ShopBot's plain `M3`
+  keeps only its #106 warning, and a footer `S0` after the last cut reports nothing. Ruling: ShopBot (which never prints `S`)
+  is refused too, since a copy may write `M3 S{S}` and the RPM also drives estimates and chip load; its owner sets any speed.
+  No output changes. Spec: `docs/specs/2026-11-02-spindle-zero-design.md`.

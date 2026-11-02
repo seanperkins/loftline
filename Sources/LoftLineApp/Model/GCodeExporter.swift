@@ -229,6 +229,9 @@ enum GCodeExporter {
             return GCodeExporter.refused("\(name) dwells \(String(format: "%.0f", seconds)) s, more than the "
                                          + "\(Int(PostProfile.maxDwellSeconds)) s a program may hold: shorten its dwell.",
                                          issues: issues, toolpathCount: toolpaths.count)
+        } catch PostError.spindleStopped(let name) {
+            return GCodeExporter.refused("\(name) has no spindle speed (below 1 RPM): set the tool's spindle speed.",
+                                         issues: issues, toolpathCount: toolpaths.count)
         } catch PostError.spindleSpeedOutOfRange(let rpm) {
             return GCodeExportResult(text: nil, issues: issues,
                                      errorMessage: String(format: "Spindle speed %.0f RPM is outside the machine's range (%.0f–%.0f).",
