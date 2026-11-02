@@ -91,7 +91,10 @@ it is.
   Each read gives four segments, whose comments are the four tool names in order.
 - **Speed.** In the GRBL sample, the third segment (the drill) has `spindleRPM` 12000 and the others 18000.
   The same holds for the Mach4 `M6` sample.
-- **No double split.** The Mach4 sample with an extra `M0` line after each `T… M6` still gives four segments.
+- **No double split.**
+  - The Mach4 sample, with a `(Change to Tool: <name>)` and `M0` pair added after each `T… M6`, still gives four
+    segments.
+  - A T-word-only program (no `M6`) with the same marker stop keeps its T-word segments.
 - **A pause stays a pause.**
   - A one-tool GRBL program (header lists T1 only) with `(MSG, Change to Tool: Clamps)` then `M0` between two
     toolpaths gives one segment.
@@ -107,6 +110,8 @@ it is.
 - An `M6` program with no `T` gives `Tool change – <comment>`.
 
 ## Docs
+
+- **`GCodeReader` doc comments.** Update the type comment (the changes it reads) and `Segment.toolNumber`/`toolComment`.
 
 DECISIONS entry `preview-stop-tool-change`. It records:
 - the gate;
