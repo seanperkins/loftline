@@ -463,3 +463,50 @@ func toolpathCheckRejectsARapidPastTheHoleBottom(mode: ZZeroMode) {
     let moves = drillMoves(Vec2(.nan, 2), mc: mc, pecks: [0.1, 0.2])
     _ = v.validate(toolpaths: [toolpath("Drill", tool: PostFixtures.endMill, moves)])
 }
+
+// MARK: - G28/G30 intermediate point (#129)
+
+/// The intermediate point of a `G28`/`G30` with axis words is a rapid in work coordinates: checked as a `G0` to it, in
+/// both Z-zero modes, without changing the modal motion.
+@Suite struct ReferenceReturnTests {
+    func z(_ depth: Double, _ mode: ZZeroMode) -> String {
+        NumberFormat.compact(MachineCoordinates(job: PostFixtures.job(zZero: mode)).z(depth: depth), maxDecimals: 4)
+    }
+
+    @Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+    func aReferenceReturnIntoTheStockIsARapidPlunge(mode: ZZeroMode) {
+        let issues = validate(program("G0 X1 Y1\nG28 Z\(z(1, mode))", safe: z(-0.2, mode)), zZero: mode)
+        #expect(has(issues, "Rapid plunge", .warning), "\(issues)")
+    }
+
+    @Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+    func aReferenceReturnAcrossAtDepthIsARapidInTheMaterial(mode: ZZeroMode) {
+        let issues = validate(program("G0 X1 Y1\nG1 Z\(z(0.1, mode)) F30\nG28 X2 Y2", safe: z(-0.2, mode)), zZero: mode)
+        #expect(has(issues, "Rapid XY move inside the material"), "\(issues)")
+    }
+
+    @Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+    func theIncrementalEndingRaisesNothing(mode: ZZeroMode) {
+        let issues = validate(program("G0 X1 Y1\nG91 G28 Z0\nG28 X0 Y0\nG90", safe: z(-0.2, mode)), zZero: mode)
+        #expect(!issues.contains { $0.message.hasPrefix("Rapid") }, "\(issues)")
+    }
+
+    /// Before any G0/G1 the intermediate point is still checked (here past a 5.5 in X travel), not reported as axis words
+    /// without a motion mode.
+    @Test func aReferenceReturnNeedsNoMotionMode() {
+        let issues = validate("G20\nG90\nM3 S18000\nG28 X6 Y1\nM5\nM30\n", profile: TravelWindowTests.post())
+        #expect(!issues.contains { $0.message.contains("without a motion mode") }, "\(issues)")
+        #expect(has(issues, "X travel 6.0000 in exceeds"), "\(issues)")
+    }
+
+    @Test func theModalFeedStaysInForce() {
+        let issues = validate(program("G0 X1 Y1\nG1 Z-0.1 F30\nG1 X1.5 F60\nG28 Z0.5\nX2"))
+        // X2 is still a G1 at Z0.5 (above the stock): no rapid issue, and its feed is the one in force.
+        #expect(!issues.contains { $0.message.hasPrefix("Rapid") }, "\(issues)")
+        #expect(!has(issues, "without a feed rate"))
+    }
+
+    @Test func aReferenceReturnAndAMotionCodeOnOneBlockIsAnError() {
+        #expect(has(validate(program("G0 X1 Y1\nG1 G28 X1 F30")), "G28/G30 and a motion code on one block"))
+    }
+}

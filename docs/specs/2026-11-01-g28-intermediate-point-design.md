@@ -1,6 +1,6 @@
 # The validator checks a G28/G30 intermediate point (issue #129)
 
-Status: approved, revision 2 (after debate:all round 1)
+Status: approved, revision 3 (after debate:all rounds 1 and 2)
 
 ## Problem
 
@@ -35,9 +35,10 @@ A block with `G28` or `G30` and at least one axis word is checked as a `G0` to i
   - forgetting the position would switch those checks off, because `rapid-plunge` needs a known start;
   - a stored position is normally the top of Z, so reasoning from the intermediate point errs towards more
     warnings, not fewer.
-- **Two motion codes on one block are an error.** `G28` or `G30` on the same block as `G0`, `G1`, `G2` or `G3`
-  gives `"G28/G30 and a motion code on one block"`. LinuxCNC rejects it, and which motion the controller
-  would make is ambiguous.
+- **Two motion codes on one block are an error.** A block with axis words that has `G28` or `G30` together
+  with another of `G0`, `G1`, `G2`, `G3`, `G28` or `G30` gives `"G28/G30 and a motion code on one block"`. LinuxCNC
+  rejects it, and which motion the controller would make is ambiguous. A bare `G1 G28` (no axis words) is left
+  alone.
 - **No axis words, no change.** A `G28` or `G30` with no axis words is still non-motion, and the position is
   kept, as today.
 
@@ -50,6 +51,9 @@ A block with `G28` or `G30` and at least one axis word is checked as a `G0` to i
   probed tool-change sequence. That is existing and fails safe.
 - **`G28.1` and `G30.1`.** They still get the unknown-code warning. Mach's `G28.1` (reference axes) is not
   modelled.
+- **An incremental move after a reference return.** It is judged from the intermediate point, not from the
+  stored position the machine is really at. Every `G91` block already warns "Incremental positioning (G91) in
+  program", so the user is told.
 - **Keep-out zones and clamps.** The export's zone checks model the footer's move home only from its
   `{HOME_*}` tokens. A `G28` intermediate move in a custom footer is not checked against zones.
 
@@ -66,7 +70,7 @@ A block with `G28` or `G30` and at least one axis word is checked as a `G0` to i
 - **Before any motion mode.** `G28 X6` (6 > 5.5 travel) is checked, and there is no `no-motion-mode`.
 - **`G1` stays modal.** `G1 X1 F10`, then `G28 Z0.5`, then `X2` is a feed: no `rapid-*` issue, and
   `feed-missing` is not raised.
-- **Two motion codes.** `G1 G28 X1` gives the error.
+- **Two motion codes.** `G1 G28 X1` and `G28 G30 X1` give the error; a bare `G1 G28` does not.
 - **Millimetres.** A G21 program ending `G28 X200`, on a 5.5 in X-travel post, gives `travel-X`.
 - **Unchanged test.** `anyCodeOtherThanAPlainMoveForgetsTheHole` still passes, including `G28` and `G30 X1 Y1`.
 

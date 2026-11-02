@@ -180,4 +180,18 @@ import Testing
         let found = issues("G0 X0 Y0 Z0.2\nG0 X5\nG92 X0\nG0 X5")
         #expect(found.contains { $0.severity == .warning && $0.message.contains("depth and travel checks no longer apply") })
     }
+
+    // MARK: G28/G30 intermediate point (#129)
+
+    @Test(arguments: ["G28", "G30"])
+    func aReferenceReturnPastTheTravelIsATravelError(code: String) {
+        #expect(!travel(issues(cut(1, 2) + "\n\(code) X6")).isEmpty)
+        #expect(travel(issues(cut(1, 2) + "\n\(code) X2")).isEmpty)
+    }
+
+    @Test func aReferenceReturnInMillimetresIsATravelError() {
+        let p = Self.post(x: 5.5)
+        let body = "G0 X10 Y10 Z5\nG1 Z-1 F600\nG1 X20 F1000\nG0 Z5\nG28 X200"
+        #expect(!travel(issues(body, profile: p, job: Self.mmJob(), units: .millimeter)).isEmpty)
+    }
 }
