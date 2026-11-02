@@ -1,0 +1,8 @@
+{
+  "id": "chatterbox-sean-2026-11-01",
+  "host": "breezy",
+  "dir": "sites/loftline-voice",
+  "python": ".venv-cb/bin/python",
+  "script": "clone.py",
+  "reference": "sean-ref.wav"
+}

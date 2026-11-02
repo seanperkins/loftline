@@ -1,0 +1,168 @@
+{
+  "id": "a1-first-cut",
+  "title": "Your first cut",
+  "subtitle": "LoftLine training · A1 · the sample sign",
+  "youtube_title": "How to cut your first sign in LoftLine | First cuts | A1",
+  "next": "A2 · Z zero and the stock",
+  "window": [1280, 720],
+  "appearance": "light",
+  "setup": [
+    {"op": "sample", "name": "sign"},
+    {"op": "tab", "value": "toolpaths"},
+    {"op": "calculate"},
+    {"op": "press", "name": "3D", "value": "AXRadioButton"},
+    {"op": "view", "value": "threeQuarter"},
+    {"op": "wait", "seconds": 3}
+  ],
+  "scenes": [
+    {
+      "id": "finished", "chapter": "Introduction",
+      "stand_in": "the finished 3D preview; replace with footage of the cut sign",
+      "narration": "This is LoftLine's sample sign, carved and cut free. In this video you'll take it from the file to the finished part: check the job, preview every cut, export the G-code, and run it in the air before you cut.",
+      "zoom": {"x": 0.45, "y": 0.5, "to": 1.12},
+      "steps": [{"op": "wait", "seconds": 0.5}]
+    },
+    {"id": "title", "chapter": "Introduction", "card": "title", "duration": 3.0},
+
+    {
+      "id": "open", "chapter": "Open the sample",
+      "pre": [{"op": "press", "name": "2D", "value": "AXRadioButton"}, {"op": "tab", "value": "design"}, {"op": "fit"}, {"op": "wait", "seconds": 0.5}],
+      "label": {"text": "Help ▸ Welcome to LoftLine"},
+      "narration": "Choose Help, then Welcome to LoftLine, and open the sample sign. The design is done and its toolpaths are set up, so you can go straight to the parts that matter at the machine.",
+      "steps": [{"op": "wait", "seconds": 0.5}]
+    },
+    {
+      "id": "tp-pocket", "chapter": "Open the sample",
+      "pre": [{"op": "tab", "value": "toolpaths"}],
+      "narration": "It has four toolpaths, cut in this order. First, a pocket clears the recessed panel with a quarter-inch end mill, tool one.",
+      "steps": [{"op": "selectToolpath", "name": "Pocket 1"}]
+    },
+    {
+      "id": "tp-vcarve", "chapter": "Open the sample",
+      "narration": "Then a V-carve cuts the letters with a sixty-degree V-bit, tool six.",
+      "steps": [{"op": "selectToolpath", "name": "V-Carve 1"}]
+    },
+    {
+      "id": "tp-drill", "chapter": "Open the sample",
+      "narration": "Drilling makes the hanging holes with a quarter-inch drill, tool nine.",
+      "steps": [{"op": "selectToolpath", "name": "Drilling 1"}]
+    },
+    {
+      "id": "tp-profile", "chapter": "Open the sample",
+      "narration": "Last, a profile cuts the sign free, with tabs to hold it. The cut-out comes last, so the part stays held while everything else is cut.",
+      "steps": [{"op": "selectToolpath", "name": "Profile 1"}]
+    },
+
+    {
+      "id": "js-open", "chapter": "Job Setup",
+      "label": {"text": "Job Setup", "keys": "⇧⌘J"},
+      "narration": "Before anything else, open Job Setup, with Shift-Command-J, and check each line against the stock on your bed.",
+      "steps": [{"op": "sheet", "value": "jobSetup"}]
+    },
+    {
+      "id": "js-material", "chapter": "Job Setup",
+      "narration": "The material is 24 by 12 inches, and three-quarters of an inch thick. Measure your stock's thickness and type in what you measure; the through cut follows it.",
+      "steps": [{"op": "move", "name": "Thickness (Z)", "value": "AXTextField"}]
+    },
+    {
+      "id": "js-zero", "chapter": "Job Setup",
+      "narration": "Z zero is the material surface. You'll touch off on top of the stock, so every cut has a negative Z. The XY origin is the lower left, so X zero, Y zero is the front-left corner of the stock.",
+      "steps": [{"op": "move", "name": "Material surface"}]
+    },
+    {
+      "id": "js-post", "chapter": "Job Setup",
+      "narration": "Then choose your router and its controller. If you're not sure which post processor to pick, the controllers page on loftline.app explains each one.",
+      "steps": [{"op": "move", "name": "Avid PRO6096 Mach4 (inch)", "value": "AXPopUpButton"}]
+    },
+
+    {
+      "id": "calc", "chapter": "Calculate and preview",
+      "pre": [{"op": "closeSheet"}],
+      "label": {"text": "Calculate", "keys": "⌘R"},
+      "narration": "Press Command-R to calculate. The toolpaths are drawn over the design.",
+      "steps": [{"op": "press", "name": "Calculate All", "value": "AXButton"}]
+    },
+    {
+      "id": "preview", "chapter": "Calculate and preview",
+      "pre": [{"op": "press", "name": "3D", "value": "AXRadioButton"}, {"op": "wait", "seconds": 3}],
+      "label": {"text": "3D preview"},
+      "narration": "Open the 3D preview and press play. Watch the order: the pocket, the letters, the holes, then the cut-out. Scrub back to anything that looks wrong. The preview also gives you the run time.",
+      "simulate": true
+    },
+
+    {
+      "id": "check", "chapter": "Check and export",
+      "label": {"text": "Check Toolpaths", "keys": "⇧⌘K"},
+      "narration": "Press Shift-Command-K to check the toolpaths. Every toolpath, and the combined program, should pass.",
+      "steps": [{"op": "sheet", "value": "validation"}]
+    },
+    {
+      "id": "export", "chapter": "Check and export",
+      "pre": [{"op": "closeSheet"}],
+      "label": {"text": "Export G-code", "keys": "⇧⌘E"},
+      "narration": "Then press Shift-Command-E to export. Before you save, read three lines on this sheet.",
+      "steps": [{"op": "sheet", "value": "exportGCode"}]
+    },
+    {
+      "id": "export-lines", "chapter": "Check and export",
+      "narration": "The post processor is the controller you'll load the file into. Z zero is the material top, the same as in Job Setup. And the deepest cut is the cut-out, at the bottom of the stock: Z minus 0.75 inches.",
+      "steps": [{"op": "move", "name": "Avid PRO6096 Mach4 (inch)", "value": "AXPopUpButton"}, {"op": "wait", "seconds": 4}, {"op": "move", "name": "Z -0.75 in (at the material bottom)"}]
+    },
+    {
+      "id": "export-errors", "chapter": "Check and export",
+      "narration": "If this sheet lists errors, fix them before you save. An error means the program would do something you didn't ask for.",
+      "steps": [{"op": "wait", "seconds": 0.5}]
+    },
+    {
+      "id": "save-all", "chapter": "Check and export",
+      "pre": [{"op": "closeSheet"}],
+      "label": {"text": "Save All Toolpaths", "keys": "⌥⌘S"},
+      "narration": "This sign uses three tools. If your controller can't set Z for a new bit by itself, use Save All Toolpaths, with Option-Command-S, and choose one file per tool. Then touch off Z again before each file.",
+      "steps": [{"op": "sheet", "value": "saveAllToolpaths"}, {"op": "wait", "seconds": 3}, {"op": "move", "name": "One file per tool"}]
+    },
+
+    {
+      "id": "dry-run", "chapter": "Dry run",
+      "card": "placeholder",
+      "footage": "Controller screen with the file loaded: the header comments, then the toolpath display with the part inside the stock.",
+      "narration": "Load the file into your controller without cutting anything. Read the header comments: the job name, the post, the material size, the Z zero mode and the tool list should all match Job Setup. Then check the toolpath display. The part should sit inside the stock, and nothing should go off the bed."
+    },
+
+    {
+      "id": "air-zero", "chapter": "Air cut",
+      "card": "placeholder",
+      "footage": "Clamping the stock; zeroing X and Y at its front-left corner; touch plate on top, jog up 1 to 2 in, set Z zero there.",
+      "narration": "Now run the whole program in the air. Do this on every new job. Clamp the stock and zero X and Y at its front-left corner. Zero Z on top of the stock with your touch plate, then jog up one to two inches and set Z zero there."
+    },
+    {
+      "id": "air-run", "chapter": "Air cut",
+      "card": "placeholder",
+      "footage": "Spindle off and unable to spin; feed override at about 50 %; a hand on the E-stop; the program running in the air.",
+      "narration": "Leave the spindle off. The program still turns it on, so make sure it can't spin. Run at about fifty percent feed override, with a hand on the E-stop."
+    },
+    {
+      "id": "air-watch", "chapter": "Air cut",
+      "card": "placeholder",
+      "footage": "The stop at a tool change; the lift before a rapid move; the cut order; the final move home.",
+      "narration": "Watch for a stop at each tool change, a lift to safe height before every rapid move, the order of the cuts, and the final move home."
+    },
+
+    {
+      "id": "cut", "chapter": "Cut it",
+      "card": "placeholder",
+      "footage": "Re-zeroing Z on the stock top; spindle on; the cut, with eye and hearing protection on and a hand near the E-stop.",
+      "narration": "Then re-zero Z on the real stock top, turn the spindle on, and run the program. Keep the feed override low for the first minute, and listen to the cut. Wear eye and hearing protection, and keep a hand near the E-stop."
+    },
+    {
+      "id": "tabs", "chapter": "Cut it",
+      "card": "placeholder",
+      "footage": "Cutting the tabs with a chisel or flush-trim saw; sanding the stubs; the finished sign.",
+      "narration": "When the profile finishes, the sign is held by its tabs. Cut them with a chisel or a flush-trim saw, and sand the stubs."
+    },
+    {
+      "id": "end", "chapter": "Cut it",
+      "card": "end",
+      "narration": "That's your first sign, from the file to the finished part."
+    }
+  ]
+}
