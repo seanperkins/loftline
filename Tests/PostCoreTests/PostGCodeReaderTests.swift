@@ -130,8 +130,22 @@ func postReaderReadsBackOurOwnProgram(mode: ZZeroMode) throws {
         #expect(moves(r).suffix(2) == ["G0 0.0000 0.0000 1.5000", "G1 2.0000 0.0000 1.5000"])
     }
 
-    @Test(arguments: ["G53 G0 Z-3", "G53 G0 X0 Y0", "G53"])
-    func anyOtherG53DrawsNothing(code: String) {
+    /// GRBL's machine top is below 0 (homing leaves a pull-off): any machine Z that is not a descent at a park is a retract.
+    @Test func aNegativeMachineRetractIsDrawnUpToo() {
+        let r = GCodeReader.read("G21\nG90\nG0 X0 Y0 Z5\nG1 Z-2 F100\nG53 G0 Z-1\nG1 X20 F100\n", units: .millimeter, startZ: 5)
+        #expect(moves(r).suffix(2) == ["G0 0.0000 0.0000 5.0000", "G1 20.0000 0.0000 5.0000"])
+    }
+
+    /// A retract written as a feed is drawn (and timed) as one.
+    @Test func aFeedRetractIsAFeed() {
+        let r = GCodeReader.read("G20\nG90\nG0 X0 Y0 Z0.2\nG1 Z-0.5 F10\nG53 G1 Z0 F5\nG1 X2 F10\n", units: .inch, startZ: 0.2)
+        #expect(moves(r).suffix(2) == ["G1 0.0000 0.0000 0.2000", "G1 2.0000 0.0000 0.2000"])
+    }
+
+    /// The park and the descent at it (the probe sequence's `G53 G0 X Y` then `G53 G0 Z<parkZ>`, or a tool setter) draw
+    /// nothing; a G53 with no axes neither.
+    @Test(arguments: ["G53 G0 X0 Y0\nG53 G0 Z-3", "G53 G0 X0 Y0", "G53"])
+    func aParkAndItsDescentDrawNothing(code: String) {
         let r = GCodeReader.read("G20\nG90\nG0 X1 Y1 Z0.2\nG1 Z-0.5 F10\n\(code)\nG1 X2 F10\n", units: .inch, startZ: 0.2)
         #expect(moves(r).last == "G1 2.0000 1.0000 -0.5000")
         #expect(r.warnings.isEmpty, "\(r.warnings)")

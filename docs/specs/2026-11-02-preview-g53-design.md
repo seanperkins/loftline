@@ -1,6 +1,6 @@
 # The G-code preview after a G53 retract (issue #120, item 4)
 
-Status: approved, revision 2 (after debate:all round 1)
+Status: approved, revision 2 (after debate:all round 1); amended after the branch review: a G53 Z move is a retract whatever its sign (GRBL's top is below 0) unless it follows a park in machine X/Y, and a G1 retract is drawn as a feed (see DECISIONS preview-g53-retract)
 
 ## Problem
 

@@ -71,6 +71,9 @@ public enum GCodeReader {
 
         /// The highest Z any move has reached (output units): a G53 retract is drawn at least this high.
         var highestZ: Double?
+        /// The machine has moved X or Y in machine coordinates (a park) since the last work-coordinate move: a G53 Z now is
+        /// the descent at the park (the probe swap, a tool setter), not a retract.
+        var parked = false
         func emit(_ m: Move) {
             segments[segments.count - 1].moves.append(m)
             if let z = m.target?.z { highestZ = max(highestZ ?? z, z) }
@@ -138,11 +141,16 @@ public enum GCodeReader {
                     nonModal = true
                     probed = true
                 case 53:
-                    // A machine-coordinate move: the work position after it is not known. A Z of 0 or above (the top of the
-                    // machine's Z on Mach, LinuxCNC and GRBL) is a retract, drawn up to a stand-in height below; any other
-                    // G53 (a park, a descent to a tool setter) draws nothing and leaves the position as it was (#120).
+                    // A machine-coordinate move: the work position after it is not known. A Z move is a retract (to the
+                    // machine's top, which is below 0 on GRBL), drawn up to a stand-in height below, unless the machine has
+                    // just parked in X/Y: then it is the descent at the park (the probe swap, a tool setter), and like the
+                    // park itself it draws nothing and leaves the position as it was (#120).
                     nonModal = true
-                    if let z = b.value("Z"), z >= -1e-9 { machineRetract = true }
+                    if b.value("X") != nil || b.value("Y") != nil {
+                        parked = true
+                    } else if b.value("Z") != nil, !parked {
+                        machineRetract = true
+                    }
                 case 10 where b.value("L") == 20 && b.value("Z") != nil:
                     nonModal = true
                     pos = Vec3(pos?.x ?? 0, pos?.y ?? 0, (b.value("Z") ?? 0) * f)
@@ -176,11 +184,15 @@ public enum GCodeReader {
                 // Straight up to the higher of the assumed start height and the highest point the program reached, so the
                 // next move starts above the stock (the renderer draws every move from the previous target).
                 let up = max(startZ, highestZ ?? startZ)
-                if up > p.z + 1e-12 { emit(.rapid(to: Vec3(p.x, p.y, up))) }
+                if up > p.z + 1e-12 {
+                    let to = Vec3(p.x, p.y, up)
+                    emit(b.has("G", 1) ? .linear(to: to, feed: max(b.value("F").map { $0 * f } ?? feed, 1e-6)) : .rapid(to: to))
+                }
                 pos = Vec3(p.x, p.y, max(up, p.z))
                 known.z = true
             }
             if nonModal { continue }
+            if b.value("X") != nil || b.value("Y") != nil || b.value("Z") != nil { parked = false }
             let bx = b.value("X"), by = b.value("Y"), bz = b.value("Z")
             guard bx != nil || by != nil || bz != nil else { continue }
             guard let m = motion else {
