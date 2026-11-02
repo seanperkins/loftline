@@ -212,6 +212,7 @@ enum GCodeExporter {
             }
             let text = try TemplatePostProcessor(profile: profile).post(job)
             issues += validator.validate(gcode: text)
+            issues += UnknownWords.issues(text: text, job: job, profile: profile)
             return GCodeExportResult(text: text, issues: GCodeIssue.merged(issues), errorMessage: nil, toolpathCount: toolpaths.count,
                                      deepestCut: DeepestCut.find(in: text, job: doc.job, units: doc.units,
                                                                 postUnits: profile.units, comments: profile.parserComments),

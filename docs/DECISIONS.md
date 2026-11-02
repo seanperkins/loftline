@@ -1256,3 +1256,15 @@
   unset field being each listed post's own, is empty), which the GRBL notes already told owners to set. The UI
   harness cannot open the Settings window, so the fields are checked by `MachineRPMFieldTests` and the build. Spec:
   `docs/specs/2026-11-02-controller-settings-design.md`.
+- **unknown-words — export warns of a word a family's post writes that its built-in does not (#99 item 14).** No separate word
+  list: the program a built-in writes holds the words its controller is known to read (each dialect issue, #103-#111, kept the
+  built-ins to documented words). `UnknownWords.issues(text:job:profile:)` posts the same job with the built-in, given the
+  post's units, limits, feeds, spindle range and probe setting (what a machine applies), and compares the G and M codes of the
+  two programs; written programs, not templates, so coolant, `G90.1`, rendered stops, the tool length line and a probed tool
+  change all count (revision 1 compared templates and the panel found false warnings and misses both ways). Units words are
+  left out (a family keeps its own), and so are codes the validator does not model (`unknown-g`/`unknown-m` already warn). If
+  the built-in cannot post the job, even without the probe, the check is silent. A post that only carries a built-in's id is
+  checked too. The warning names the codes and what that controller does with a word it does not know: MASSO skips the line,
+  CNC12 cancels the job (error 502), UCCNC follows its Unknown g-codes setting, any other "may ignore, skip or refuse" it. A
+  warning, not an error (the owner may know the controller reads it), at export only: the post editor's sample report blocks
+  Save on any issue. Spec: `docs/specs/2026-11-02-unknown-words-design.md`.
