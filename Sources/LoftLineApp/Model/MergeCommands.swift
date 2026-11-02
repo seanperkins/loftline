@@ -34,6 +34,7 @@ extension LoftLineProject {
         merged.setup.pauseAfter = b.setup.pauseAfter
         merged.setup.coolant = a.setup.coolant
         operations.replaceSubrange(i...(i + 1), with: [.merge(merged)])
+        operations = operations.givingRepeatedIDsNewOnes()
         return merged.setup.id
     }
 
@@ -52,6 +53,64 @@ extension LoftLineProject {
             children[last].editableSetup = s
         }
         operations.replaceSubrange(i...i, with: children)
+        // Parts of a duplicated merge written before #123 may repeat ids already at the top level.
+        operations = operations.givingRepeatedIDsNewOnes()
+    }
+}
+
+extension AnyOperation {
+    /// The same operation under another id (its merged parts keep theirs).
+    func withID(_ id: UUID) -> AnyOperation {
+        var op = self, s = op.editableSetup
+        s.id = id
+        op.editableSetup = s
+        return op
+    }
+
+    /// A copy with a new id, and new ids for every part merged inside it, so splitting the copy cannot bring back an id
+    /// the original holds (#123).
+    func withNewIDs() -> AnyOperation {
+        var op = withID(UUID())
+        if case .merge(var m) = op {
+            m.params.children = m.params.children.map { $0.withNewIDs() }
+            op = .merge(m)
+        }
+        return op
+    }
+}
+
+extension Array where Element == AnyOperation {
+    /// Gives every operation whose id is already taken a new one (#123). Top-level ids are reserved first, in order, so a
+    /// top-level operation keeps its id (and its results, selection and variable links) over a merged part; then merged
+    /// parts are walked depth first. The first holder of an id always keeps it.
+    func givingRepeatedIDsNewOnes() -> [AnyOperation] {
+        var seen = Set<UUID>()
+        var out = self
+        for i in out.indices where !seen.insert(out[i].id).inserted {
+            out[i] = out[i].withID(UUID())
+            seen.insert(out[i].id)
+        }
+        func parts(_ ops: [AnyOperation]) -> [AnyOperation] {
+            ops.map { child in
+                var op = child
+                if !seen.insert(op.id).inserted {
+                    op = op.withID(UUID())
+                    seen.insert(op.id)
+                }
+                if case .merge(var m) = op {
+                    m.params.children = parts(m.params.children)
+                    op = .merge(m)
+                }
+                return op
+            }
+        }
+        for i in out.indices {
+            if case .merge(var m) = out[i] {
+                m.params.children = parts(m.params.children)
+                out[i] = .merge(m)
+            }
+        }
+        return out
     }
 }
 

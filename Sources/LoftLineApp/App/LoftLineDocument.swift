@@ -761,9 +761,8 @@ final class LoftLineDocument: ReferenceFileDocument {
     }
 
     func duplicateOperation(_ id: UUID) {
-        guard var op = operation(id) else { return }
+        guard var op = operation(id)?.withNewIDs() else { return }
         var s = op.editableSetup
-        s.id = UUID()
         s.name = OperationFactory.defaultName(for: op.kind, existing: project.operations)
         op.editableSetup = s
         let copy = op

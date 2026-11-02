@@ -1164,3 +1164,14 @@
   forgotten axis resolves from 0; every G91 block already warns. G28/G30 with another motion code (or each
   other) on one block with axis words is an error. Bare G28/G30 are unchanged; the stored position, G28.1/G30.1 and keep-out
   zones on a custom footer's intermediate move are not modelled.
+- **duplicate-ids — ids in a project are unique (#123).** A project finds operations, shapes, layers, models, keep-out
+  zones and tools by id, taking one match, so two items on one id post whichever comes first (a disabled 0.2 in drill and
+  an enabled 0.02 in one on one id posted 0.2 in). The app could write an operation clash itself: Duplicate on a merged
+  toolpath kept its parts' ids, and splitting both put two operations on one id at the top level. Duplicate now gives
+  the copy and every merged part a new id (`withNewIDs`), and Split and Merge pass the operations through
+  `givingRepeatedIDsNewOnes`, which also repairs files written before this on open (`opening(from:)`): top-level ids are
+  reserved first so a top-level operation keeps its id, results and variable links over a merged part; later holders
+  get new ids. Operations are repaired, not refused, because the app wrote them. Layers, shapes, models, keep-out zones, sheets, images and
+  carried tools the app never writes twice, so a clash there is refused at open with the kind, positions and names ("Two
+  shapes share the id …: the 2nd ("Hole") and the 4th ("Hole")."). A project tool that shadows a library tool is not a
+  clash. `decode(from:)` is unchanged, so clipart still reads.
