@@ -1,6 +1,6 @@
 # Words a controller may not know (#99 item 14)
 
-Status: revision 1.
+Status: revision 2, after the round 1 panel (two GPT-6 seats, an Opus skeptic, a Sonnet simplifier): compare written programs, not templates.
 
 ## Question
 
@@ -22,37 +22,45 @@ relies on, and whether the Export sheet should say so.
 
 ## Decision
 
-**No separate word list.** A built-in's own templates are the words it relies on, and the words its controller is known to
-read. A copy that writes a G or M code its built-in's templates never write gets an export warning that names the codes and
-says what that controller does with a word it does not know. The owner may know that their controller reads the code, so this
-is a warning, not an error.
+**No separate word list.** The program a built-in writes holds the words it relies on, the words its controller is known to
+read. A post of a built-in family (a copy, or a file or project copy that carries the built-in's id) whose program writes a G
+or M code the built-in's program for the same job does not, gets an export warning naming the codes and what that controller
+does with a word it does not know. The owner may know that their controller reads it, so it is a warning, not an error.
 
-- **Words compared**: the G and M codes in the templates: prelude, preamble, tool change, tool length line (the copy's only
-  when it is on; the built-in's always, since its family documents it), spindle on and off, dwell, footer, and the pause lines.
-  Each line is read with `GCodeParser` in the post's comment style, after every `{NAME}` placeholder is replaced by `1`, so
-  comments never count and `T{T}` reads as a word. The builder's own words (motion, units, coolant, `G90`/`G91.1`) are the
-  same for a copy and its built-in, so they are not compared.
+- **Compared on written programs**, so every word the builder writes counts: coolant, units, `G90.1` (absolute arcs),
+  rendered stops (`{STOP}`), the tool length line as written, a probed tool change. `UnknownWords.issues(text:job:profile:)`
+  (PostCore) takes the exported text, the `PostJob` and the post. The reference is the built-in post given the copy's units,
+  limits, rapid rate, max feed, spindle range and probe setting (what a machine applies, `MachineDefinition.applied(to:)`), so
+  only the dialect differs. It is posted with the same job; if that throws, it is posted again without the probe setting (a
+  built-in that cannot probe); if that throws too, the check is silent (no false warning).
+- **Words**: the G and M codes of each program, read with `GCodeParser` in each post's comment style. Units words
+  (`G20`, `G21`, `G70`, `G71`) are left out (`postProblem` already keeps a family's units words, and the reference has the
+  copy's units). A code the validator does not model is left out too: it already gets `unknown-g`/`unknown-m`.
 - **Message**: "<post name> writes <codes>, which the built-in <built-in name> post does not: <consequence> Check that your
-  controller reads <it/them>." The codes are in first-seen order, for example "G64, M7".
-  - MASSO: "MASSO skips a whole line with a word it does not know."
-  - Centroid: "CNC12 cancels the job at a word it does not know (error 502)."
-  - UCCNC: "UCCNC runs, skips or stops at a word it does not know, as its Unknown g-codes setting says."
+  controller reads them." Codes in first-seen order, `NumberFormat.compact` (G64, G90.1, M7).
+  - MASSO: "MASSO skips a whole line with a word it does not know." (the same claim as the G43 error, #107)
+  - Centroid: "CNC12 cancels the job at a word it does not know (error 502)." (#99's research)
+  - UCCNC: "UCCNC runs, skips or stops at a word it does not know, as its Unknown g-codes setting says." (#99; TESTING's
+    UCCNC check)
   - any other family: "A controller may ignore, skip or refuse a word it does not know."
-- **Where**: `DialectChecks.issues(toolpaths:profile:)`, which runs at every export and in the CLI. A built-in itself
-  (`family == id`) is not checked.
+- **Where**: `GCodeExporter.export`, after posting, beside `validate(gcode:)`; the CLI goes through it. Not in the post editor:
+  its sample report blocks Save on any issue, and this is a warning the owner may accept.
+- A post equal to its built-in by value skips the work.
 
 No output changes.
 
 ## Tests
 
-- A MASSO copy whose preamble adds `G64 P0.01`: one warning, naming G64, with MASSO's consequence.
-- A Centroid copy adding `M7` in its tool change, and a UCCNC copy adding `G28` in its footer: each gets its own consequence.
-- A Mach4 copy adding `G64`: the general consequence.
-- A copy whose only change is a comment containing "G64": no warning. A copy identical to its built-in: none. A copy that
-  re-orders the built-in's own words: none.
-- An NcStudio copy that turns on its tool length line (`G43`): no unknown-word warning (the built-in's line counts).
-- Every built-in: no warning.
+- A MASSO copy whose preamble adds `G64 P0.01`: one warning naming G64, with MASSO's consequence.
+- A MASSO copy set to absolute arcs: the warning names G90.1.
+- A Centroid copy adding `M7` to its tool change, on a job with no coolant: warned; the built-in Centroid post on a job with
+  mist coolant: no unknown-word warning (the built-in writes M7 itself).
+- A UCCNC copy adding `G28` to its footer: UCCNC's consequence; a Mach4 copy adding `G64`: the general one.
+- A copy whose only change is a comment containing "G64", a copy changed to the other units, a copy whose pause is a manual
+  M0, and the Avid post with a machine's probe setting: no unknown-word warning.
+- A user post carrying `masso-g3-inch` as its id with `G64` added: warned.
+- A code the validator does not model (`M98`) in a copy: only the existing `unknown-m` warning.
 
 ## Docs
 
-DECISIONS `unknown-words`; help topic (one sentence where duplicated posts are described); #99 comment answering item 14.
+DECISIONS `unknown-words`; #99 comment answering item 14.
