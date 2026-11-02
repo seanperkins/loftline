@@ -212,6 +212,13 @@ struct MachineEditor: View {
                 NumberField("Rapid rate", value: Binding(get: { machine.rapidRate ?? 0 },
                                                          set: { machine.rapidRate = $0 > 0 ? $0 : nil }),
                             unit: "\(u.abbreviation)/min", help: "Used for time estimates (0 = the post's value)")
+                NumberField("Min RPM", value: Binding(get: { machine.minRPM ?? 0 }, set: { machine.minRPM = Self.rpm($0) }),
+                            unit: "RPM", help: "The spindle's lowest speed (0 = the post's value)")
+                NumberField("Max RPM", value: Binding(get: { machine.maxRPM ?? 0 }, set: { machine.maxRPM = Self.rpm($0) }),
+                            unit: "RPM", help: "The spindle's top speed; on GRBL, set $30 to the same value (0 = the post's value)")
+                if let problem = Self.rpmProblem(machine) {
+                    Text(problem).font(.caption).foregroundStyle(.red)
+                }
                 ToolChangeProbeSection(machine: $machine, posts: posts)
                 Section("Post processors") {
                     ForEach(posts) { p in
@@ -240,9 +247,18 @@ struct MachineEditor: View {
         }
     }
 
+    /// A spindle speed field's value: 0 (or less) means the post's own.
+    static func rpm(_ value: Double) -> Double? { value > 0 ? value : nil }
+
+    static func rpmProblem(_ m: MachineDefinition) -> String? {
+        if let lo = m.minRPM, let hi = m.maxRPM, lo > hi { return "Min RPM is above Max RPM." }
+        return nil
+    }
+
     private var isValid: Bool {
         !machine.name.trimmingCharacters(in: .whitespaces).isEmpty && machine.limits.xTravel > 0
             && machine.limits.yTravel > 0 && machine.limits.zTravel > 0 && machine.limits.maxSpoilboardCut >= 0
+            && Self.rpmProblem(machine) == nil
             && (machine.toolChangeProbe?.problems(limits: machine.limits, units: machine.units).isEmpty ?? true)
     }
 
