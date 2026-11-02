@@ -7,9 +7,12 @@ import Foundation
 /// (#110, #111), and NcStudio's missing M7 and H00-H07 (#109).
 public enum DialectChecks {
     public static let uccncUnitsWarningPrefix = "UCCNC takes units from its profile"
+    public static let centroidDwellWarningPrefix = "CNC12 reads G4 P in seconds"
+    public static let grblSettingsWarningPrefix = "GRBL scales S against $30"
     static let massoIDs: Set<String> = [BuiltInPosts.massoG3Inch.id, BuiltInPosts.massoG3MM.id]
     static let uccncIDs: Set<String> = [BuiltInPosts.uccncInch.id, BuiltInPosts.uccncMM.id]
     static let centroidIDs: Set<String> = [BuiltInPosts.centroidInch.id, BuiltInPosts.centroidMM.id]
+    static let grblIDs: Set<String> = [BuiltInPosts.genericGRBLInch.id, BuiltInPosts.genericGRBLMM.id]
     /// CNC12's documented dwell range, seconds.
     static let centroidDwell = 0.01...327.67
     static let haasIDs: Set<String> = [BuiltInPosts.haasInch.id, BuiltInPosts.haasMM.id]
@@ -60,7 +63,19 @@ public enum DialectChecks {
         if uccncIDs.contains(family) {
             let units = profile.units == .inch ? "inches" : "millimetres"
             out.append(GCodeIssue(severity: .warning, message: "\(uccncUnitsWarningPrefix) and may ignore G20/G21: set the profile to "
-                                                              + "\(units) before running this program."))
+                                                              + "\(units) before running this program, and leave \"Measure dwell in "
+                                                              + "seconds\" off (LoftLine writes G4 P in milliseconds)."))
+        }
+        // Settings a program cannot set (#99 item 13): Centroid's Parameter 2 bit 2 makes P milliseconds, so the 3 s spin-up
+        // would last 3 ms; GRBL scales S against $30, and laser mode ($32=1) turns the spindle off on every G0.
+        if centroidIDs.contains(family) {
+            out.append(GCodeIssue(severity: .warning, message: "\(centroidDwellWarningPrefix) unless Parameter 2 bit 2 is set: check "
+                                                              + "that it is clear, or a 3 s dwell lasts 3 ms."))
+        }
+        if grblIDs.contains(family) {
+            out.append(GCodeIssue(severity: .warning, message: "\(grblSettingsWarningPrefix) and stops the spindle on every G0 in laser "
+                                                              + "mode: set $30 to \(NumberFormat.fixed(profile.maxRPM, decimals: 0)) "
+                                                              + "and $32=0."))
         }
         if centroidIDs.contains(family) {
             let outside = posting.filter { tp in
