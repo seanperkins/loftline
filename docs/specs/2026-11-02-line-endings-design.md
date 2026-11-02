@@ -1,6 +1,7 @@
 # Line endings per post (#99 item 4)
 
-Status: revision 2, after the round 1 panel (two GPT-6 seats, an Opus skeptic, a Sonnet simplifier).
+Status: revision 3, after the round 1 panel (two GPT-6 seats, an Opus skeptic, a Sonnet simplifier) and a
+verification pass.
 
 ## Problem
 
@@ -32,10 +33,12 @@ one `Character`. So the text stays LF and the ending is applied only to the byte
 
 - `GCodeExportResult` stores `lineEnding: PostProfile.LineEnding?` (set by `GCodeExporter.export` from the profile) and
   computes `fileText: String?` from `text`, so the two cannot drift.
-- `PostProfile.LineEnding.apply(_ program: String) -> String` (or a static on `PostProfile`) works on UTF-8 bytes: a CR
-  is inserted before every LF not already preceded by one. It is idempotent, so a template line that already carries
-  `\r\n` (a post read from JSON never passes the editor's ASCII rule) does not become `\r\r\n`; a lone CR is left as it
-  is, exactly as an LF post writes it today.
+- The program text is LF only, and one line per template line: `postProblem` (checked by the builder for every post,
+  so a post read from JSON is covered) refuses a template line that contains a CR or LF, "A template line contains a
+  line break: put each line on its own line." Today such a line from a JSON post reaches the text, where
+  `GCodeParser` counts `\r\n` as a line break but `PostDraftReport.stopProblems` does not, so the stop check's line
+  numbers shift (verification pass; a pre-existing gap this change closes).
+- `PostProfile.LineEnding.apply(_ program: String) -> String` works on UTF-8 bytes: a CR before every LF.
 - Every place that writes a program to a file writes `fileText`: `ExportGCodeSheet` (`:192`), `SaveAllToolpathsSheet`
   (`:175`), `GCodeFileSet.init(posted:)` and `init(tiles:)` (Save All and tiled export), and the CLI's `export` (file at
   `:326` and `--out -` at `:316`). Nothing puts a program on the pasteboard.
@@ -58,8 +61,9 @@ No other built-in changes: there is no evidence that any other controller needs 
 
 Every line-ending assertion compares UTF-8 bytes (`Array(s.utf8)`), never `Character`s or `split(separator: "\n")`.
 
-- PostCore: apply for CRLF (byte 13 before every byte 10, line count by bytes unchanged, the last line too) and
-  idempotent (a `"\r\n"` in a line stays one CR); nil leaves bytes unchanged; `requiredSchemaVersion` 5 for CRLF,
+- PostCore: apply for CRLF (byte 13 before every byte 10, line count by bytes unchanged, the last line too);
+  `postProblem` refuses a prelude, footer or tool-change line containing `\r\n`, `\r` or `\n`, and the builder throws
+  for such a post read from JSON; nil leaves bytes unchanged; `requiredSchemaVersion` 5 for CRLF,
   including with `'` comments; a CRLF post round-trips through JSON (`everyFieldSurvivesTheDecoder`); `"lf"` in JSON is
   refused; `SnapshotTests` pins (MASSO now 5, current 5); both MASSO built-ins are CRLF and version 1.1, no other is CRLF.
 - App: `GCodeExporter.export` with the MASSO post: `text` bytes have no 13, `fileText` is `text` with CRLF;
