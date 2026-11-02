@@ -97,35 +97,37 @@ enum GCodeExporter {
     /// Name of the modelled end-of-program travel in keep-out messages.
     static let homeMoveName = "Move home (end of program)"
 
-    /// The footer's travel after the last toolpath, machine frame, document units: the post
-    /// retracts to safe Z, then the built-in footers go to Home Z and across to home XY. Only
-    /// the moves the profile's footer actually makes ({HOME_Z}, {HOME_X}/{HOME_Y}) are included,
-    /// Z first. Empty when the footer does not go home.
-    static func homeTravel(from end: Vec3, document doc: Document, profile: PostProfile) -> [Vec3] {
-        let footer = profile.footer.joined(separator: "\n")
-        let goesZ = footer.contains("{HOME_Z}")
-        let goesXY = footer.contains("{HOME_X}") || footer.contains("{HOME_Y}")
-        guard goesZ || goesXY else { return [] }
-        let coords = MachineCoordinates(job: doc.job)
-        var pts = [Vec3(end.xy, z: max(end.z, coords.safeZ))]
-        var z = pts[0].z
-        if goesZ { z = coords.homeZ; pts.append(Vec3(end.xy, z: z)) }
-        if goesXY { pts.append(Vec3(doc.job.home, z: z)) }
-        return pts
-    }
-
-    /// The footer's travel home as a rapid-only toolpath with the last toolpath's tool, so the
-    /// keep-out checks see it as the next move of the program; nil when there is none.
-    static func homeMove(after toolpaths: [Toolpath], document doc: Document, profile: PostProfile) -> Toolpath? {
+    /// The footer's travel after the last toolpath (machine frame, document units), walked from the footer as the post
+    /// renders it (#132): the builder's retract, then the footer's own moves in order, a G28/G30 intermediate move
+    /// included. nil when no toolpath moves.
+    static func footerTravel(after toolpaths: [Toolpath], document doc: Document, profile: PostProfile) -> FooterTravel? {
         guard let last = toolpaths.last(where: { $0.moves.contains { $0.target != nil } }),
               let end = last.moves.last(where: { $0.target != nil })?.target else { return nil }
-        let pts = homeTravel(from: end, document: doc, profile: profile)
-        guard !pts.isEmpty else { return nil }
+        let job = PostJob(name: "", units: doc.units, job: doc.job, toolpaths: toolpaths,
+                          approachHeight: approachHeight(document: doc))
+        return FooterTravel.model(profile: profile, job: job, from: end)
+    }
+
+    /// The footer's travel as a rapid-only toolpath with the last toolpath's tool, so the
+    /// keep-out checks see it as the next move of the program; nil when there is none. It is marked as written: the
+    /// footer's lines are posted verbatim, with no climb to safe Z before an XY move.
+    static func homeMove(after toolpaths: [Toolpath], document doc: Document, profile: PostProfile) -> Toolpath? {
+        guard let last = toolpaths.last(where: { $0.moves.contains { $0.target != nil } }),
+              let pts = footerTravel(after: toolpaths, document: doc, profile: profile)?.points, !pts.isEmpty
+        else { return nil }
         var tp = last
         tp.name = homeMoveName
         tp.moves = pts.map { .rapid(to: $0) }
-        tp.metadata = [:]
+        tp.metadata = [KeepOut.asWrittenKey: "1"]
         return tp
+    }
+
+    /// A warning when the job has keep-out zones or clamps and the footer does something the check cannot follow.
+    static func footerWarning(after toolpaths: [Toolpath], document doc: Document, profile: PostProfile) -> GCodeIssue? {
+        let zones = (doc.keepOutZones ?? []).contains { $0.outline.count > 2 } || !Fixtures.zones(in: doc).isEmpty
+        guard zones, let line = footerTravel(after: toolpaths, document: doc, profile: profile)?.unmodelledFrom else { return nil }
+        return GCodeIssue(severity: .warning, message: "Keep-out zones and clamps are not checked from the footer's line "
+                          + "\"\(line)\" on: LoftLine cannot tell where the machine goes from there.")
     }
 
     /// Raises the footer's move home over "lift over" keep-out zones taller than Home Z.
@@ -178,6 +180,7 @@ enum GCodeExporter {
         let validator = GCodeValidator(profile: profile, job: doc.job, units: doc.units)
         var issues = validator.validate(toolpaths: toolpaths)
         issues += keepOutIssues(checked, document: doc)
+        issues += [footerWarning(after: toolpaths, document: doc, profile: profile)].compactMap { $0 }
         issues += LayoutChecks.toolpaths(toolpaths, job: doc.job, units: doc.units)
         issues += PreflightChecks.issues(project: project, toolpaths: toolpaths, units: doc.units)
         issues += PreflightChecks.operationWarnings(toolpaths)
@@ -187,7 +190,7 @@ enum GCodeExporter {
         issues += LayoutChecks.keepOut(checked, zones: Fixtures.zones(in: doc), job: doc.job, units: doc.units).map { i in
             guard i.message.contains(homeMoveName) else { return i }
             var fixed = i
-            fixed.message = i.message.replacingOccurrences(of: "raise safe Z", with: "raise Home Z")
+            fixed.message = i.message.replacingOccurrences(of: "raise safe Z", with: "raise Home Z or change the post's footer")
             return fixed
         }
         // The post header already prints W x H x T, so no extra material description.

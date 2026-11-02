@@ -135,3 +135,88 @@ func keepOutHomeLiftIsPinned(mode: ZZeroMode) throws {
     ]
     #expect(Array(lines[start...].suffix(12)) == pinned[mode] ?? [], "\(Array(lines[start...].suffix(12)))")
 }
+
+/// A custom footer's moves are checked as the machine makes them, a G28 intermediate move included (#132).
+enum FooterTravelExport {
+    /// Avid Mach4 with a footer that goes to Home Z, then `G28 X6 Y6`: a rapid from about (4.9, 1) to (6, 6) at Home Z.
+    static let g28Post: PostProfile = {
+        var p = BuiltInPosts.avidMach4Inch
+        p.footer = ["G0 Z{HOME_Z}", "M5", "G28 X6 Y6", "M30"]
+        return p
+    }()
+    /// Across the G28 move only (not the straight way home to X0 Y0), 1 in tall: above Home Z (0.8).
+    static let across = [Vec2(4, 3.5), Vec2(8, 3.5), Vec2(8, 4.5), Vec2(4, 4.5)]
+    static let warning = "Keep-out zones and clamps are not checked from the footer's line \"G28 X6 Y6\" on: "
+        + "LoftLine cannot tell where the machine goes from there."
+
+    static func export(_ project: LoftLineProject, profile: PostProfile = g28Post) throws -> GCodeExportResult {
+        let ids = project.document.shapes.map(\.id)
+        let b = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "B", toolID: ToolLibrary.seeded.tools[0].id,
+                                                                            shapeIDs: [ids[1]])))
+        let tps = try b.generate(in: CAMContext(document: project.document, tools: .seeded))
+        return GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T")
+    }
+
+    static func project(_ mode: ZZeroMode) -> LoftLineProject {
+        var p = AppTestSupport.project()
+        p.document.job.zZero = mode
+        return p
+    }
+}
+
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func aKeepOutZoneOnTheFootersG28MoveIsAnError(mode: ZZeroMode) throws {
+    var project = FooterTravelExport.project(mode)
+    project.document.keepOutZones = [KeepOutZone(name: "Jig", outline: FooterTravelExport.across, height: 1)]
+    let r = try FooterTravelExport.export(project)
+    #expect(r.issues.contains { $0.severity == .error && $0.message.contains("\(GCodeExporter.homeMoveName) rapids over keep-out zone \"Jig\"") },
+            "\(r.issues)")
+    #expect(r.issues.contains { $0.severity == .warning && $0.message == FooterTravelExport.warning }, "\(r.issues)")
+}
+
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func aClampOnTheFootersG28MoveIsAnError(mode: ZZeroMode) throws {
+    var project = FooterTravelExport.project(mode)
+    let layer = FixtureCommands.keepOutLayer(named: "Clamps", height: 1, in: &project)
+    project.document.add(AppTestSupport.rect(4, 3.5, 4, 1, layer: layer))
+    let r = try FooterTravelExport.export(project)
+    #expect(r.issues.contains {
+        $0.severity == .error && $0.message.contains(GCodeExporter.homeMoveName)
+            && $0.message.hasSuffix("raise Home Z or change the post's footer")
+    }, "\(r.issues)")
+    #expect(r.issues.contains { $0.message == FooterTravelExport.warning }, "\(r.issues)")
+}
+
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func aLiftOverZoneOnTheFootersG28MoveIsCrossedAboveIt(mode: ZZeroMode) throws {
+    var project = FooterTravelExport.project(mode)
+    project.document.keepOutZones = [KeepOutZone(name: "Jig", outline: FooterTravelExport.across, height: 1, liftOver: true)]
+    let r = try FooterTravelExport.export(project)
+    #expect(!r.issues.contains { $0.message.contains("keep-out") || $0.message.contains("clamp '") }, "\(r.issues)")
+    let lines = try #require(r.text).split(separator: "\n").map(String.init)
+    let g28 = try #require(lines.firstIndex(of: "G28 X6 Y6"))
+    let clear = "Z" + String(format: "%.4f", MachineCoordinates(job: project.document.job).z(aboveTop: 1.1))
+    let start = try #require(lines.lastIndex { $0.contains("Toolpath: B") })
+    #expect(lines[start..<g28].contains { $0.contains(clear) }, "\(lines[start...g28])")
+    #expect(lines[start..<g28].contains("X6.0000 Y6.0000"), "\(lines[start...g28])")
+}
+
+@Test func theFooterWarningNeedsAZoneOrAClamp() throws {
+    let r = try FooterTravelExport.export(FooterTravelExport.project(.materialTop))
+    #expect(!r.issues.contains { $0.message.contains("not checked from the footer") }, "\(r.issues)")
+}
+
+/// Home Z below safe Z (a project not edited through Job Setup): the footer goes down to Home Z where the last cut
+/// ended and crosses at Home Z, which the check used to look at from safe Z.
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func aBuiltInFooterBelowSafeZIsCheckedWhereItCrosses(mode: ZZeroMode) throws {
+    var project = FooterTravelExport.project(mode)
+    project.document.job.safeZ = 0.5
+    project.document.job.homeZ = 0.1
+    project.document.keepOutZones = [KeepOutZone(name: "Low", outline: [Vec2(3.4, -1), Vec2(4.6, -1), Vec2(4.6, 3),
+                                                                         Vec2(3.4, 3)], height: 0.3)]
+    let r = try FooterTravelExport.export(project, profile: BuiltInPosts.avidMach4Inch)
+    #expect(r.issues.contains { $0.severity == .error && $0.message.contains("\(GCodeExporter.homeMoveName) rapids over keep-out zone \"Low\"") },
+            "\(r.issues)")
+    #expect(!r.issues.contains { $0.message.contains("not checked from the footer") }, "\(r.issues)")
+}
