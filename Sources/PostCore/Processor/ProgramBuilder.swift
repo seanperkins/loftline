@@ -30,6 +30,9 @@ struct ProgramBuilder {
     func build() throws -> String {
         let active = toolpaths.filter { !$0.moves.isEmpty }
         guard !active.isEmpty else { throw PostError.noToolpaths }
+        if let tp = active.first(where: { !($0.spindleRPM >= PostProfile.minSpindleRPM) }) {
+            throw PostError.spindleStopped(toolpath: tp.name)
+        }
         for tp in active where tp.spindleRPM < profile.minRPM || tp.spindleRPM > profile.maxRPM {
             throw PostError.spindleSpeedOutOfRange(tp.spindleRPM)
         }

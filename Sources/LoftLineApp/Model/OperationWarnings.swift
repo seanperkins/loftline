@@ -245,6 +245,8 @@ enum OperationWarnings {
 
     /// Why `rpm` is outside what `profile`'s spindle runs, or nil. The range is the post's, not a constant.
     static func rpmProblem(_ rpm: Double, profile: PostProfile) -> String? {
+        // Below the floor S prints as S0, a stopped spindle, on every post (#99 item 10).
+        if !(rpm >= PostProfile.minSpindleRPM) { return "The spindle speed must be at least 1 RPM." }
         guard !(rpm >= profile.minRPM && rpm <= profile.maxRPM) else { return nil }
         let range = "\(RulerTicks.label(profile.minRPM))–\(RulerTicks.label(profile.maxRPM)) RPM"
         return "The spindle speed \(RulerTicks.label(rpm)) RPM is outside the range \(range) of the post \(profile.name)."

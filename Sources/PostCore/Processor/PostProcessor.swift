@@ -6,6 +6,9 @@ public enum PostError: Error, Equatable, Sendable {
     case notImplemented(String)
     case noToolpaths
     case spindleSpeedOutOfRange(Double)
+    /// The named toolpath's spindle speed is below `PostProfile.minSpindleRPM` (or not a number): it would print as `S0`,
+    /// which leaves the spindle stopped (#99 item 10).
+    case spindleStopped(toolpath: String)
     /// A move in the named toolpath has a NaN or infinite coordinate, centre or feed.
     case nonFiniteMove(toolpath: String)
     /// The park-and-probe tool change cannot be written; the message says why.
