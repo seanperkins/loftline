@@ -177,4 +177,21 @@ func postReaderReadsBackOurOwnProgram(mode: ZZeroMode) throws {
         #expect(count("M0\n") == 1)
         #expect(count("(Change to Tool: B)\nG0 Z1\nM0\n") == 1)
     }
+
+    /// A tool name may itself contain " - ": the kind is read from the right of the header row.
+    @Test func aToolNameWithADashStillSplits() {
+        let text = "( Tools: )\n(   T1: A - rough - End Mill, dia 0.2500 in )\n(   T2: B - V-Bit, dia 0.5000 in )\nG20\n"
+            + "(Change to Tool: A - rough)\nM0\nG0 X0 Y0 Z1\nG1 Z-0.1 F10\n(Change to Tool: B)\nM0\nG0 X1 Y1 Z1\nG1 Z-0.1 F10\n"
+        #expect(GCodeReader.read(text, units: .inch, startZ: 1).segments.map(\.toolComment) == ["A - rough", "B"])
+        let header = GCodeReader.headerToolList(text, units: .inch)
+        #expect(header.map(\.tool.name) == ["A - rough", "B"])
+        #expect(header.map(\.tool.kind) == [.endMill, .vBit])
+    }
+
+    /// An explicit S0 is the segment's own speed, not a reason to inherit the last tool's.
+    @Test func anExplicitZeroSpeedIsKept() {
+        let text = "G20\n(Change to Tool: A)\nM0\nM3 S18000\nG0 X0 Y0 Z1\nG1 Z-0.1 F10\n(Change to Tool: B)\nM0\nM3 S0\n"
+            + "G0 X1 Y1 Z1\nG1 Z-0.1 F10\n"
+        #expect(GCodeReader.read(text, units: .inch, startZ: 1).segments.map(\.spindleRPM) == [18000, 0])
+    }
 }

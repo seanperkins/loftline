@@ -78,9 +78,11 @@ public enum GCodeReader {
             : stopToolNames(lines, headerNames: Set(headerToolList(text, units: units).map(\.tool.name)))
         // Each segment starts at speed 0 and takes the highest S it sets; `inherited` is the speed in force when it began.
         var inherited: [Double] = [0]
+        var setsSpeed: [Bool] = [false]
         func startSegment(tool: Int?, comment: String?) {
             segments.append(Segment(toolNumber: tool, toolComment: comment, spindleRPM: 0, moves: [], startsAtToolChange: true))
             inherited.append(rpm)
+            setsSpeed.append(false)
         }
         var currentTool: Int?
         /// Set by a probe until the zero that follows it (G10 L20, or the Mach4 zero macro's P).
@@ -142,7 +144,11 @@ public enum GCodeReader {
                 default: break
                 }
             }
-            if let s = b.value("S") { rpm = s; segments[segments.count - 1].spindleRPM = max(segments[segments.count - 1].spindleRPM, s) }
+            if let s = b.value("S") {
+                rpm = s
+                segments[segments.count - 1].spindleRPM = max(segments[segments.count - 1].spindleRPM, s)
+                setsSpeed[segments.count - 1] = true
+            }
             if let fw = b.value("F") { feed = fw * f }
             if let t = b.value("T") { pendingTool = Int(exactly: t.rounded()) }
             if !changesAtM6, let t = b.value("T").flatMap({ Int(exactly: $0.rounded()) }), t != currentTool {
@@ -233,7 +239,7 @@ public enum GCodeReader {
         if progUnits == nil {
             warnings.insert("The program never sets G20/G21; assumed \((assumedUnits ?? units).abbreviation).", at: 0)
         }
-        for i in segments.indices where segments[i].spindleRPM == 0 { segments[i].spindleRPM = inherited[i] }
+        for i in segments.indices where !setsSpeed[i] { segments[i].spindleRPM = inherited[i] }
         return Result(segments: segments.filter { !$0.moves.isEmpty }, warnings: warnings, programUnits: progUnits)
     }
 
@@ -265,7 +271,8 @@ public enum GCodeReader {
     /// Every header tool row in order, two tools that share a number included.
     public static func headerToolList(_ text: String, units: LengthUnit) -> [(number: Int, tool: HeaderTool)] {
         var out: [(number: Int, tool: HeaderTool)] = []
-        let pattern = "T([0-9]+):[ ]*(.+?)[ ]+-[ ]+([A-Za-z -]+?),[ ]*dia[ ]+([0-9.]+)[ ]*(in|mm)"
+        // The name is greedy, so a name that itself contains " - " keeps it: the kind is the part after the last " - ".
+        let pattern = "T([0-9]+):[ ]*(.+)[ ]+-[ ]+([A-Za-z-]+(?: [A-Za-z-]+)*),[ ]*dia[ ]+([0-9.]+)[ ]*(in|mm)"
         guard let re = try? NSRegularExpression(pattern: pattern) else { return out }
         for line in text.split(whereSeparator: { $0 == "\n" || $0 == "\r\n" }).prefix(400) {
             let s = String(line)
