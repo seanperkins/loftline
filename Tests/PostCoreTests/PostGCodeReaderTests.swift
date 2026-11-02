@@ -116,3 +116,82 @@ func postReaderReadsBackOurOwnProgram(mode: ZZeroMode) throws {
         #expect(r.segments.map(\.moves.count) == [2, 1])
     }
 }
+
+/// Issue #126: six built-in posts change tools with `M5`, a "Change to Tool:" comment and a stop (`M0`), and their
+/// programs used to preview as one tool.
+@Suite struct StopToolChangeReaderTests {
+    static func sample(_ post: String) throws -> String {
+        let folder = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("samples/expected/\(post)")
+        let file = try #require(try FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)
+            .first { $0.lastPathComponent.hasPrefix("sign.") })
+        return try String(contentsOf: file, encoding: .utf8)
+    }
+
+    static let names = ["1/4\" End Mill [2 flute]", "60 deg V-Bit 1/2\"", "1/4\" Drill", "1/4\" End Mill [2 flute]"]
+
+    @Test(arguments: ["generic-grbl-inch", "uccnc-inch", "shopbot-gcode-inch", "linuxcnc-inch", "onefinity-bb-inch",
+                      "ncstudio-mm"])
+    func stopPostsGiveOneSegmentPerTool(post: String) throws {
+        let text = try Self.sample(post)
+        let own = try #require(BuiltInPosts.all.first { $0.id == post }).parserComments
+        for syntax in [GCodeParser.Comments.any, own] {
+            let r = GCodeReader.read(text, units: .inch, startZ: 0.2, comments: syntax)
+            #expect(r.segments.map(\.toolComment) == Self.names, "\(post) read with \(syntax)")
+            #expect(r.segments.allSatisfy { $0.startsAtToolChange })
+            #expect(r.segments.allSatisfy { $0.toolNumber == nil })
+        }
+    }
+
+    @Test(arguments: ["generic-grbl-inch", "avid-pro6096-mach4-inch"])
+    func eachSegmentHasItsOwnSpeed(post: String) throws {
+        let r = GCodeReader.read(try Self.sample(post), units: .inch, startZ: 0.2)
+        #expect(r.segments.map(\.spindleRPM) == [18000, 18000, 12000, 18000])
+    }
+
+    @Test func markerStopsDoNotSplitM6OrTPrograms() throws {
+        let mach4 = try Self.sample("avid-pro6096-mach4-inch").split(separator: "\n", omittingEmptySubsequences: false)
+            .flatMap { line -> [Substring] in
+                line.hasSuffix(" M6") ? [line, "(Change to Tool: X)", "M0"] : [line]
+            }.joined(separator: "\n")
+        #expect(GCodeReader.read(mach4, units: .inch, startZ: 0.2).segments.map(\.toolNumber) == [1, 6, 9, 1])
+        let tOnly = "G20\nT1\nG0 X0 Y0 Z1\n(Change to Tool: A)\nM0\nG1 X1 F10\nT2\nG1 X2\n"
+        #expect(GCodeReader.read(tOnly, units: .inch, startZ: 1).segments.map(\.toolNumber) == [1, 2])
+    }
+
+    @Test(arguments: ["(MSG, Change to Tool: Clamps)", "(MSG, Stop)"])
+    func aPauseIsNotAToolChange(comment: String) {
+        let text = "( Tools: )\n(   T1: A - End Mill, dia 0.2500 in )\nG20\n(Change to Tool: A)\nM0\nG0 X0 Y0 Z1\n"
+            + "G1 Z-0.1 F10\n\(comment)\nM0\nG1 X1 F10\n"
+        let r = GCodeReader.read(text, units: .inch, startZ: 1)
+        #expect(r.segments.map(\.toolComment) == ["A"])
+    }
+
+    @Test func markerPositions() {
+        func count(_ middle: String) -> Int {
+            GCodeReader.read("G20\nG0 X0 Y0 Z1\n" + middle + "G1 X1 F10\n", units: .inch, startZ: 1).segments.count
+        }
+        #expect(count("M0 (Change to Tool: B)\n") == 2)
+        #expect(count("(Change to Tool: B)\n\nM0\n") == 2)
+        #expect(count("(Change to Tool: B)\n  \nN40 M0\n") == 2)
+        #expect(count("M0\n") == 1)
+        #expect(count("(Change to Tool: B)\nG0 Z1\nM0\n") == 1)
+    }
+
+    /// A tool name may itself contain " - ": the kind is read from the right of the header row.
+    @Test func aToolNameWithADashStillSplits() {
+        let text = "( Tools: )\n(   T1: A - rough - End Mill, dia 0.2500 in )\n(   T2: B - V-Bit, dia 0.5000 in )\nG20\n"
+            + "(Change to Tool: A - rough)\nM0\nG0 X0 Y0 Z1\nG1 Z-0.1 F10\n(Change to Tool: B)\nM0\nG0 X1 Y1 Z1\nG1 Z-0.1 F10\n"
+        #expect(GCodeReader.read(text, units: .inch, startZ: 1).segments.map(\.toolComment) == ["A - rough", "B"])
+        let header = GCodeReader.headerToolList(text, units: .inch)
+        #expect(header.map(\.tool.name) == ["A - rough", "B"])
+        #expect(header.map(\.tool.kind) == [.endMill, .vBit])
+    }
+
+    /// An explicit S0 is the segment's own speed, not a reason to inherit the last tool's.
+    @Test func anExplicitZeroSpeedIsKept() {
+        let text = "G20\n(Change to Tool: A)\nM0\nM3 S18000\nG0 X0 Y0 Z1\nG1 Z-0.1 F10\n(Change to Tool: B)\nM0\nM3 S0\n"
+            + "G0 X1 Y1 Z1\nG1 Z-0.1 F10\n"
+        #expect(GCodeReader.read(text, units: .inch, startZ: 1).segments.map(\.spindleRPM) == [18000, 0])
+    }
+}
