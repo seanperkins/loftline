@@ -1175,3 +1175,14 @@
   carried tools the app never writes twice, so a clash there is refused at open with the kind, positions and names ("Two
   shapes share the id …: the 2nd ("Hole") and the 4th ("Hole")."). A project tool that shadows a library tool is not a
   clash. `decode(from:)` is unchanged, so clipart still reads.
+- **preview-g53-retract — the G-code preview draws a G53 retract (#120 item 4).** The preview skipped `G53`, so after a
+  cut at depth and `G53 G0 Z0` the next feed was drawn from the old point, through the stock. A `G53` Z move is now taken
+  as a retract (whatever its sign: GRBL's machine top is below 0) unless the machine has just parked in machine X/Y, and is
+  drawn straight up (as a rapid, or a feed on a `G1` block) to
+  `max(startZ, the highest Z the program reached)`, a stand-in for a height the file cannot tell, at or above everything
+  drawn so far so a file in the other Z-zero mode is not drawn inside its stock; the next move starts there. A park
+  (`G53` with X or Y) and the Z descent that follows it before any work-coordinate move (the probe swap's
+  `G53 G0 Z<parkZ>`, a tool setter) draw nothing and keep the position,
+  as before, with no warning: LoftLine's own probe sequence re-enters with an explicit Z, so nothing it writes is drawn
+  stale, and a note on every probed program would be noise. The validator still keeps the old Z after `G53` (a possible
+  false alarm, never a missed one).
