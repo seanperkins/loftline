@@ -63,9 +63,13 @@ public enum GCodeParser {
                 if depth == 0 { body.append(ch) }
             }
             var trimmed = body.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("/") {
+            // A `/` first, or after a line number (`N10 /M5`, which a numbering post writes), is block delete.
+            let unnumbered = trimmed.first.map { $0 == "N" || $0 == "n" } == true
+                ? trimmed.dropFirst().drop { $0.isNumber }.drop { $0 == " " || $0 == "\t" } : Substring(trimmed)
+            if unnumbered.hasPrefix("/") {
                 blockDeleteLines.append(lineNo)
-                trimmed = String(trimmed.dropFirst()).trimmingCharacters(in: .whitespaces)
+                let number = trimmed.prefix(trimmed.count - unnumbered.count)
+                trimmed = (number + " " + unnumbered.dropFirst()).trimmingCharacters(in: .whitespaces)
             }
             if trimmed.isEmpty || trimmed == "%" { continue }
             var words: [GCodeBlock.Word] = []

@@ -140,6 +140,13 @@ public struct GCodeValidator: Sendable {
             carried.add("block-delete-\(line)", .warning, line: line,
                         "Line starts with '/' (block delete): the controller runs it whenever Block Delete is off, so it is checked as code")
         }
+        // MASSO changes tools only with the spindle stopped and the T word first ("Txx M06 is correct and behaves differently
+        // to M06 Txx"), and skips a block-delete line when Block Delete is on (#99 item 11).
+        let masso = BuiltInPosts.family(of: profile.id).map(DialectChecks.massoIDs.contains) ?? false
+        let blockDeleted = Set(parsed.blockDeleteLines)
+        var pendingT = false
+        // The last spindle word (3, 4 or 5): MASSO wants an M5 before M6, not just a spindle never started.
+        var lastSpindleWord: Double?
         var absolute = true
         var sawAbsolute = false
         var motion: Int?
@@ -245,17 +252,33 @@ public struct GCodeValidator: Sendable {
                 && b.values("G").allSatisfy { Self.motionG.contains($0) }
             if !plainMove { check.leaveHole() }
             defer { if !plainMove { check.leaveHole() } }
+            if masso, blockDeleted.contains(b.line),
+               b.words.contains(where: { $0.letter == "T" || ($0.letter == "M" && ($0.value == 5 || $0.value == 6)) }) {
+                carried.add("masso-block-delete", .error, line: b.line,
+                            "MASSO skips a block-delete line when Block Delete is on: take the / off the tool change.")
+            }
             for m in b.values("M") {
                 if !Self.knownM.contains(m) {
                     carried.add("unknown-m", .warning, line: b.line,
                                 "M\(NumberFormat.compact(m, maxDecimals: 0)) is not a code this validator knows")
                 }
                 switch m {
-                case 3, 4: spindleOn = true
-                case 5: spindleOn = false
+                case 3, 4: spindleOn = true; lastSpindleWord = m
+                case 5: spindleOn = false; lastSpindleWord = m
                 case 0, 1: stop = Int(m)
                 case 6:
-                    if spindleOn {
+                    if masso {
+                        if lastSpindleWord != 5 {
+                            carried.add("masso-toolchange-spindle-on", .error, line: b.line,
+                                        "MASSO needs the spindle stopped (M5) before M6.")
+                        }
+                        let m6 = b.words.firstIndex { $0.letter == "M" && $0.value == 6 } ?? b.words.endIndex
+                        if !pendingT, !b.words[..<m6].contains(where: { $0.letter == "T" }) {
+                            carried.add("masso-toolchange-order", .error, line: b.line,
+                                        "MASSO reads the tool number before M6 (T5 M6), not after it (M6 T5): write T{T} M6.")
+                        }
+                        pendingT = false
+                    } else if spindleOn {
                         carried.add("toolchange-spindle-on", .warning, line: b.line,
                                     "Tool change (M6) with the spindle running; stop it (M5) first")
                     }
@@ -268,6 +291,8 @@ public struct GCodeValidator: Sendable {
                 default: break
                 }
             }
+            // A T on a line of its own selects the tool the next M6 changes to.
+            if b.value("T") != nil, !b.has("M", 6) { pendingT = true }
             if let s = b.value("S") { sawSpeed = sawSpeed || s > 0; speed = s }
             if (b.has("M", 3) || b.has("M", 4)), !sawSpeed, b.value("S") == nil {
                 carried.add("spindle-no-speed", .warning, line: b.line, "Spindle started (M3/M4) with no speed (S) set")
