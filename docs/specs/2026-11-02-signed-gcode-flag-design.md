@@ -1,6 +1,6 @@
 # The update feed's G-code-change warning is signed (issue #123, item 3)
 
-Status: draft, revision 1
+Status: not implemented (2026-11-02). DECISIONS `updater-trust-boundary` keeps the feed fields unsigned: whoever can edit latest.json can already read the signing secrets. Kept for the day that changes (a collaborator is added). Open review points if revived: sign a notes hash and hide notes when unverified; pass the controller's key to parse; define absent-field encoding; list the existing assertions that flip.
 
 ## Problem
 
