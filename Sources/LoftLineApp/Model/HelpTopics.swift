@@ -457,7 +457,7 @@ enum FieldHelp {
         "Max pass depth": "Split the carve into passes no deeper than this (off = one pass)",
         "Final pass": "Thin last pass for a cleaner floor (0 = none)",
         "Ramp length": "Distance over which the tool descends into the material",
-        "Max angle": "Steepest allowed ramp angle",
+        "Max angle": "Steepest allowed ramp angle; warns when a vector is too short to keep it or the angle is under 0.5°",
         "Raster angle": "Direction of raster lines (0° = along X)",
         "Overhang": "How far the cutter's edge reaches past the area's edge (off = a tool radius)",
         "Area": "Face the whole material, or the box round the selected vectors",
@@ -494,7 +494,7 @@ enum FieldHelp {
         "Rapid rate": "Rapid traverse speed, used for time estimates",
         // Toolpath forms: toggles and pickers (through `fieldHelp`) and the remaining fields.
         "Ramp plunges": "Enter the material on a slope instead of plunging straight down",
-        "Ramp type": "Smooth follows the cut on a slope, zig-zag goes back and forth, spiral circles down",
+        "Ramp type": "Smooth follows the cut on a slope, zig-zag goes back and forth, spiral circles down as far as the angle needs",
         "Direction": "Climb cuts with the spindle's rotation for a cleaner edge; conventional cuts against it",
         "Clearing": "Offset follows the outline inwards; raster sweeps back and forth",
         "Profile pass": "A pass along the wall to clean up what the raster leaves, before or after it",
