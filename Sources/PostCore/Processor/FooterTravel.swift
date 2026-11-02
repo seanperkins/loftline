@@ -12,9 +12,12 @@ public struct FooterTravel: Sendable, Equatable {
     /// The footer line the walk stopped at, when it stopped before the footer's end (or its M2/M30): the machine's
     /// moves from that line on are not modelled.
     public var unmodelledFrom: String?
+    /// Indices into `points` reached by a feed move (G1): checked where they go, and never routed over lift-over zones,
+    /// which would turn them into rapids.
+    public var feedLegs: Set<Int>
 
-    public init(points: [Vec3], unmodelledFrom: String?) {
-        self.points = points; self.unmodelledFrom = unmodelledFrom
+    public init(points: [Vec3], unmodelledFrom: String?, feedLegs: Set<Int> = []) {
+        self.points = points; self.unmodelledFrom = unmodelledFrom; self.feedLegs = feedLegs
     }
 
     static let letters: Set<Character> = ["G", "M", "N", "F", "S", "T", "P", "X", "Y", "Z"]
@@ -46,12 +49,16 @@ public struct FooterTravel: Sendable, Equatable {
 
         var pos = Vec3(start.xy, z: max(start.z, coords.safeZ))
         var moves: [Vec3] = []
+        var feeds: Set<Int> = []
         var absolute = true
         var stoppedAt: String?
         func move(_ b: GCodeBlock) {
             func axis(_ v: Double?, _ cur: Double) -> Double { v.map { absolute ? $0 : cur + $0 } ?? cur }
             let p = Vec3(axis(b.value("X"), pos.x), axis(b.value("Y"), pos.y), axis(b.value("Z"), pos.z))
-            if p.distance(to: pos) > eps { moves.append(p) }
+            if p.distance(to: pos) > eps {
+                moves.append(p)
+                if mode == 1 { feeds.insert(moves.count) }   // index in `points`, after the retract point
+            }
             pos = p
         }
         walk: for n in lines.indices.map({ $0 + 1 }) {
@@ -61,20 +68,26 @@ public struct FooterTravel: Sendable, Equatable {
             let gs = b.values("G"), ms = b.values("M")
             guard b.words.allSatisfy({ Self.letters.contains($0.letter) }),
                   gs.allSatisfy({ Self.walkedG.contains($0) || Self.quietG.contains($0) || unitsG.contains($0) }),
-                  ms.allSatisfy({ Self.quietM.contains($0) }),
-                  !gs.contains(1) else { stoppedAt = text; break }
+                  ms.allSatisfy({ Self.quietM.contains($0) }) else { stoppedAt = text; break }
+            // A dwell's X or P is its time (Syntec writes `G4 X`), not an axis.
+            if gs.contains(4) {
+                if gs.contains(where: { [0, 1, 28, 30].contains($0) }) { stoppedAt = text; break }
+                continue
+            }
             if gs.contains(90) { absolute = true }
             if gs.contains(91) { absolute = false }
+            if gs.contains(0) && gs.contains(1) { stoppedAt = text; break }
             if gs.contains(0) { mode = 0 }
+            if gs.contains(1) { mode = 1 }
             let axes = b.value("X") != nil || b.value("Y") != nil || b.value("Z") != nil
             if gs.contains(28) || gs.contains(30) {
                 // The intermediate move, then the stored position LoftLine cannot see.
-                if axes, !gs.contains(0) { move(b) }
+                if axes, !gs.contains(0), !gs.contains(1) { let m = mode; mode = 0; move(b); mode = m }
                 stoppedAt = text
                 break walk
             }
             if axes {
-                guard mode == 0 else { stoppedAt = text; break }
+                guard mode == 0 || mode == 1 else { stoppedAt = text; break }
                 move(b)
             }
             if ms.contains(2) || ms.contains(30) { break }
@@ -83,6 +96,6 @@ public struct FooterTravel: Sendable, Equatable {
         let points = moves.isEmpty ? [] : ([Vec3(start.xy, z: max(start.z, coords.safeZ))] + moves).map {
             Vec3($0.x * back, $0.y * back, $0.z * back)
         }
-        return FooterTravel(points: points, unmodelledFrom: stoppedAt)
+        return FooterTravel(points: points, unmodelledFrom: stoppedAt, feedLegs: moves.isEmpty ? [] : feeds)
     }
 }

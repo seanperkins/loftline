@@ -1191,13 +1191,13 @@
   XY before Z) were not checked against keep-out zones or clamps. `FooterTravel.model` renders the footer through the
   builder's own values (`ProgramBuilder.renderedFooter`, which `build` posts) and walks it with an allowlist: G0 moves
   (G90/G91), the motion mode the builder leaves (G0 after its retract, else the last move's), a G28/G30 intermediate
-  move, quiet codes (G4, G17, G40, G80, G90.1, G91.1, G94, the post's units code, M2-M5, M7-M9, M30, F/S/T/N/P). Anything
-  else (G1, arcs, G53, a bare G28, G43/G49, G92, work offsets, canned cycles, M0/M1/M6/M98, unparsed text, a `/` line)
+  move, G1 feed moves, quiet codes (G4, whose X or P is its time, G17, G40, G80, G90.1, G91.1, G94, the post's units code,
+  M2-M5, M7-M9, M30, F/S/T/N/P). Anything else (arcs, G53, a bare G28, G43/G49, G92, work offsets, canned cycles, M0/M1/M6/M98, unparsed text, a `/` line)
   stops the walk, and so does the G28/G30 after its intermediate move: the stored position is unknown, and keeping the
   last Z there could miss a collision. When the walk stops early and the job has zones or clamps, the export warns
   (`Keep-out zones and clamps are not checked from the footer's line "…" on`), a warning and not an error because the
-  common cause is the machine's own reference return. G1 stops rather than being walked because lift-over routing turns
-  every modelled move into a rapid. The move home is marked `KeepOut.asWrittenKey`, so `KeepOut.violations` checks it
+  common cause is the machine's own reference return. A G1 leg is checked as a cut and a travel with one is never
+  routed over lift-over zones (routing turns every move into a rapid), so such a zone in its way is an error. The move home is marked `KeepOut.asWrittenKey`, so `KeepOut.violations` checks it
   without the climb to safe Z it assumes for the program's own XY rapids (footer lines are written verbatim; Home Z
   below safe Z in a project not edited through Job Setup was missed). Lift-over routing needs no extra rule: the export
   re-models the footer from the lifted route's end, so a footer that moves again on replay is what gets checked.

@@ -113,11 +113,13 @@ enum GCodeExporter {
     /// footer's lines are posted verbatim, with no climb to safe Z before an XY move.
     static func homeMove(after toolpaths: [Toolpath], document doc: Document, profile: PostProfile) -> Toolpath? {
         guard let last = toolpaths.last(where: { $0.moves.contains { $0.target != nil } }),
-              let pts = footerTravel(after: toolpaths, document: doc, profile: profile)?.points, !pts.isEmpty
+              let travel = footerTravel(after: toolpaths, document: doc, profile: profile), !travel.points.isEmpty
         else { return nil }
         var tp = last
         tp.name = homeMoveName
-        tp.moves = pts.map { .rapid(to: $0) }
+        tp.moves = travel.points.enumerated().map { i, p in
+            travel.feedLegs.contains(i) ? .linear(to: p, feed: last.tool.feedRate) : .rapid(to: p)
+        }
         tp.metadata = [KeepOut.asWrittenKey: "1"]
         return tp
     }
@@ -134,7 +136,8 @@ enum GCodeExporter {
     static func linkHomeOverKeepOutZones(_ toolpaths: [Toolpath], document doc: Document,
                                          profile: PostProfile) -> [Toolpath] {
         guard let zones = doc.keepOutZones, zones.contains(where: { $0.liftOver == true }),
-              let home = homeMove(after: toolpaths, document: doc, profile: profile) else { return toolpaths }
+              let home = homeMove(after: toolpaths, document: doc, profile: profile),
+              home.moves.allSatisfy(\.isRapid) else { return toolpaths }   // a footer feed move is checked, not routed
         let margin = doc.units == .inch ? 0.05 : 1.0
         let tol = doc.units == .inch ? 0.0005 : 0.01
         return KeepOutAvoidance.linkTravel(after: toolpaths, through: home.moves.compactMap(\.target), zones: zones,

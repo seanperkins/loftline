@@ -69,7 +69,7 @@ import Testing
         #expect(Self.close(t.points, [Vec3(5, 1, s), Vec3(1, 2, s)]), "\(t.points)")
     }
 
-    @Test(arguments: ["G28", "G30", "G53 G0 Z0", "G2 X1 Y1 I1 J0", "G1 X0 Y0", "M6", "M0", "M1", "/G0 Z1", "G43 H1",
+    @Test(arguments: ["G28", "G30", "G53 G0 Z0", "G2 X1 Y1 I1 J0", "M6", "M0", "M1", "/G0 Z1", "G43 H1",
                       "G49", "G92 X0", "G54", "M98 P100", "G81 X1 Y1 Z-0.1 R0.1"])
     func anUnknownBlockStopsTheWalkAtItsLine(line: String) {
         let t = Self.walk([line, "G0 X0 Y0", "M30"])
@@ -110,8 +110,8 @@ import Testing
         let tool = ToolLibrary.seeded.tools[0]
         let fed = Toolpath(name: "A", kind: .profile, tool: tool, moves: [.linear(to: high, feed: 50)])
         let afterFeed = Self.walk(["X0 Y0", "M30"], end: high, toolpaths: [fed])
-        #expect(afterFeed.points.isEmpty)
-        #expect(afterFeed.unmodelledFrom == "X0 Y0")
+        #expect(Self.close(afterFeed.points, [high, Vec3(0, 0, high.z)]), "\(afterFeed.points)")
+        #expect(afterFeed.feedLegs == [1])
         let rapid = Toolpath(name: "A", kind: .profile, tool: tool, moves: [.rapid(to: high)])
         let afterRapid = Self.walk(["X0 Y0", "M30"], end: high, toolpaths: [rapid])
         #expect(Self.close(afterRapid.points, [high, Vec3(0, 0, high.z)]), "\(afterRapid.points)")
@@ -127,5 +127,23 @@ import Testing
         let t = Self.walk(["G0 X1 Y1 #5", "M30"])
         #expect(t.unmodelledFrom == "G0 X1 Y1 #5")
         #expect(t.points.isEmpty)
+    }
+
+    /// G4's X is the dwell time on Syntec, not an axis: the next G0 goes straight from the retract point.
+    @Test func aDwellsXIsNotAMove() {
+        let s = MachineCoordinates(job: Self.job()).safeZ
+        let t = Self.walk(["G4 X1.0", "G0 X1 Y3", "M30"], profile: BuiltInPosts.syntecInch)
+        #expect(Self.close(t.points, [Vec3(5, 1, s), Vec3(1, 3, s)]), "\(t.points)")
+        #expect(t.unmodelledFrom == nil)
+    }
+
+    /// A feed move is walked as one, so it is checked where it goes; the legs it makes are listed.
+    @Test func feedMovesAreWalkedAndMarked() {
+        let s = MachineCoordinates(job: Self.job()).safeZ
+        let t = Self.walk(["G1 X2 F50", "Y3", "G0 X0 Y0", "M30"])
+        #expect(Self.close(t.points, [Vec3(5, 1, s), Vec3(2, 1, s), Vec3(2, 3, s), Vec3(0, 0, s)]), "\(t.points)")
+        #expect(t.feedLegs == [1, 2])
+        #expect(t.unmodelledFrom == nil)
+        #expect(Self.walk().feedLegs.isEmpty)
     }
 }

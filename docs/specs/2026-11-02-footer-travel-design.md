@@ -55,11 +55,12 @@ public struct FooterTravel: Sendable, Equatable {
 | Block | Effect |
 |---|---|
 | G0 with axis words (or axis words while G0 is the motion mode) | A move to the resolved point (G90 absolute, G91 added to the current point) |
-| G1 (or axis words while G1 is the motion mode) | The walk stops at this line: lift routing turns every modelled move into a rapid, which would replace a feed move |
+| G1 (or axis words while G1 is the motion mode) | A feed move, listed in `feedLegs`: checked as a cut (`.linear`), and a travel with one is never routed over lift-over zones, which would turn it into a rapid (branch review) |
+| G4 | No effect: its X or P is the dwell time (Syntec writes `G4 X`), not an axis (branch review) |
 | G90, G91 | Sets the distance mode |
 | G28/G30 with axis words | A move to the resolved intermediate point, then the walk stops at this line (the machine then goes to a stored position LoftLine cannot see) |
 | M2, M30 | The walk ends after this block's own move (a controller runs a block's motion before it stops); nothing after it runs |
-| G4, G17, G40, G80, G90.1, G91.1, G94, the post's own units code (`profile.unitsCode`, so G20/G21 or G70/G71), M3, M4, M5, M7, M8, M9, and F, S, T, N words | No effect |
+| G17, G40, G80, G90.1, G91.1, G94, the post's own units code (`profile.unitsCode`, so G20/G21 or G70/G71), M3, M4, M5, M7, M8, M9, and F, S, T, N words | No effect |
 | Anything else: G2/G3, a bare G28/G30, G53, G43/G49, G92, a work offset, a canned cycle, M0/M1, M6, M98, any other code; axis words with no known motion mode; a line with unparsed text; a block-delete (`/`) line | The walk stops at this line |
 
 ### 3. Stopping early is reported

@@ -220,3 +220,18 @@ func aBuiltInFooterBelowSafeZIsCheckedWhereItCrosses(mode: ZZeroMode) throws {
             "\(r.issues)")
     #expect(!r.issues.contains { $0.message.contains("not checked from the footer") }, "\(r.issues)")
 }
+
+/// A footer feed move is checked where it goes, and never routed: lift-over routing would turn it into a rapid.
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func aFootersFeedMoveIsCheckedAndNotRouted(mode: ZZeroMode) throws {
+    var project = FooterTravelExport.project(mode)
+    var post = BuiltInPosts.avidMach4Inch
+    post.footer = ["G0 Z{HOME_Z}", "G1 X6 Y6 F50", "M30"]
+    for lift in [nil, true] as [Bool?] {
+        project.document.keepOutZones = [KeepOutZone(name: "Jig", outline: FooterTravelExport.across, height: 1, liftOver: lift)]
+        let r = try FooterTravelExport.export(project, profile: post)
+        #expect(r.issues.contains { $0.severity == .error && $0.message.contains("\(GCodeExporter.homeMoveName) cuts into keep-out zone \"Jig\"") },
+                "\(lift as Any): \(r.issues)")
+        #expect(!r.issues.contains { $0.message.contains("not checked from the footer") }, "\(r.issues)")
+    }
+}
