@@ -5,17 +5,23 @@ import Foundation
 /// Turns a G-code program back into moves for previewing it (toolpaths-2d round 2: "import
 /// toolpaths from another job" as G-code). It reads what routers usually emit: G0/G1/G2/G3
 /// with I/J (incremental or G90.1 absolute) or R arcs in the XY plane, G20/G21, G90/G91,
-/// G4 dwells, F/S words, T…M6 tool changes and G81/G82/G83 drilling cycles (G98/G99). Anything
+/// G4 dwells, F/S words, tool changes (T…M6, a T word alone, or a stop after a "Change to Tool:" comment, #126) and
+/// G81/G82/G83 drilling cycles (G98/G99). Anything
 /// it cannot follow is reported, never guessed silently.
 public enum GCodeReader {
     public struct Segment: Sendable {
-        /// Tool number (T word) in force, nil before the first tool change.
+        /// Tool number (T word) in force, nil before the first tool change and in a program that changes tools
+        /// with a stop (no T words).
         public var toolNumber: Int?
-        /// Tool name from a comment on the tool-change block, when there is one.
+        /// For an M6 or T change, the whole comment on (or before) the tool-change block, when there is one; for a
+        /// stop change, the tool's name: the text after "Change to Tool:".
         public var toolComment: String?
+        /// The highest S in the segment, or the speed in force when it began if it sets none.
         public var spindleRPM: Double
         /// Moves in the program's coordinates converted to `units`.
         public var moves: [Move]
+        /// The segment began at a tool change (M6, a T word, or a stop marker), not at the start of the program.
+        public var startsAtToolChange = false
     }
 
     public struct Result: Sendable {
@@ -37,7 +43,8 @@ public enum GCodeReader {
                             startZ: Double, absoluteArcCentres: Bool = false,
                             comments commentSyntax: GCodeParser.Comments = .any) -> Result {
         let parsed = GCodeParser.parse(text, comments: commentSyntax)
-        let comments = toolComments(text, comments: commentSyntax)
+        let lines = lineComments(text, comments: commentSyntax)
+        let comments = toolComments(lines)
         var warnings: [String] = []
         func warn(_ line: Int, _ s: String) { if warnings.count < 200 { warnings.append("Line \(line): \(s)") } }
         for g in parsed.garbage.prefix(20) { warn(g.line, "unrecognised text '\(g.text)'") }
@@ -66,6 +73,15 @@ public enum GCodeReader {
         // A program with no M6 changes tools with a T word alone (the park-and-probe sequence); one with M6 may name the
         // next tool early (pre-staging), so there only M6 starts a segment.
         let changesAtM6 = parsed.blocks.contains { $0.has("M", 6) }
+        // A program with neither changes tools, if at all, with a stop after a "Change to Tool:" comment (#126).
+        let stops = changesAtM6 || parsed.blocks.contains { $0.value("T") != nil } ? [:]
+            : stopToolNames(lines, headerNames: Set(headerToolList(text, units: units).map(\.tool.name)))
+        // Each segment starts at speed 0 and takes the highest S it sets; `inherited` is the speed in force when it began.
+        var inherited: [Double] = [0]
+        func startSegment(tool: Int?, comment: String?) {
+            segments.append(Segment(toolNumber: tool, toolComment: comment, spindleRPM: 0, moves: [], startsAtToolChange: true))
+            inherited.append(rpm)
+        }
         var currentTool: Int?
         /// Set by a probe until the zero that follows it (G10 L20, or the Mach4 zero macro's P).
         var probed = false
@@ -130,14 +146,15 @@ public enum GCodeReader {
             if let fw = b.value("F") { feed = fw * f }
             if let t = b.value("T") { pendingTool = Int(exactly: t.rounded()) }
             if !changesAtM6, let t = b.value("T").flatMap({ Int(exactly: $0.rounded()) }), t != currentTool {
-                segments.append(Segment(toolNumber: t, toolComment: comments[b.line], spindleRPM: rpm, moves: []))
+                startSegment(tool: t, comment: comments[b.line])
                 currentTool = t
             } else if b.has("M", 6) {
-                let t = pendingTool
-                segments.append(Segment(toolNumber: t, toolComment: comments[b.line], spindleRPM: rpm, moves: []))
+                startSegment(tool: pendingTool, comment: comments[b.line])
                 // Tool changes leave the position unknown in Z on many machines; keep XY.
+            } else if b.has("M", 0), let name = stops[b.line] {
+                startSegment(tool: nil, comment: name)
             } else if b.has("M", 3) || b.has("M", 4), rpm > 0 {
-                segments[segments.count - 1].spindleRPM = rpm
+                segments[segments.count - 1].spindleRPM = max(segments[segments.count - 1].spindleRPM, rpm)
             }
             if nonModal { continue }
             let bx = b.value("X"), by = b.value("Y"), bz = b.value("Z")
@@ -216,6 +233,7 @@ public enum GCodeReader {
         if progUnits == nil {
             warnings.insert("The program never sets G20/G21; assumed \((assumedUnits ?? units).abbreviation).", at: 0)
         }
+        for i in segments.indices where segments[i].spindleRPM == 0 { segments[i].spindleRPM = inherited[i] }
         return Result(segments: segments.filter { !$0.moves.isEmpty }, warnings: warnings, programUnits: progUnits)
     }
 
@@ -237,9 +255,16 @@ public enum GCodeReader {
     public typealias HeaderTool = (name: String, kind: ToolKind, diameter: Double)
 
     /// Tools listed in a header comment like "T1: 1/4in End Mill - End Mill, dia 0.2500 in"
-    /// (LoftLine's own posts write this): number → name, kind and diameter in `units`.
+    /// (LoftLine's own posts write this): number → name, kind and diameter in `units`. Two rows on one number: the last.
     public static func headerTools(_ text: String, units: LengthUnit) -> [Int: HeaderTool] {
         var out: [Int: HeaderTool] = [:]
+        for row in headerToolList(text, units: units) { out[row.number] = row.tool }
+        return out
+    }
+
+    /// Every header tool row in order, two tools that share a number included.
+    public static func headerToolList(_ text: String, units: LengthUnit) -> [(number: Int, tool: HeaderTool)] {
+        var out: [(number: Int, tool: HeaderTool)] = []
         let pattern = "T([0-9]+):[ ]*(.+?)[ ]+-[ ]+([A-Za-z -]+?),[ ]*dia[ ]+([0-9.]+)[ ]*(in|mm)"
         guard let re = try? NSRegularExpression(pattern: pattern) else { return out }
         for line in text.split(whereSeparator: { $0 == "\n" || $0 == "\r\n" }).prefix(400) {
@@ -250,25 +275,22 @@ public enum GCodeReader {
                   let d = group(4).flatMap({ Double($0) }), let u = group(5) else { continue }
             let kind = ToolKind.allCases.first { $0.displayName.lowercased() == kindText.lowercased() } ?? .endMill
             let from: LengthUnit = u == "mm" ? .millimeter : .inch
-            out[n] = (name, kind, d * from.factor(to: units))
+            out.append((n, (name, kind, d * from.factor(to: units))))
         }
         return out
     }
 
-    /// Text of the first comment on each line that has an M6 (the tool's name in most posts): the first comment opener on the
-    /// line, as the parser reads `comments`.
-    static func toolComments(_ text: String, comments: GCodeParser.Comments) -> [Int: String] {
+    /// Each line's first comment (the first comment opener on the line, as the parser reads `comments`) and whether
+    /// the line is blank, by 1-based line number (index 0 unused).
+    static func lineComments(_ text: String, comments: GCodeParser.Comments) -> [(text: String, comment: String?)] {
         let parentheses = comments != .apostrophe
         let endOfLine: Set<Character> = switch comments {
         case .standard: [";"]
         case .apostrophe: ["'"]
         case .any: [";", "'"]
         }
-        var out: [Int: String] = [:]
-        var lineNo = 0
-        var lastComment: String?
+        var out: [(text: String, comment: String?)] = [("", nil)]
         for raw in text.split(omittingEmptySubsequences: false, whereSeparator: { $0 == "\n" || $0 == "\r\n" }) {
-            lineNo += 1
             let s = String(raw)
             var comment: String?
             if let o = s.firstIndex(where: { (parentheses && $0 == "(") || endOfLine.contains($0) }) {
@@ -279,11 +301,50 @@ public enum GCodeReader {
                     comment = String(rest).trimmingCharacters(in: .whitespaces)
                 }
             }
-            let code = s.uppercased().replacingOccurrences(of: " ", with: "")
+            out.append((s, comment))
+        }
+        return out
+    }
+
+    /// Text of the first comment on each line that has an M6 (the tool's name in most posts): the first comment opener on the
+    /// line, as the parser reads `comments`.
+    static func toolComments(_ text: String, comments: GCodeParser.Comments) -> [Int: String] {
+        toolComments(lineComments(text, comments: comments))
+    }
+
+    private static func toolComments(_ lines: [(text: String, comment: String?)]) -> [Int: String] {
+        var out: [Int: String] = [:]
+        var lastComment: String?
+        for (lineNo, line) in lines.enumerated().dropFirst() {
+            let code = line.text.uppercased().replacingOccurrences(of: " ", with: "")
             if code.range(of: #"M0?6(?![0-9])"#, options: .regularExpression) != nil {
-                out[lineNo] = comment ?? lastComment
+                out[lineNo] = line.comment ?? lastComment
             }
-            if let c = comment, !c.isEmpty { lastComment = c }
+            if let c = line.comment, !c.isEmpty { lastComment = c }
+        }
+        return out
+    }
+
+    /// Line → tool name for every line whose own comment, or else the previous non-blank line's, begins (after an
+    /// optional "MSG,") with "Change to Tool:" (#126). With a header tool list, the name must be one of its tools, so a
+    /// pause whose message happens to start that way is not taken for a tool change. The caller decides which of these
+    /// lines are stops.
+    static func stopToolNames(_ lines: [(text: String, comment: String?)], headerNames: Set<String>) -> [Int: String] {
+        func name(_ comment: String?) -> String? {
+            guard let comment else { return nil }
+            var c = Substring(comment)
+            if c.hasPrefix("MSG,") { c = c.dropFirst(4).drop { $0 == " " || $0 == "\t" } }
+            let marker = "Change to Tool:"
+            guard c.hasPrefix(marker) else { return nil }
+            let n = c.dropFirst(marker.count).trimmingCharacters(in: .whitespaces)
+            return headerNames.isEmpty || headerNames.contains(n) ? n : nil
+        }
+        var out: [Int: String] = [:]
+        var previous: String?? = nil   // the previous non-blank line's comment
+        for (lineNo, line) in lines.enumerated().dropFirst() {
+            if line.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
+            if let n = line.comment != nil ? name(line.comment) : name(previous ?? nil) { out[lineNo] = n }
+            previous = .some(line.comment)
         }
         return out
     }
