@@ -1152,3 +1152,15 @@
   on one number keep their own rows). Every segment now starts at speed 0 and takes the highest S it sets, inheriting the
   speed in force only if it sets none: a drill after an end mill no longer shows the end mill's speed (true of M6 programs
   too). A segment begun at any tool change with no tool number is labelled "Tool change", not "No tool change".
+- **g28-intermediate-point — a G28/G30 intermediate point is checked as a rapid (#129).** `G28 X6` first rapids to X6 in
+  work coordinates (the current distance mode) before the named axes go on to the stored position. `validate(gcode:)` used
+  to skip G28/G30 entirely, so a custom footer's `G28 X6` past the X travel, or `G28 Z-1` into the stock, passed. A G28/G30
+  with axis words is now checked as a `G0` to that point (travel window, rapid in material, below safe Z, rapid plunge, the
+  one-time `no-absolute`), even before any motion mode, without changing the modal motion (a `G1` stays in force). The
+  named axes are then unknown (they went on to the stored position; the branch review showed that keeping the
+  intermediate point hid a later rapid across at depth). Unnamed axes keep their positions, so the two-line `G91 G28 Z0` /
+  `G28 X0 Y0` ending raises nothing, and a Z-only rapid from an unknown height that ends below the material top now warns
+  `rapid-plunge` (it used to need a known start), so forgetting Z does not switch that check off. An incremental move on a
+  forgotten axis resolves from 0; every G91 block already warns. G28/G30 with another motion code (or each
+  other) on one block with axis words is an error. Bare G28/G30 are unchanged; the stored position, G28.1/G30.1 and keep-out
+  zones on a custom footer's intermediate move are not modelled.

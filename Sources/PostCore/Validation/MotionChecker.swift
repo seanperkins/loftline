@@ -67,6 +67,11 @@ struct MotionChecker {
                 issues.add("rapid-below-safe", .warning, line: line,
                            "Rapid XY move below safe Z (Z\(f(low)) < Z\(f(safeZ)))")
             }
+        } else if start == nil, target.z < topZ - eps {
+            // From a height the program has not made known (after a G28/G30 Z return), a rapid that ends below the
+            // material top may plunge into it.
+            issues.add("rapid-plunge", .warning, line: line,
+                       "Rapid plunge below the material top to Z\(f(target.z)) from an unknown height; use a feed move")
         } else if let s = start, target.z < s.z - eps, target.z < topZ - eps,
                   !(hole.map { $0.xy.distance(to: target.xy) <= eps && target.z >= $0.z } ?? false) {
             // Not a re-entry into the hole this tool has just drilled (a NaN coordinate compares false
