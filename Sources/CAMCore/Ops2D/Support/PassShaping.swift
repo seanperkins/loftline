@@ -7,6 +7,9 @@ public struct ChainPass: Sendable {
     public var pieces: [[StationPoint]]
     /// Unwrapped parameter where the pass ends (next pass on a closed loop may start here).
     public var endS: Double
+    /// The entry ramp goes down steeper than `RampSettings.maxAngle`: the vector is too short for the
+    /// ramp even at its lap or leg cap, or the angle is under the 0.5° floor (issue #124).
+    public var isSteeperThanMaxAngle = false
 
     public var points: [CutPoint] {
         var out: [CutPoint] = []
@@ -22,17 +25,37 @@ public struct ChainPass: Sendable {
 
 /// Builds the depth profile of a pass: plunge or ramp entry, main lap, overcut.
 public enum PassShaping {
+    /// Upper bound on zig-zag legs per pass (even).
+    static let maxZigzagLegs = 200
+    /// Upper bound on the laps one smooth or spiral ramp may take (a pathologically tiny loop and a deep pass).
+    static let maxRampLaps = 200.0
+
+    /// The warning an operation gives when some pass's ramp is steeper than its maximum angle.
+    public static func steepRampWarning(_ ramp: RampSettings) -> String {
+        "ramps go down steeper than the \(String(format: "%g", ramp.maxAngle))° maximum angle on some passes "
+            + "(the vector is too short, or the angle is under 0.5°); use a plunge, a steeper maximum angle, "
+            + "or a shallower pass depth"
+    }
+
+    /// Length along the loop of a smooth or spiral descent: at least what was asked, at least what the
+    /// angle needs, at most `maxRampLaps` laps.
+    private static func descentLength(asked: Double, L: Double, drop: Double, tanA: Double) -> Double {
+        min(max(asked, drop / tanA), L * Self.maxRampLaps)
+    }
+
+    /// True when a descent of `slope` (depth per unit run) is steeper than the angle the user asked for,
+    /// not the clamped one the ramp was built with.
+    private static func isSteeper(_ slope: Double, than ramp: RampSettings) -> Bool {
+        let requested = ramp.maxAngle <= 0 ? 0 : tan(min(ramp.maxAngle, 89.5) * .pi / 180)
+        return slope > requested * (1 + 1e-9)
+    }
+
     /// - Parameters:
     ///   - s0: unwrapped start parameter (closed loops) — 0 for open chains.
     ///   - fromDepth: depth already cut along this chain (ramp start).
     ///   - toDepth: this pass's depth.
     ///   - overcut: extra distance past the start on closed loops.
     ///   - spiralFinish: for spiral ramps, append a flat lap at `toDepth` (last pass).
-    /// Upper bound on zig-zag legs per pass (even).
-    static let maxZigzagLegs = 200
-    /// Upper bound on the laps one smooth ramp may take (a pathologically tiny loop and a deep pass).
-    static let maxSmoothLaps = 200.0
-
     public static func pass(on chain: ArcLengthChain, s0: Double, fromDepth: Double, toDepth: Double,
                             ramp: RampSettings, overcut: Double = 0, spiralFinish: Bool = true) -> ChainPass {
         let L = chain.length
@@ -47,30 +70,39 @@ public enum PassShaping {
         if !chain.isClosed, type != .zigzag { type = .zigzag }
         switch type {
         case .spiral:
-            let helix = chain.samples(from: s0, to: s0 + L) { s in fromDepth + drop * (s - s0) / L }
+            // At least one lap, and as far round as the maximum angle needs (issue #124); a loop long enough
+            // for one lap gets exactly one, as before.
+            let length = descentLength(asked: L, L: L, drop: drop, tanA: tanA)
+            let helix = chain.samples(from: s0, to: s0 + length) { s in fromDepth + drop * (s - s0) / length }
             var pieces = [helix]
-            var end = s0 + L
+            var end = s0 + length
             if spiralFinish {
                 pieces.append(chain.samples(from: end, to: end + L + max(0, overcut), depth: flat))
                 end += L + max(0, overcut)
             }
-            return ChainPass(pieces: pieces, endS: end)
+            var pass = ChainPass(pieces: pieces, endS: end)
+            pass.isSteeperThanMaxAngle = isSteeper(drop / length, than: ramp)
+            return pass
         case .smooth:
             // The asked-for length is cut short at one lap, but the maximum angle is not: a loop shorter than
             // drop / tan(angle) goes round again until the descent is gentle enough (a helix, then one lap flat).
-            let lr = min(max(min(ramp.length, L), drop / tanA), L * Self.maxSmoothLaps)
+            let lr = descentLength(asked: min(ramp.length, L), L: L, drop: drop, tanA: tanA)
             let end = s0 + L + max(lr, overcut)
             let piece = chain.samples(from: s0, to: end, extraBreaks: [s0 + lr]) { s in
                 s < s0 + lr ? fromDepth + drop * (s - s0) / lr : toDepth
             }
-            return ChainPass(pieces: [piece], endS: end)
+            var pass = ChainPass(pieces: [piece], endS: end)
+            pass.isSteeperThanMaxAngle = isSteeper(drop / lr, than: ramp)
+            return pass
         case .zigzag:
             // A zero or tiny length is floored at the shortest leg that keeps the max angle in
             // two legs (as the smooth ramp floors at drop / tan); legs are capped so a very
             // short open vector cannot turn one pass into thousands of legs.
             let lz = min(max(ramp.length, drop / tanA / 2), L)
             let perLeg = lz * tanA
-            var legs = min(Self.maxZigzagLegs, max(2, Int(ceil(drop / perLeg - 1e-9))))
+            // Capped as a Double before the Int conversion, so a vanishing leg cannot overflow it.
+            let wanted = max(2, ceil(drop / perLeg - 1e-9))
+            var legs = Int(min(wanted, Double(Self.maxZigzagLegs)))
             if legs % 2 == 1 { legs += 1 }
             var pieces: [[StationPoint]] = []
             for k in 0..<legs {
@@ -82,7 +114,9 @@ public enum PassShaping {
             }
             let end = chain.isClosed ? s0 + L + max(0, overcut) : L
             pieces.append(chain.samples(from: s0, to: end, depth: flat))
-            return ChainPass(pieces: pieces, endS: end)
+            var pass = ChainPass(pieces: pieces, endS: end)
+            pass.isSteeperThanMaxAngle = isSteeper(drop / Double(legs) / lz, than: ramp)
+            return pass
         }
     }
 }
