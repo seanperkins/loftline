@@ -108,6 +108,40 @@ func postReaderReadsBackOurOwnProgram(mode: ZZeroMode) throws {
         #expect(!r.warnings.contains { $0.contains("not previewed") })
     }
 
+    // MARK: G53 (#120 item 4)
+
+    func moves(_ r: GCodeReader.Result) -> [String] {
+        r.segments.flatMap(\.moves).compactMap { m -> String? in
+            guard let t = m.target else { return nil }
+            return (m.isRapid ? "G0 " : "G1 ") + String(format: "%.4f %.4f %.4f", t.x, t.y, t.z)
+        }
+    }
+
+    /// A retract to the top of machine Z is drawn straight up to a stand-in height, so the next feed starts above the stock.
+    @Test func aG53RetractIsDrawnUp() {
+        let r = GCodeReader.read("G20\nG90\nG0 X0 Y0 Z0.2\nG1 Z-0.5 F10\nG53 G0 Z0\nG1 X2 F10\n", units: .inch, startZ: 0.2)
+        #expect(moves(r) == ["G0 0.0000 0.0000 0.2000", "G1 0.0000 0.0000 -0.5000", "G0 0.0000 0.0000 0.2000",
+                             "G1 2.0000 0.0000 0.2000"])
+        #expect(r.warnings.isEmpty, "\(r.warnings)")
+    }
+
+    @Test func theRetractGoesAtLeastAsHighAsTheProgramWent() {
+        let r = GCodeReader.read("G20\nG90\nG0 X0 Y0 Z1.5\nG1 Z-0.5 F10\nG53 G0 Z0\nG1 X2 F10\n", units: .inch, startZ: 0.2)
+        #expect(moves(r).suffix(2) == ["G0 0.0000 0.0000 1.5000", "G1 2.0000 0.0000 1.5000"])
+    }
+
+    @Test(arguments: ["G53 G0 Z-3", "G53 G0 X0 Y0", "G53"])
+    func anyOtherG53DrawsNothing(code: String) {
+        let r = GCodeReader.read("G20\nG90\nG0 X1 Y1 Z0.2\nG1 Z-0.5 F10\n\(code)\nG1 X2 F10\n", units: .inch, startZ: 0.2)
+        #expect(moves(r).last == "G1 2.0000 1.0000 -0.5000")
+        #expect(r.warnings.isEmpty, "\(r.warnings)")
+    }
+
+    @Test func theRetractHeightIsInOutputUnits() {
+        let r = GCodeReader.read("G21\nG90\nG0 X0 Y0 Z5\nG1 Z-10 F100\nG53 G0 Z0\nG1 X20 F100\n", units: .inch, startZ: 0.2)
+        #expect(moves(r).last == "G1 0.7874 0.0000 0.2000")
+    }
+
     @Test func m6ProgramsKeepTodaysSegments() {
         // A post that pre-stages the next tool: T2 is named while T1 still cuts.
         let text = "G20\nG90\nT1 M6\nG0 X0 Y0 Z1\nT2\nG1 Z-0.1 F10\nT2 M6\nG1 X1 F10\n"

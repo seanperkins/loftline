@@ -69,7 +69,12 @@ public enum GCodeReader {
         var cycleZ: Double?
         var cycleQ: Double?
 
-        func emit(_ m: Move) { segments[segments.count - 1].moves.append(m) }
+        /// The highest Z any move has reached (output units): a G53 retract is drawn at least this high.
+        var highestZ: Double?
+        func emit(_ m: Move) {
+            segments[segments.count - 1].moves.append(m)
+            if let z = m.target?.z { highestZ = max(highestZ ?? z, z) }
+        }
         // A program with no M6 changes tools with a T word alone (the park-and-probe sequence); one with M6 may name the
         // next tool early (pre-staging), so there only M6 starts a segment.
         let changesAtM6 = parsed.blocks.contains { $0.has("M", 6) }
@@ -91,6 +96,7 @@ public enum GCodeReader {
 
         for b in parsed.blocks {
             var nonModal = false
+            var machineRetract = false
             if probed, let p = b.value("P"), b.values("M").contains(where: { $0 >= 100 }) {
                 // The Mach4 zero macro: the plate's top is Z = P from here on.
                 pos = Vec3(pos?.x ?? 0, pos?.y ?? 0, p * f)
@@ -132,7 +138,11 @@ public enum GCodeReader {
                     nonModal = true
                     probed = true
                 case 53:
-                    nonModal = true   // a machine-coordinate move: the work position after it is not known
+                    // A machine-coordinate move: the work position after it is not known. A Z of 0 or above (the top of the
+                    // machine's Z on Mach, LinuxCNC and GRBL) is a retract, drawn up to a stand-in height below; any other
+                    // G53 (a park, a descent to a tool setter) draws nothing and leaves the position as it was (#120).
+                    nonModal = true
+                    if let z = b.value("Z"), z >= -1e-9 { machineRetract = true }
                 case 10 where b.value("L") == 20 && b.value("Z") != nil:
                     nonModal = true
                     pos = Vec3(pos?.x ?? 0, pos?.y ?? 0, (b.value("Z") ?? 0) * f)
@@ -161,6 +171,14 @@ public enum GCodeReader {
                 startSegment(tool: nil, comment: name)
             } else if b.has("M", 3) || b.has("M", 4), rpm > 0 {
                 segments[segments.count - 1].spindleRPM = max(segments[segments.count - 1].spindleRPM, rpm)
+            }
+            if machineRetract, let p = pos {
+                // Straight up to the higher of the assumed start height and the highest point the program reached, so the
+                // next move starts above the stock (the renderer draws every move from the previous target).
+                let up = max(startZ, highestZ ?? startZ)
+                if up > p.z + 1e-12 { emit(.rapid(to: Vec3(p.x, p.y, up))) }
+                pos = Vec3(p.x, p.y, max(up, p.z))
+                known.z = true
             }
             if nonModal { continue }
             let bx = b.value("X"), by = b.value("Y"), bz = b.value("Z")
