@@ -1,0 +1,61 @@
+{
+  "_comment": "Rewrites applied to narration for the voice only; subtitles and transcripts keep the written form. Applied in order, case-sensitive.",
+  "rules": [
+    [
+      "Job Setup",
+      "job setup"
+    ],
+    [
+      "G-code",
+      "G code"
+    ],
+    [
+      "V-Carve",
+      "V carve"
+    ],
+    [
+      "V-carve",
+      "V carve"
+    ],
+    [
+      "V-bit",
+      "V bit"
+    ],
+    [
+      "E-stop",
+      "E stop"
+    ],
+    [
+      "loftline.app",
+      "loftline dot app"
+    ],
+    [
+      "Shift-Command-",
+      "Shift Command "
+    ],
+    [
+      "Option-Command-",
+      "Option Command "
+    ],
+    [
+      "Command-",
+      "Command "
+    ],
+    [
+      "minus 0.75",
+      "minus zero point seven five"
+    ],
+    [
+      "24 by 12",
+      "twenty-four by twelve"
+    ],
+    [
+      "XY",
+      "X Y"
+    ],
+    [
+      "quarter-inch end mill",
+      "quarter inch end mill"
+    ]
+  ]
+}
