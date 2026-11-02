@@ -122,6 +122,11 @@ struct PostProcessorsSheet: View {
                         Text("; …").tag(PostProfile.CommentStyle.semicolon)
                         Text("' …").tag(PostProfile.CommentStyle.apostrophe)
                     }
+                    Picker("Line endings", selection: value(\.lineEnding, nil)) {
+                        Text("LF (macOS, Linux)").tag(PostProfile.LineEnding?.none)
+                        Text("CRLF (Windows)").tag(PostProfile.LineEnding?.some(.crlf))
+                    }
+                    .help("How each line of a saved program ends; MASSO's own post writes CRLF")
                 }
                 Section("Motion") {
                     TextField("Rapid", text: value(\.rapid, ""))
