@@ -1,6 +1,6 @@
 # Operation warnings reach Check Toolpaths and the export sheet (issue #131)
 
-Status: approved, revision 2 (after debate:all round 1)
+Status: approved, revision 3 (after debate:all rounds 1 and 2)
 
 ## Problem
 
@@ -24,10 +24,13 @@ come free.
   - The message is `"Toolpath '<name>': <warning>"`, in the same form as the validator's and layout's
     per-toolpath issues.
   - The issues come in toolpath order.
-- **Where it runs.** `PreflightChecks.issues(project:toolpaths:units:)` appends it.
-  - `export` already calls that function, after keep-out linking, on `toolpaths` (not `checked`). Linking
-    keeps names and metadata. The move home has no metadata.
-  - `export` itself does not change.
+- **Where it runs.** `export` appends `PreflightChecks.operationWarnings(toolpaths)` on the line after
+  `PreflightChecks.issues(...)`.
+  - It runs after keep-out linking, on `toolpaths` (not `checked`). Linking keeps names and metadata, and
+    the move home has no metadata.
+  - It is not part of `PreflightChecks.issues`, because the job sheet also calls that
+    (`JobSheet.swift:155`). The job sheet already prints each toolpath's warning in that step's notes
+    (`:129`), so including it there would print every warning twice on the sheet.
 - **Always a warning.** The severity is never `.error`: the operation already let these through, and they
   must not need Save Anyway.
 - **One string per toolpath.** The string is not split. A sentence can itself contain `"; "`, as the #124
@@ -71,6 +74,8 @@ come free.
   - `export` writes the program with `errorMessage` nil and no errors, and its issues contain
     `"Toolpath '<name>': 1 loop(s) got fewer tabs than asked"`.
   - `ValidationReport.make` lists it in the operation's section, not in "Combined program".
+- **The job sheet does not repeat it.** For the same tab project, the job sheet's text has the tab sentence
+  exactly once.
 - **A flute overrun.** A profile deeper than its tool's flute gives the existing error and the operation
   warning.
 - **The samples.** First run `scripts/test.sh --filter "SampleFiles|LoftLineCLI"`. These pin that the
