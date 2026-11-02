@@ -1,6 +1,6 @@
 # Ramps keep their maximum angle (issue #124)
 
-Status: draft, revision 3 (after debate:all rounds 1 and 2)
+Status: approved, revision 4 (after debate:all rounds 1–3)
 
 ## Problem
 
@@ -71,7 +71,7 @@ There is one message, `PassShaping.steepRampWarning(_ ramp: RampSettings) -> Str
   can act on.
 - "A steeper maximum angle" is offered because it always works. A last pass at full depth ramps the whole
   cut depth, so a shallower pass depth does nothing for it.
-- The warning is appended after an operation's existing warnings, so it is always last.
+- Each operation appends the warning last among its own warnings. Later stages, such as `AnyOperation`'s flute-length note, may add more after it, so tests use `contains`.
 
 **Profile.**
 - `TabNotes` becomes `CutNotes`, with a new field `var steepRamp = false`.
@@ -84,10 +84,11 @@ There is one message, `PassShaping.steepRampWarning(_ ramp: RampSettings) -> Str
 
 **Pocket.**
 - `emit` returns `(toolpath: Toolpath, steepRamp: Bool)`.
-- A clearance toolpath with flagged passes gets the warning in its own `metadata["warning"]`. Clearance
-  toolpaths carry no other warning.
-- For the finish toolpath, the warning is appended last to `warnings`, before line 74's single
-  assignment, so nothing overwrites it.
+- The operation reports the steep ramp once, on the finish toolpath: if any `emit` call (clearance or
+  finish) flagged a pass, the warning is appended last to `warnings`, before line 74's single assignment,
+  so nothing overwrites it.
+- Clearance toolpaths get no `warning` key. The operation editor lists every toolpath's metadata with
+  `ForEach(..., id: \.key)` (`OperationEditor.swift:217`), so a second `warning` key would collide.
 
 **Callers with `RampSettings()`.** Moulding, prism, the pocket linking lap, and the profile wrappers that
 build `ProfileParameters` without a ramp all have the ramp disabled. They never set the flag and are
@@ -99,6 +100,7 @@ unchanged.
 - **Splitting a pass instead of adding length.** Adding length keeps the user's pass depths, and the
   smooth ramp already does it.
 - **The hole mill's helix.** It already holds its angle and warns.
+- **Toolpaths projected onto a 3D model.** `ReliefProjection` adds the surface height to each depth, so a ramp keeps its angle relative to the surface it is projected onto, which is the material it enters. A machine move that also follows a falling surface is the surface, not the ramp.
 - **Rejecting an angle under 0.5°.** That would make an existing document fail to build. It warns instead,
   and only when the ramp is actually steeper.
 
@@ -136,10 +138,14 @@ recompute the length themselves.
   0.062 in round, so the cap is 12.4 in against 14.3 in needed. The toolpath's warning ends with the exact
   sentence.
 - **A profile on a short open vector.** A 0.05 in line, `side: .on`, with a zig-zag ramp at `maxAngle: 0.5`,
-  warns. It wants 286 legs, more than 200.
-- **Pocket.** A pocket with a clearance tool and `maxAngle: 0.2` at a 0.25 in drop per pass. The clearance
-  toolpath carries the warning. The finish toolpath carries it after "region(s) too small for the tool",
-  from a second region too small for the tool. Each sentence is checked with `contains`.
+  warns. It wants 287 legs, more than 200.
+- **Pocket.**
+  - Setup: a sharp-cornered rectangle pocket, `clearanceTools = [F.bigEndMill.id]`, a smooth ramp at
+    `maxAngle: 0.2`, and a second region too small for the tool. The sharp corners leave rest material for
+    the finish tool.
+  - The finish toolpath's warning contains "region(s) too small for the tool" and ends with the steep
+    sentence (`hasSuffix`).
+  - The clearance toolpath has no `warning` key.
 - **Both Z-zero modes.** An inside profile of a 3/8 in circle with the 1/4 in mill: the tool-centre loop is
   about 0.39 in round, so today's one-lap spiral descends at 17.7° on a 0.125 pass. With a spiral ramp at
   10°, in material-top and spoilboard modes, no descending feed move is steeper than 10°. This is modelled
@@ -150,9 +156,9 @@ recompute the length themselves.
 - **DECISIONS, new entry `ramp-angle-laps`.**
   - Ramps add length rather than split passes.
   - A ramp steeper than its maximum, from the caps or the 0.5° floor, warns.
-  - The spiral now ends part-way round a lap on a short loop.
-  - It supersedes :108 (the smooth ramp, which has had the 200-lap cap since #96) and :110 ("one helical
-    lap per pass").
+  - The spiral now ends part-way round a lap on a short loop. A profile chains the next pass from there. A pocket starts every pass at the loop's start (`s0: 0`), so on a short loop it now retracts, which `travel` does safely, and re-enters between passes, as the smooth ramp already does.
+  - It supersedes :108 (the smooth ramp, which has had the 200-lap cap since #96), :109 (zig-zag "within
+    `length`") and :110 ("one helical lap per pass").
   - It supersedes the note at :843 ("the spiral ramp … is still unbounded").
   - It adds to :598 (zig-zag capped at 200 legs) that a capped ramp now warns.
 - **HelpTopics.**
