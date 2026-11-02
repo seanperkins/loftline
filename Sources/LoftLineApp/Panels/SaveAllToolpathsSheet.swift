@@ -164,7 +164,7 @@ struct SaveAllToolpathsSheet: View {
         failure = nil
         let from = postedFrom
         if mode.isSingleFile {
-            guard let item = posted.first, let text = item.result.text else { return }
+            guard let item = posted.first, let text = item.result.fileText else { return }
             let panel = PanelRunner.makeSavePanel()
             panel.nameFieldStringValue = SavePanelName.suggested(item.file.fileName, allowedExtension: profile.fileExtension)
             if let t = UTType(filenameExtension: profile.fileExtension) { panel.allowedContentTypes = [t] }

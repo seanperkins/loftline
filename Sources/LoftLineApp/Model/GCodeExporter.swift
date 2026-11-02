@@ -18,6 +18,11 @@ struct GCodeExportResult {
     var toolpathCount: Int
     /// Where the program cuts deepest, read back from `text`; nil without text or cuts.
     var deepestCut: DeepestCut? = nil
+    /// The post's line endings (#99 item 4). `text` is always LF: the validator, the stop check and the preview read it.
+    var lineEnding: PostProfile.LineEnding? = nil
+
+    /// What a program file holds: `text` with the post's line endings. Every write to disk uses this.
+    var fileText: String? { text.map { lineEnding?.apply($0) ?? $0 } }
 
     var hasErrors: Bool { issues.contains { $0.severity == .error } }
 }
@@ -209,7 +214,8 @@ enum GCodeExporter {
             issues += validator.validate(gcode: text)
             return GCodeExportResult(text: text, issues: GCodeIssue.merged(issues), errorMessage: nil, toolpathCount: toolpaths.count,
                                      deepestCut: DeepestCut.find(in: text, job: doc.job, units: doc.units,
-                                                                postUnits: profile.units, comments: profile.parserComments))
+                                                                postUnits: profile.units, comments: profile.parserComments),
+                                     lineEnding: profile.lineEnding)
         } catch PostError.notImplemented(let what) {
             return GCodeExportResult(text: nil, issues: issues,
                                      errorMessage: "\(what) is not available in this build yet.",

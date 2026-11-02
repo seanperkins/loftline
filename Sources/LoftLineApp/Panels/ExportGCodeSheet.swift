@@ -173,7 +173,7 @@ struct ExportGCodeSheet: View {
     }
 
     private func save() {
-        guard let text = result?.text else { return }
+        guard let text = result?.fileText else { return }
         failure = nil
         let inputs = postedFrom
         let panel = PanelRunner.makeSavePanel()

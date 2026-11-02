@@ -145,12 +145,12 @@ struct GCodeFileSet {
 
     /// The planned files of a Save All, in order.
     init(posted: [(file: PlannedGCodeFile, result: GCodeExportResult)]) {
-        files = posted.map { File(fileName: $0.file.fileName, title: $0.file.title, text: $0.result.text) }
+        files = posted.map { File(fileName: $0.file.fileName, title: $0.file.title, text: $0.result.fileText) }
     }
 
     /// The tiles of a tiled export, in order.
     init(tiles: [TiledExport.File]) {
-        files = tiles.map { File(fileName: $0.fileName, title: $0.title, text: $0.result.text) }
+        files = tiles.map { File(fileName: $0.fileName, title: $0.title, text: $0.result.fileText) }
     }
 
     /// Titles of the files that have no program. While there are any, nothing is written.

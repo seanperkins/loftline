@@ -295,7 +295,7 @@ enum LoftLineCLI {
         for issue in result.issues {
             output.standardError("\(issue.severity.rawValue): \(issue.line.map { "line \($0): " } ?? "")\(issue.message)\n")
         }
-        guard let text = result.text else {
+        guard let text = result.fileText else {
             output.standardError("error: \(result.errorMessage ?? "nothing to export")\n")
             return 1
         }
