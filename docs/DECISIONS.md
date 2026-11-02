@@ -1203,3 +1203,17 @@
   re-models the footer from the lifted route's end, so a footer that moves again on replay is what gets checked.
   Built-in footers give the same points and the same output (pinned in `keepOutHomeLiftIsPinned`). Spec:
   `docs/specs/2026-11-02-footer-travel-design.md`.
+- **line-endings — a post can write CRLF; the text stays LF (#99 item 4).** `PostProfile.lineEnding` is a one-case enum
+  (`.crlf`; nil is LF, like `UnitsCodes`, so no file can spell out the default and a built-in recognised by value never
+  drifts). The program text stays LF in memory, because the validator, `PostDraftReport.stopProblems`, the export
+  preview and many tests split it on `"\n"`, and Swift reads `"\r\n"` as one `Character`. `GCodeExportResult.fileText`
+  (computed from `text` and the post's ending, so the two cannot drift) is what every write to disk uses: the export and
+  Save All sheets, `GCodeFileSet` (Save All folders, tiles) and the CLI (file and stdout). `postProblem` now refuses a
+  template line containing CR or LF for every post, because a post read from JSON never passes the editor: such a line
+  reached the text, where the parser counted `\r\n` as a break and the stop check did not, so the check's line numbers
+  shifted. The MASSO built-ins write CRLF (MASSO's own Vectric post does; whether MASSO reads LF is unknown) and are
+  version 1.1; a project carrying an older MASSO copy keeps posting LF with it (the copy wins) and shows the "differs
+  from the installed post" notice. CRLF needs schema 5, checked before every other rule, so an older LoftLine refuses
+  such a post or project rather than write LF. `samples/expected/** -text` in `.gitattributes` keeps git from
+  normalising the MASSO samples, and the CLI samples test compares bytes. The next release's feed should set
+  `gcodeChanged` (MASSO output changes). Spec: `docs/specs/2026-11-02-line-endings-design.md`.

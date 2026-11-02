@@ -308,8 +308,9 @@ import Testing
                 #expect(r.status == 0 && other.isEmpty, "\(name) with \(post.id): \(r.err)")
                 let file = expected.appendingPathComponent(post.id).appendingPathComponent(
                     GCodeExporter.suggestedFileName(jobName: name, operationName: nil, profile: post))
-                let committed = try String(contentsOf: file, encoding: .utf8)
-                #expect(r.out == committed, "\(name) with \(post.id) differs from \(file.path)")
+                // Bytes, not Strings: Swift reads "\r\n" as one Character, so a lost CR must still show (#99 item 4).
+                let committed = try Data(contentsOf: file)
+                #expect(Array(r.out.utf8) == Array(committed), "\(name) with \(post.id) differs from \(file.path)")
                 compared += 1
             }
         }

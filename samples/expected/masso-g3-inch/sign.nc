@@ -1,5 +1,5 @@
 ( Job: Untitled )
-( Post: MASSO G3 [inch] v1.0 )
+( Post: MASSO G3 [inch] v1.1 )
 ( Units: inches )
 ( Material: 24.0000 x 12.0000 x 0.7500 in )
 ( Z zero: material top [bottom at Z-0.7500] )

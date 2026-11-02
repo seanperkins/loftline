@@ -20,6 +20,18 @@ import Testing
         ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).sorted()
     }
 
+    /// Text pasted from Windows (CRLF) or old Mac (CR) files splits into lines like LF text, so no template line keeps a
+    /// line break (which the post would refuse).
+    @Test func textAreaLinesSplitOnEveryLineBreak() {
+        #expect(PostEditorModel.lines("G90\r\nG17\rM5\n\r\n  M30  \r\n") == ["G90", "G17", "M5", "M30"])
+        let (m, _, _) = model()
+        #expect(m.select(BuiltInPosts.avidMach4Inch.id))
+        m.duplicate()
+        m.setLines(\.preamble, "G90\r\nG17")
+        #expect(m.draft?.preamble == ["G90", "G17"])
+        #expect(m.draft?.postProblem == nil)
+    }
+
     @Test func duplicateIsAnUnsavedDraftWithTheBuiltInsController() {
         let (m, dir, _) = model()
         #expect(m.select(BuiltInPosts.avidMach4Inch.id))
