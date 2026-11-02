@@ -23,18 +23,25 @@ struct GCodePreviewModel {
         let coords = MachineCoordinates(job: job)
         reader = GCodeReader.read(text, units: units, assumedUnits: units, startZ: coords.safeZ)
         let header = GCodeReader.headerTools(text, units: units)
+        let rows = GCodeReader.headerToolList(text, units: units)
         tools = reader.segments.enumerated().map { i, seg in
-            let n = seg.toolNumber
+            // A stop tool change has no T word: its tool is the one header row with its name (#126).
+            let byName = seg.toolNumber == nil ? seg.toolComment.flatMap { c in
+                let matches = rows.filter { $0.tool.name == c }
+                return matches.count == 1 ? matches[0] : nil
+            } : nil
+            let n = seg.toolNumber ?? byName?.number
             var t = Tool(name: "Tool", kind: .endMill, units: units, number: n ?? 0,
                          diameter: units == .inch ? 0.25 : 6, stepdown: 0, stepover: 0,
                          spindleRPM: seg.spindleRPM, feedRate: 0, plungeRate: 0)
-            if let n, let h = header[n] {
+            if let h = byName?.tool ?? n.flatMap({ header[$0] }) {
                 t.name = h.name; t.kind = h.kind; t.diameter = h.diameter
                 if h.kind == .vBit || h.kind == .engraving { t.angle = 60 }
             } else if let c = seg.toolComment, !c.isEmpty {
                 t.name = c
             }
-            let label = (n.map { "T\($0)" } ?? "No tool change") + (t.name == "Tool" ? "" : " – \(t.name)")
+            let head = n.map { "T\($0)" } ?? (seg.startsAtToolChange ? "Tool change" : "No tool change")
+            let label = head + (t.name == "Tool" ? "" : " – \(t.name)")
             return ToolEntry(id: i, label: label, tool: t)
         }
     }

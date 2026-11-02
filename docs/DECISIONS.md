@@ -1142,3 +1142,13 @@
   warning a second time beside the step that already shows it. A cut deeper than the flutes shows twice on purpose: the
   validator's error, which needs Save Anyway, and the operation's note, which rides in its warning string. The sign sample's
   V-carve now states the V-bit's full depth as its flat depth, so it does as asked (the same program) and exports clean.
+- **preview-stop-tool-change — the G-code preview follows a tool change made with a stop (#126).** GRBL, UCCNC, ShopBot
+  G-code, LinuxCNC, Onefinity and NcStudio change tools with `M5`, a "Change to Tool: <name>" comment (bare, `MSG,` or `'`)
+  and `M0`; their programs used to preview as one tool. In a program with no `M6` and no `T` word anywhere (so a marker is
+  never counted on top of an M6 or T split), an `M0` block whose own line's comment, or else the previous non-blank line's,
+  begins with that marker starts a segment. When the header lists tools the name must be one of them, so a pause whose
+  message happens to start "Change to Tool:" does not split a one-tool program; a pause named exactly like a listed tool
+  does, which is the operator changing to it. The preview finds such a segment's tool by its header row's name (two tools
+  on one number keep their own rows). Every segment now starts at speed 0 and takes the highest S it sets, inheriting the
+  speed in force only if it sets none: a drill after an end mill no longer shows the end mill's speed (true of M6 programs
+  too). A segment begun at any tool change with no tool number is labelled "Tool change", not "No tool change".
