@@ -37,15 +37,26 @@ struct RecoveryStore {
         try enc.encode(entry).write(to: metaURL(entry.id), options: .atomic)
     }
 
-    /// Entries with a readable snapshot, newest first.
+    /// One entry per snapshot, newest first. The snapshot (`<id>.loftline`, a regular file named by an upper-case UUID, as
+    /// `projectURL` writes it) is what is recovered; its metadata only names and dates it. A snapshot whose metadata is
+    /// missing, unreadable or about another id (a crash or a full disk between the two writes) is still listed, as
+    /// "Unsaved document" at the file's date; it is not decoded here, at launch, but when it is recovered (#123).
     func entries() -> [RecoveryEntry] {
-        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        let keys: [URLResourceKey] = [.isRegularFileKey, .contentModificationDateKey]
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: keys,
+                                                                   options: [.skipsHiddenFiles])) ?? []
         let dec = JSONDecoder()
         dec.dateDecodingStrategy = .iso8601
-        return files.filter { $0.pathExtension == "json" }
-            .compactMap { try? dec.decode(RecoveryEntry.self, from: Data(contentsOf: $0)) }
-            .filter { FileManager.default.fileExists(atPath: projectURL($0.id).path) }
-            .sorted { $0.savedAt > $1.savedAt }
+        return files.compactMap { url -> RecoveryEntry? in
+            let stem = url.deletingPathExtension().lastPathComponent
+            guard url.pathExtension == "loftline", let id = UUID(uuidString: stem), id.uuidString == stem,
+                  let values = try? url.resourceValues(forKeys: Set(keys)), values.isRegularFile == true else { return nil }
+            if let entry = try? dec.decode(RecoveryEntry.self, from: Data(contentsOf: metaURL(id))), entry.id == id {
+                return entry
+            }
+            return RecoveryEntry(id: id, name: "Unsaved document", savedAt: values.contentModificationDate ?? .distantPast)
+        }
+        .sorted { $0.savedAt > $1.savedAt }
     }
 
     func project(for id: UUID) throws -> LoftLineProject {
@@ -121,10 +132,12 @@ final class RecoveryCoordinator {
             if doc.needsRecovery {
                 guard written[id] != doc.project else { continue }
                 let entry = RecoveryEntry(id: id, name: doc.document.name, savedAt: now)
+                // Owned before writing: a write that fails halfway leaves files this session must clean up, and must not
+                // offer as another session's work.
+                ownedIDs.insert(id)
                 do {
                     try store.write(doc.project, entry: entry)
                     written[id] = doc.project
-                    ownedIDs.insert(id)
                 } catch {
                     NSLog("LoftLine: could not write recovery copy: \(error.localizedDescription)")
                 }
