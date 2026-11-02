@@ -110,3 +110,28 @@ func keepOutHomeMoveIsCheckedAndLifted(mode: ZZeroMode) throws {
     #expect(lines[m6..<firstXY].contains { $0.contains(clearText) }, "\(lines[m6...firstXY])")
     #expect(!lines[firstXY].contains("Z"), "\(lines[firstXY])")
 }
+
+/// The lifted move home of `keepOutHomeMoveIsCheckedAndLifted`, pinned from the code before #132: modelling the footer
+/// from its moves must not change a built-in post's output.
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func keepOutHomeLiftIsPinned(mode: ZZeroMode) throws {
+    var project = AppTestSupport.project()
+    project.document.job.zZero = mode
+    let ids = project.document.shapes.map(\.id)
+    let tool = ToolLibrary.seeded.tools[0].id
+    let b = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "B", toolID: tool, shapeIDs: [ids[1]])))
+    project.document.keepOutZones = [KeepOutZone(name: "HomeClamp", outline: [Vec2(3.4, -1), Vec2(4.6, -1), Vec2(4.6, 3),
+                                                                               Vec2(3.4, 3)], height: 1, liftOver: true)]
+    let ctx = CAMContext(document: project.document, tools: .seeded)
+    let result = GCodeExporter.export(project: project, toolpaths: try b.generate(in: ctx),
+                                      profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+    let lines = try #require(result.text).split(separator: "\n").map(String.init)
+    let start = try #require(lines.lastIndex { $0.contains("Toolpath: B") })
+    let pinned: [ZZeroMode: [String]] = [
+        .materialTop: ["G2 X7.0000 Y0.8750 I-0.1250 J0.0000", "G1 X5.0000", "G2 X4.8770 Y0.9778 I0.0000 J0.1250", "G0 Z0.2000",
+                       "Z0.8000", "Z1.1000", "X0.0000 Y0.0000", "Z0.8000", "G0 Z0.8000", "M5", "G0 X0.0000 Y0.0000", "M30"],
+        .spoilboard: ["G2 X7.0000 Y0.8750 I-0.1250 J0.0000", "G1 X5.0000", "G2 X4.8770 Y0.9778 I0.0000 J0.1250", "G0 Z0.9500",
+                      "Z1.5500", "Z1.8500", "X0.0000 Y0.0000", "Z1.5500", "G0 Z1.5500", "M5", "G0 X0.0000 Y0.0000", "M30"],
+    ]
+    #expect(Array(lines[start...].suffix(12)) == pinned[mode] ?? [], "\(Array(lines[start...].suffix(12)))")
+}
