@@ -307,7 +307,8 @@ struct ProjectOpenError: Error, LocalizedError, Equatable {
 }
 
 extension ProjectPost {
-    /// Refuses a project in which two layers, shapes, placed models, keep-out zones or carried tools share an id (#123):
+    /// Refuses a project in which two layers, shapes, placed models, keep-out zones, sheets, images or carried tools share an
+    /// id (#123):
     /// lookups take the first match, so which item an operation means would be an accident. The app never writes these
     /// twice. (Operations are repaired instead; see `givingRepeatedIDsNewOnes`.)
     static func rejectDuplicateIDs(in project: LoftLineProject) throws {
@@ -317,6 +318,10 @@ extension ProjectPost {
             ("shapes", doc.shapes.map { ($0.id, $0.name) }),
             ("models", doc.models.map { ($0.id, $0.name) }),
             ("keep-out zones", (doc.keepOutZones ?? []).map { ($0.id, $0.name) }),
+            // The current sheet (in `job`) and the parked ones: `job(ofSheet:)` takes the first match, which decides the
+            // thickness and Z zero an operation on that sheet posts with.
+            ("sheets", [(doc.currentSheetID, doc.currentSheetName)] + (doc.otherSheets ?? []).map { ($0.id, $0.name) }),
+            ("images", (doc.images ?? []).map { ($0.id, $0.name) }),
             ("tools", project.tools.map { ($0.id, $0.name) }),
         ]
         for kind in kinds {

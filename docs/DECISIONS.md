@@ -1171,7 +1171,7 @@
   the copy and every merged part a new id (`withNewIDs`), and Split and Merge pass the operations through
   `givingRepeatedIDsNewOnes`, which also repairs files written before this on open (`opening(from:)`): top-level ids are
   reserved first so a top-level operation keeps its id, results and variable links over a merged part; later holders
-  get new ids. Operations are repaired, not refused, because the app wrote them. Layers, shapes, models, keep-out zones and
+  get new ids. Operations are repaired, not refused, because the app wrote them. Layers, shapes, models, keep-out zones, sheets, images and
   carried tools the app never writes twice, so a clash there is refused at open with the kind, positions and names ("Two
   shapes share the id …: the 2nd ("Hole") and the 4th ("Hole")."). A project tool that shadows a library tool is not a
   clash. `decode(from:)` is unchanged, so clipart still reads.

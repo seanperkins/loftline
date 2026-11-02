@@ -11,7 +11,7 @@ import Testing
     enum Bad: CaseIterable {
         case newerPost, newerMachine, malformedMachine, nullPost, nullMachine
         // #123: two items on one id.
-        case duplicateLayers, duplicateShapes, duplicateModels, duplicateZones, duplicateTools
+        case duplicateLayers, duplicateShapes, duplicateModels, duplicateZones, duplicateTools, duplicateSheets, duplicateImages
 
         /// The file's bytes and a fragment of the message the user must be shown.
         func make() throws -> (data: Data, message: String) {
@@ -40,6 +40,13 @@ import Testing
             case .duplicateZones:
                 let z = KeepOutZone(name: "Clamp", outline: [Vec2(0, 0), Vec2(1, 0), Vec2(1, 1)], height: 0.5)
                 p.document.keepOutZones = [z, z]; message = "Two keep-out zones share the id"
+            case .duplicateSheets:
+                // A parked sheet on the current sheet's id: an operation on it would take the current sheet's job.
+                p.document.otherSheets = [MaterialSheet(id: p.document.currentSheetID, name: "Other", job: p.document.job)]
+                message = "Two sheets share the id"
+            case .duplicateImages:
+                let i = PlacedImage(name: "Photo", png: Data(), pixelWidth: 1, pixelHeight: 1, rect: Rect2(x: 0, y: 0, width: 1, height: 1))
+                p.document.images = [i, i]; message = "Two images share the id"
             case .duplicateTools:
                 let t = ToolLibrary.seeded.tools[0]
                 p.tools = [t, t]; message = "Two tools share the id"
