@@ -20,6 +20,13 @@ import Testing
         #expect(s.steps.map(\.op) == ["sample", "tab", "selectToolpath", "capture"])
     }
 
+    @Test func aLongRecordingCanRaiseTheWatchdog() throws {
+        #expect(try parse(#"{"steps": []}"#).watchdogSeconds == 180)
+        #expect(try parse(#"{"timeout": 600, "steps": []}"#).watchdogSeconds == 600)
+        #expect(throws: HarnessError.self) { try parse(#"{"timeout": 0, "steps": []}"#) }
+        #expect(throws: HarnessError.self) { try parse(#"{"timeout": 3601, "steps": []}"#) }
+    }
+
     @Test func anUnknownOpNamesTheValidOnes() {
         #expect(throws: HarnessError.self) { try parse(#"{"steps": [{"op": "teleport"}]}"#) }
         do { _ = try parse(#"{"steps": [{"op": "teleport"}]}"#) } catch let e as HarnessError {

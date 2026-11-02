@@ -30,7 +30,13 @@ struct HarnessScenario: Decodable {
     var appearance: String?
     /// Content size of the document window, in points.
     var window: [Double]?
+    /// Seconds before the watchdog ends the run (default 180, at most 3600). A narrated video's recording runs for
+    /// minutes; everything else should finish well inside the default.
+    var timeout: Double?
     var steps: [Step]
+
+    static let defaultWatchdogSeconds: Double = 180
+    var watchdogSeconds: Double { timeout ?? Self.defaultWatchdogSeconds }
 
     static let modes: Set<String> = ["2d", "split", "3d"]
     static let tabs: Set<String> = ["design", "toolpaths"]
@@ -97,6 +103,9 @@ struct HarnessScenario: Decodable {
         }
         if let w = scenario.window, w.count != 2 || w.contains(where: { $0 <= 0 }) {
             throw HarnessError(message: "window must be [width, height] in points")
+        }
+        if let t = scenario.timeout, !(t > 0 && t <= 3600) {
+            throw HarnessError(message: "timeout must be between 1 and 3600 seconds, not \(t)")
         }
         for (i, step) in scenario.steps.enumerated() {
             try validate(step, at: i + 1)

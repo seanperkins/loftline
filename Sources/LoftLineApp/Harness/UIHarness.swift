@@ -71,14 +71,17 @@ final class UIHarness {
     func start() {
         guard let request = Self.request else { return }
         outDir = request.out
-        // Never hang a run, even if the main thread is blocked: this watchdog is on its own thread.
+        // Never hang a run, even if the main thread is blocked: this watchdog is on its own thread. A scenario may
+        // raise it (a narrated video records for minutes); one that fails to parse reports that below, well inside it.
         let log = outDir.appendingPathComponent("harness.log")
-        DispatchQueue.global().asyncAfter(deadline: .now() + 180) {
+        let seconds = (try? HarnessScenario.parse(Data(contentsOf: request.scenario)))?.watchdogSeconds
+            ?? HarnessScenario.defaultWatchdogSeconds
+        DispatchQueue.global().asyncAfter(deadline: .now() + seconds) {
             if let h = FileHandle(forWritingAtPath: log.path) {
                 h.seekToEndOfFile()
-                h.write(Data("timed out after 180 s (the main thread may be blocked)\n".utf8))
+                h.write(Data("timed out after \(Int(seconds)) s (the main thread may be blocked)\n".utf8))
             }
-            print("[harness] finished: timed out after 180 s")
+            print("[harness] finished: timed out after \(Int(seconds)) s")
             _exit(2)
         }
         Task { @MainActor in

@@ -42,7 +42,7 @@ your real tool library, recovery copies or window files. Preferences are the exc
 through a daemon that does not follow `HOME`, so a run reads and writes the real defaults domain of the debug binary
 (`LoftLine`, not `com.seanperkins.loftline`), including the one-time settings migration's copy of the old app's values. Set
 `LOFTLINE_NO_MIGRATION=1` to skip the migration, and use launch arguments after `--` instead of `defaults write` to
-change a setting for one run. A 90 s watchdog on its own thread ends a run that hangs once the harness has started.
+change a setting for one run. A watchdog on its own thread ends a run that hangs once the harness has started (180 s, or the scenario's `timeout`).
 
 ## Scenario format
 
@@ -63,7 +63,8 @@ change a setting for one run. A 90 s watchdog on its own thread ends a run that 
 ```
 
 `appearance` is `light`, `dark` or `system`; `window` is the content size in points (the document window's
-minimum is 1000 x 640). Steps run in order and the run stops at the first error, naming the step.
+minimum is 1000 x 640). `timeout` (seconds, default 180, at most 3600) is when the watchdog ends the run; only a
+long recording, such as a narrated video (`scripts/video.py`), needs to raise it. Steps run in order and the run stops at the first error, naming the step.
 
 | op | arguments | does |
 |---|---|---|
