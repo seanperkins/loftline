@@ -70,12 +70,17 @@ public enum DialectChecks {
         // would last 3 ms; GRBL scales S against $30, and laser mode ($32=1) turns the spindle off on every G0.
         if centroidIDs.contains(family) {
             out.append(GCodeIssue(severity: .warning, message: "\(centroidDwellWarningPrefix) unless Parameter 2 bit 2 is set: check "
-                                                              + "that it is clear, or a 3 s dwell lasts 3 ms."))
+                                                              + "that it is clear, or every dwell lasts a thousandth as long (a 3 s "
+                                                              + "spin-up, 3 ms)."))
         }
         if grblIDs.contains(family) {
-            out.append(GCodeIssue(severity: .warning, message: "\(grblSettingsWarningPrefix) and stops the spindle on every G0 in laser "
-                                                              + "mode: set $30 to \(NumberFormat.fixed(profile.maxRPM, decimals: 0)) "
-                                                              + "and $32=0."))
+            // The Max RPM is the machine's when it sets one, else the post's default: say which value must match, not that
+            // it is the spindle's.
+            out.append(GCodeIssue(severity: .warning, message: "\(grblSettingsWarningPrefix), and in laser mode ($32=1) it switches the "
+                                                              + "spindle output off on every G0, so the next cut starts with no spin-up: "
+                                                              + "$30 must equal this program's Max RPM, "
+                                                              + "\(NumberFormat.fixed(profile.maxRPM, decimals: 0)) (set your spindle's top "
+                                                              + "speed on a copy of the machine), and $32 must be 0."))
         }
         if centroidIDs.contains(family) {
             let outside = posting.filter { tp in

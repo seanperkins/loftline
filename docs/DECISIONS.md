@@ -1248,9 +1248,11 @@
   for another controller can carry its own note in its program-start or preamble comments. Of #99's list only four change how
   a built-in program runs: Centroid's Parameter 2 bit 2 (milliseconds: the 3 s spin-up lasts 3 ms; new warning), UCCNC's
   "Measure dwell in seconds" (3,000 s; added to the units warning), and GRBL's `$30` (S is scaled against it) and `$32` (laser
-  mode turns the spindle off on every G0: GRBL's laser_mode.md; new warning naming the profile's Max RPM). NcStudio's Arc
+  mode switches the spindle output off on every G0, so the next cut starts with no spin-up: GRBL's laser_mode.md; new warning
+  naming the program's Max RPM as the value `$30` must equal, not as the spindle's, since it may be the post's default). NcStudio's Arc
   Increment (arcs are lines), Mach3's switches (no Mach3 post), grblHAL `$341` (the GRBL posts stop with `M0`) do not; a Mach4
-  set to millisecond dwells already needs its own post (see the MASSO/UCCNC/Centroid/NcStudio entry). The machine editor gains
-  Min RPM and Max RPM (0 = the post's value, Min above Max refused), which the GRBL notes already told owners to set. The UI
+  set to millisecond dwells already needs its own post (see the MASSO/UCCNC/Centroid/NcStudio entry). The Centroid text names no fixed duration (a copy's dwell may differ). The machine editor gains
+  Min RPM and Max RPM (whole RPM, since S is written whole; 0 = the post's value; refused when the range that applies, an
+  unset field being each listed post's own, is empty), which the GRBL notes already told owners to set. The UI
   harness cannot open the Settings window, so the fields are checked by `MachineRPMFieldTests` and the build. Spec:
   `docs/specs/2026-11-02-controller-settings-design.md`.

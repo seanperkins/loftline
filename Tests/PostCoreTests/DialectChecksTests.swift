@@ -83,8 +83,8 @@ import Testing
     /// Centroid's Parameter 2 bit 2 turns the seconds dwell into milliseconds: the 3 s spin-up would last 3 ms (#99 item 13).
     @Test func centroidWarnsOfItsDwellUnitSetting() {
         for p in [BuiltInPosts.centroidInch, BuiltInPosts.centroidMM, copy(BuiltInPosts.centroidInch)] {
-            #expect(warnings(p) == ["CNC12 reads G4 P in seconds unless Parameter 2 bit 2 is set: check that it is clear, or a 3 s "
-                                    + "dwell lasts 3 ms."], "\(p.id)")
+            #expect(warnings(p) == ["CNC12 reads G4 P in seconds unless Parameter 2 bit 2 is set: check that it is clear, or every "
+                                    + "dwell lasts a thousandth as long (a 3 s spin-up, 3 ms)."], "\(p.id)")
             #expect(warnings(p).allSatisfy { $0.hasPrefix(DialectChecks.centroidDwellWarningPrefix) })
         }
     }
@@ -92,13 +92,15 @@ import Testing
     /// GRBL scales S against $30, and laser mode ($32=1) turns the spindle off on every G0 (#99 item 13).
     @Test func grblWarnsOfThirtyAndThirtyTwo() {
         for p in [BuiltInPosts.genericGRBLInch, BuiltInPosts.genericGRBLMM, copy(BuiltInPosts.genericGRBLMM)] {
-            #expect(warnings(p) == ["GRBL scales S against $30 and stops the spindle on every G0 in laser mode: set $30 to 30000 "
-                                    + "and $32=0."], "\(p.id)")
+            #expect(warnings(p) == ["GRBL scales S against $30, and in laser mode ($32=1) it switches the spindle output off on "
+                                    + "every G0, so the next cut starts with no spin-up: $30 must equal this program's Max RPM, "
+                                    + "30000 (set your spindle's top speed on a copy of the machine), and $32 must be 0."],
+                    "\(p.id)")
             #expect(warnings(p).allSatisfy { $0.hasPrefix(DialectChecks.grblSettingsWarningPrefix) })
         }
         var machine = BuiltInPosts.genericGRBLMM
         machine.maxRPM = 24000
-        #expect(warnings(machine).first?.contains("set $30 to 24000 and $32=0") == true)
+        #expect(warnings(machine).first?.contains("Max RPM, 24000 (") == true)
     }
 
     @Test func otherPostsGetNoSettingsWarning() {

@@ -216,7 +216,7 @@ struct MachineEditor: View {
                             unit: "RPM", help: "The spindle's lowest speed (0 = the post's value)")
                 NumberField("Max RPM", value: Binding(get: { machine.maxRPM ?? 0 }, set: { machine.maxRPM = Self.rpm($0) }),
                             unit: "RPM", help: "The spindle's top speed; on GRBL, set $30 to the same value (0 = the post's value)")
-                if let problem = Self.rpmProblem(machine) {
+                if let problem = Self.rpmProblem(machine, posts: posts) {
                     Text(problem).font(.caption).foregroundStyle(.red)
                 }
                 ToolChangeProbeSection(machine: $machine, posts: posts)
@@ -248,17 +248,27 @@ struct MachineEditor: View {
     }
 
     /// A spindle speed field's value: 0 (or less) means the post's own.
-    static func rpm(_ value: Double) -> Double? { value > 0 ? value : nil }
+    /// Whole RPM, since S is written whole: a 23,999.6 limit would refuse the S24000 a tool at that speed posts.
+    static func rpm(_ value: Double) -> Double? { value > 0 && value.isFinite ? value.rounded() : nil }
 
-    static func rpmProblem(_ m: MachineDefinition) -> String? {
+    /// The range that applies: an unset field is each listed post's own value (`MachineDefinition.applied(to:)`).
+    static func rpmProblem(_ m: MachineDefinition, posts: [PostProfile]) -> String? {
         if let lo = m.minRPM, let hi = m.maxRPM, lo > hi { return "Min RPM is above Max RPM." }
+        for post in posts where m.postIDs.contains(post.id) {
+            if let lo = m.minRPM, m.maxRPM == nil, lo > post.maxRPM {
+                return "Min RPM is above the Max RPM of \(post.name) (\(RulerTicks.label(post.maxRPM))): set Max RPM too."
+            }
+            if let hi = m.maxRPM, m.minRPM == nil, hi < post.minRPM {
+                return "Max RPM is below the Min RPM of \(post.name) (\(RulerTicks.label(post.minRPM))): set Min RPM too."
+            }
+        }
         return nil
     }
 
     private var isValid: Bool {
         !machine.name.trimmingCharacters(in: .whitespaces).isEmpty && machine.limits.xTravel > 0
             && machine.limits.yTravel > 0 && machine.limits.zTravel > 0 && machine.limits.maxSpoilboardCut >= 0
-            && Self.rpmProblem(machine) == nil
+            && Self.rpmProblem(machine, posts: posts) == nil
             && (machine.toolChangeProbe?.problems(limits: machine.limits, units: machine.units).isEmpty ?? true)
     }
 

@@ -50,8 +50,9 @@ No output changes.
   dwell in seconds"; GRBL inch, mm and a copy → one warning with its prefix containing "$30 to 30000" and "$32=0", and with a
   machine-applied `maxRPM` of 24000, "$30 to 24000".
 - CLI samples test: the Centroid and GRBL prefixes are expected, and asserted present (not just allowed).
-- Machine editor: a machine with `maxRPM` set round-trips (existing `MachineDefinition` codable tests) and the harness
-  `preferences`/machines scenario shows the fields.
+- Machine editor: a machine with Min and Max RPM round-trips through JSON; the range check and whole-RPM rounding are unit
+  tested (`MachineRPMFieldTests`). The UI harness cannot open the Settings window, so the fields are checked by those tests
+  and the build.
 
 ## Docs
 

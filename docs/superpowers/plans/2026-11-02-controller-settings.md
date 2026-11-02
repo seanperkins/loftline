@@ -4,7 +4,7 @@
 
 **Goal:** Export reminds of the controller settings that change how a built-in program runs (Centroid dwell unit, UCCNC dwell unit, GRBL `$30`/`$32`), and a machine can carry a spindle range (#99 item 13).
 
-**Architecture:** `DialectChecks` warnings per family; Min/Max RPM fields in the machine editor; a harness `settings` step to see them.
+**Architecture:** `DialectChecks` warnings per family; Min/Max RPM fields in the machine editor (the harness cannot open Settings: unit tests and the build check them).
 
 **Tech Stack:** Swift 6, SwiftPM, swift-testing, SwiftUI.
 
@@ -31,7 +31,7 @@
 
 ### Task 2: Machine RPM fields, harness step, docs
 
-**Files:** `Sources/LoftLineApp/Panels/PreferencesView.swift`, `Sources/LoftLineApp/Harness/HarnessScenario.swift`, `Sources/LoftLineApp/Harness/UIHarness.swift`, `docs/UI-HARNESS.md`, `harness/scenarios/machines.json`, `Sources/LoftLineApp/Model/HelpTopics.swift`, `TESTING.md`, `docs/DECISIONS.md`.
+**Files:** `Sources/LoftLineApp/Panels/PreferencesView.swift`, `Sources/LoftLineApp/Model/HelpTopics.swift`, `TESTING.md`, `docs/DECISIONS.md`; Test: `Tests/LoftLineAppTests/MachineRPMFieldTests.swift`.
 
-- [ ] Min RPM / Max RPM fields; `settings` harness step; scenario shows them (`.ax.txt`). Help, TESTING, DECISIONS. Commit `feat(ui): a machine can set its spindle range (#99)`.
+- [ ] Min RPM / Max RPM fields (whole RPM, effective range per listed post), unit tested. Help, TESTING, DECISIONS. Commit `feat(ui): a machine can set its spindle range (#99)`.
 - [ ] `scripts/build.sh`, `scripts/test.sh`: green.

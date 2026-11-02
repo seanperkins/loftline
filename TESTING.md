@@ -258,7 +258,7 @@ sets the rapid rate, and the post writes none. Then air-cut.
 
 **GRBL machines (Genmitsu, LongMill, Generic GRBL):** check `$30` against the machine's Max RPM in LoftLine (duplicate the
 built-in machine and set Max RPM in Settings ▸ Machines), and `$31` against its lowest speed, before trusting any S word; check
-`$32=0` (laser mode turns the spindle off on every G0). Export reminds you of `$30` and `$32`.
+`$32=0` (laser mode switches the spindle output off on every G0, so the next cut starts with no spin-up). Export reminds you of `$30` and `$32`.
 
 **Othermill (Bantam Tools software):** the Othermill posts have not run on a machine. Each check below confirms something the
 post assumes (in brackets); stop and report if one does not hold.
