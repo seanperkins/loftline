@@ -64,6 +64,10 @@ enum VariableLinks {
             case .operation(let id): return !opIDs.contains(id)
             }
         }
+        // One link per field, the last: links that disagree about one field (a crafted or damaged file) would flip it
+        // on every pass and never settle.
+        var seenFields = Set<String>()
+        links = links.reversed().filter { seenFields.insert("\($0.target)|\($0.path)").inserted }.reversed()
         // Job fields linked in a cycle (`=thickness/2` typed into Thickness; Safe Z from the
         // thickness and the thickness from Safe Z) would move every time the links are re-evaluated;
         // such links are never made and never kept.
@@ -112,11 +116,14 @@ enum VariableLinks {
 
     /// Re-evaluates every link and writes the results, pass after pass until nothing changes, so a chain of links (a
     /// linked thickness feeding a linked width feeding a toolpath) settles in one edit whatever order the links are
-    /// stored in. Cycles are never kept (`withoutCycles`), so `count + 1` passes always suffice. Returns links that failed.
+    /// stored in. Cycles are never kept (`withoutCycles`), so `count + 1` passes suffice, capped at `maxPasses` so a
+    /// crafted file cannot make one edit run for minutes. Returns links that failed.
+    static let maxPasses = 32
+
     @discardableResult
     static func apply(_ p: inout LoftLineProject) -> [VariableLink] {
         var failed: [VariableLink] = []
-        for _ in 0...p.document.linkedValues.count {
+        for _ in 0..<min(p.document.linkedValues.count + 1, maxPasses) {
             failed = []
             var changed = false
             for l in p.document.linkedValues {

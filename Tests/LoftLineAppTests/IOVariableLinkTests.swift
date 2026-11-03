@@ -156,4 +156,23 @@ import Testing
         #expect(abs(d.document.job.thickness - 1.0) < 1e-12)
         #expect(abs(Self.cutDepth(d, id) - 0.9) < 1e-12)
     }
+
+    @Test func conflictingLinksToOneFieldKeepTheLast() {
+        // A crafted (or damaged) file with several links to one field that disagree: each pass would flip the field,
+        // so evaluation never settles. One link per field is kept, the last, and evaluation is bounded.
+        let (d, id) = Self.setup()
+        var leaves: [[String]: Double] = [:]
+        if let tree = VariableLinks.tree(of: .operation(id), in: d.project) { VariableLinks.leaves(tree, prefix: [], into: &leaves) }
+        guard let path = leaves.keys.first(where: { Array($0.suffix(2)) == ["depth", "cutDepth"] }) else {
+            Issue.record("no cut depth leaf"); return
+        }
+        d.perform("Links") {
+            $0.document.linkedValues = (0..<200).map { i in
+                VariableLink(target: .operation(id), path: path, expression: i % 2 == 0 ? "=0.1" : "=0.2")
+            }
+        }
+        #expect(d.document.linkedValues.count == 1)
+        #expect(d.document.linkedValues.first?.expression == "=0.2")
+        #expect(abs(Self.cutDepth(d, id) - 0.2) < 1e-12)
+    }
 }
