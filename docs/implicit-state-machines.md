@@ -18,11 +18,11 @@ entry where the choice is not obvious.
     stops being key. A single `CanvasSession` type is still the full fix.
   - #17: every document window now refreshes its stored times when the settings change. This is view wiring, so it
     has no unit test.
-- **Left for a decision:** #3, #5, #7, #8, #10, #13, #14, #16 and #18 each need a model or behaviour choice.
-  #20 needs one owner for "show vectors" (model or host). #26 needs a window-attach design.
-- **Left as is:**
-  - #23 is reachable only from tests and the harness.
-  - #28 has no live bug; making the check mandatory means changing `GCodeExporter.export` for six callers.
+- **Decided 2026-11-03, planned:** #3, #5, #7, #8 and #28 in `docs/superpowers/plans/2026-11-03-implicit-state-gcode.md`;
+  #10, #13, #14, #16, #18, #20 and #26 in `docs/superpowers/plans/2026-11-03-implicit-state-app.md`.
+- **Left as is:** #23 is reachable only from tests and the harness.
+- **Deferred within decided items:** #13's nest-sheet offset after a width change (the mixed-sheets warning covers it)
+  and #14's app-wide gadget panel blocking other windows.
 - **Not checked in the running app:** #15 (typing in the post editor) and #11 (the Space reset).
 
 ## What counts
