@@ -1071,6 +1071,19 @@ final class LoftLineDocument: ReferenceFileDocument {
     /// Swaps the open sheet on purpose (a sheet's own button that opens another, such as Save All's Check Toolpaths).
     func replaceSheet(_ s: DocumentSheet) { presentedSheet = s }
 
+    /// A window attaches to this document in one step: its undo manager and file URL, then crash recovery, which may
+    /// write a copy from the next tick on. Three separate `onAppear`s left room for an edit before the undo manager
+    /// was set (not undoable) or a recovery copy before the URL was known.
+    @MainActor
+    func attachWindow(undoManager: UndoManager?, fileURL: URL?, recovery: RecoveryCoordinator = .shared) {
+        self.undoManager = undoManager
+        self.fileURL = fileURL
+        recovery.register(self)
+        #if DEBUG
+        UIHarness.shared.noteDocument(self)
+        #endif
+    }
+
     /// The held report, unless something is showing by now (a sheet, or an alert reported meanwhile): then it stays
     /// held for the next dismissal.
     private func showDeferredAlert() {

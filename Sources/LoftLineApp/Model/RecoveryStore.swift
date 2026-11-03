@@ -118,6 +118,8 @@ final class RecoveryCoordinator {
 
     func register(_ doc: LoftLineDocument) { docs[doc.recoveryID] = WeakDoc(doc: doc) }
 
+    func isRegistered(_ doc: LoftLineDocument) -> Bool { docs[doc.recoveryID]?.doc === doc }
+
     /// Window closed normally: its copy is no longer needed.
     func unregister(_ doc: LoftLineDocument) {
         docs[doc.recoveryID] = nil

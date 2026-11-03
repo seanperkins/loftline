@@ -35,17 +35,12 @@ struct ContentView: View {
         .navigationTitle(document.document.name)
         .focusedSceneObject(document)
         .onAppear {
-            document.undoManager = undoManager
-            RecoveryCoordinator.shared.register(document)
-            #if DEBUG
-            UIHarness.shared.noteDocument(document)
-            #endif
+            document.attachWindow(undoManager: undoManager, fileURL: documentConfiguration?.fileURL)
+            document.showJobNotesOnOpenIfNeeded()
         }
         .onDisappear { RecoveryCoordinator.shared.unregister(document) }
         .onChange(of: undoManager) { _, um in document.undoManager = um }
         .onChange(of: timeStore.settings) { _, _ in document.refreshTimeEstimates() }
-        .onAppear { document.fileURL = documentConfiguration?.fileURL }
-        .onAppear { document.showJobNotesOnOpenIfNeeded() }
         .onChange(of: documentConfiguration?.fileURL) { _, url in
             document.fileURL = url
             document.scheduleFileThumbnail()
