@@ -43,19 +43,6 @@ extension LoftLineProject {
         }
     }
 
-    /// Copies shapes (offset by `offset`) and returns the new IDs.
-    mutating func duplicateShapes(_ ids: Set<UUID>, offset: Vec2) -> [UUID] {
-        var newIDs: [UUID] = []
-        for s in document.shapes where ids.contains(s.id) {
-            var c = s.transformed(.translation(offset))
-            c.id = UUID()
-            c.name = s.name.isEmpty ? "" : s.name + " copy"
-            document.add(c)
-            newIDs.append(c.id)
-        }
-        return newIDs
-    }
-
     mutating func moveShapes(_ ids: Set<UUID>, toLayer layerID: UUID) {
         for i in document.shapes.indices where ids.contains(document.shapes[i].id) && isEditable(document.shapes[i]) {
             document.shapes[i].layerID = layerID
