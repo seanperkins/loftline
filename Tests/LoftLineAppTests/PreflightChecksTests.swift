@@ -44,6 +44,26 @@ import Testing
         #expect(PreflightChecks.looseParts([profile(p, depth: 0.7499, tabs: false)], document: p.document).count == 1)
     }
 
+    @Test func manualTabsWithNoTabOnAVectorLeaveItLoose() {
+        // Manual placement with every tab cleared cuts no tabs at all (Ops2DManualTabTests), and a
+        // vector added after the tabs were placed has none of its own: both come loose.
+        let p = project()
+        func manual(_ anchors: [TabAnchor]) -> AnyOperation {
+            guard case .profile(var op) = profile(p, depth: 0.75, tabs: true) else { fatalError() }
+            op.params.tabs.manualTabs = anchors
+            return .profile(op)
+        }
+        let none = PreflightChecks.looseParts([manual([])], document: p.document)
+        #expect(none.map(\.message) == [
+            "Cut cuts 2 closed vectors through the full 0.75 in with no tabs placed on them: the part comes loose while the cutter is still in it. Place a tab on each, or make sure the part is held another way.",
+        ])
+        let first = p.document.shapes[0].id
+        let one = PreflightChecks.looseParts([manual([TabAnchor(shapeID: first, fraction: 0.5)])], document: p.document)
+        #expect(one.first?.message.hasPrefix("Cut cuts 1 closed vector through the full 0.75 in with no tabs placed") == true)
+        let both = p.document.shapes.map { TabAnchor(shapeID: $0.id, fraction: 0.5) }
+        #expect(PreflightChecks.looseParts([manual(both)], document: p.document).isEmpty)
+    }
+
     @Test func aLoosePartInsideAMergedOperationIsStillReported() throws {
         // Merge with Next turns two profiles into one operation; the through cut inside it is unchanged.
         let p = project()
