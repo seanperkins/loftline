@@ -315,7 +315,9 @@ private struct PlainTextView: NSViewRepresentable {
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
-        guard let view = scroll.documentView as? NSTextView, view.string != text else { return }
+        // The draft keeps trimmed lines; text that still reads as the same template is the user's typing in progress.
+        guard let view = scroll.documentView as? NSTextView,
+              !PostEditorModel.showsSameTemplate(view.string, as: text) else { return }
         view.string = text
     }
 

@@ -151,6 +151,11 @@ final class PostEditorModel: ObservableObject {
             .filter { !$0.isEmpty }
     }
 
+    /// True when a text area's text reads as the same template as `stored` (the joined lines the draft keeps). The
+    /// area keeps such text as typed: writing the stored form back over it would eat a trailing space mid-word ("G0 "
+    /// on the way to "G0 Z5") or a Return at the end of a line.
+    static func showsSameTemplate(_ text: String, as stored: String) -> Bool { lines(text) == lines(stored) }
+
     func setLines(_ keyPath: WritableKeyPath<PostProfile, [String]>, _ text: String) {
         draft?[keyPath: keyPath] = Self.lines(text)
     }
