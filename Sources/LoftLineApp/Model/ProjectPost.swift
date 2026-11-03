@@ -183,6 +183,14 @@ enum ProjectPost {
                 "This project posts with its own copy of the post \"\(r.post.name)\", which is not installed on this Mac. "
                 + "Check the program's setup, tool-change and ending lines before running it."))
         }
+        // A chosen machine that is neither installed nor carried: a machine listing the post stands in for it, which
+        // must be said, not shown as if it were the project's own.
+        if let id = p.machineID, !machines.contains(where: { $0.id == id }), machineCopy(of: p) == nil {
+            let instead = r.machine.map { "\"\($0.name)\" is used instead" } ?? "the post's own limits are used instead"
+            out.append(GCodeIssue(severity: .warning, message:
+                "The project's machine \"\(id)\" is not installed and the file has no copy of it; \(instead). "
+                + "Pick your machine in Job Setup."))
+        }
         if r.machineSource == .projectCopy, !r.machineInstalledHere, let m = r.machine {
             out.append(GCodeIssue(severity: .warning, message:
                 "This project's machine \"\(m.name)\" (bed \(bed(m))) is not installed on this Mac, so its bed and travel limits come from the file, "
