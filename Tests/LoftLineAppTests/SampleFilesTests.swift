@@ -47,7 +47,7 @@ struct SampleFilesTests {
         return try SVGExporter().export(shapes: [outline, panel, text] + holes, layers: layers, units: .inch)
     }
 
-    /// The project as a saved file holds it (format 2): the tools its operations use, and its post and machine as copies.
+    /// The project as a saved file holds it (current format): the tools its operations use, and its post and machine as copies.
     static func withCopies(_ project: LoftLineProject, library: ToolLibrary) -> LoftLineProject {
         ToolSync.carrying(ProjectPost.attaching(project, profiles: BuiltInPosts.all, machines: BuiltInMachines.all), library: library)
     }
@@ -320,13 +320,13 @@ struct SampleFilesTests {
         return out
     }
 
-    /// Every sample is a format 2 file that carries its own post, machine and tools (so it posts the same on any Mac),
+    /// Every sample is a file in the current format that carries its own post, machine and tools (so it posts the same on any Mac),
     /// and carries the tools exactly as the seeded library has them, so adding the copies moved no G-code.
     @Test("Checked-in samples carry their post, machine and tools")
     func samplesCarryTheirCopies() throws {
         for name in ["sign.loftline", "faced-board.loftline"] {
             let data = try Data(contentsOf: Self.samplesDir.appendingPathComponent(name))
-            #expect(try LoftLineFile.formatVersion(of: data) == 2, "\(name)")
+            #expect(try LoftLineFile.formatVersion(of: data) == LoftLineFile.currentVersion, "\(name)")
             let project = try LoftLineProject.opening(from: data)
             let post = try #require(project.postSnapshot.flatMap { try? PostProfile(snapshot: $0) }, "\(name): post copy")
             #expect(post == BuiltInPosts.avidMach4Inch && project.postProfileID == post.id)

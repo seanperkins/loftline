@@ -17,35 +17,35 @@
     "layers" : [
       {
         "colorHex" : "#000000",
-        "id" : "73CFE1F4-1D63-4C97-A479-ACC71D116A04",
+        "id" : "B10D7970-C0AA-40F8-BE7C-F0114347B48C",
         "isLocked" : false,
         "isVisible" : true,
         "name" : "Layer 1"
       },
       {
         "colorHex" : "#E5484D",
-        "id" : "5B9CF371-B6E5-466B-BA9F-5EE728A892B4",
+        "id" : "BC64A217-528E-4190-82FF-8574861249EB",
         "isLocked" : false,
         "isVisible" : true,
         "name" : "Outline"
       },
       {
         "colorHex" : "#30A46C",
-        "id" : "860AECAD-6F0B-414D-8F03-DF6E054DC9F8",
+        "id" : "B885D696-8049-4582-A230-F2544E387741",
         "isLocked" : false,
         "isVisible" : true,
         "name" : "Pocket"
       },
       {
         "colorHex" : "#F76B15",
-        "id" : "332BDDDE-5389-4EA9-A28C-8DB704F24952",
+        "id" : "C47A4DC9-6299-4B8A-8687-A8500BA1409D",
         "isLocked" : false,
         "isVisible" : true,
         "name" : "Text"
       },
       {
         "colorHex" : "#8E4EC6",
-        "id" : "B0F5479E-92C8-4D42-B903-088DCF832FAD",
+        "id" : "D00D0310-249E-4BBF-AFD5-BA2365DBAD8E",
         "isLocked" : false,
         "isVisible" : true,
         "name" : "Drill"
@@ -57,9 +57,9 @@
     "name" : "Untitled",
     "shapes" : [
       {
-        "id" : "B371AE2F-7347-42D2-910E-8CFC53022745",
+        "id" : "D75A08BE-6D98-4D8C-93D9-1332ACCE565D",
         "isLocked" : false,
-        "layerID" : "5B9CF371-B6E5-466B-BA9F-5EE728A892B4",
+        "layerID" : "BC64A217-528E-4190-82FF-8574861249EB",
         "name" : "Outline",
         "origin" : {
           "imported" : {
@@ -163,9 +163,9 @@
         ]
       },
       {
-        "id" : "2806DC9F-85F2-40C4-95E5-3E4B896BA59D",
+        "id" : "91135125-F32E-4F12-A1A7-67B943492426",
         "isLocked" : false,
-        "layerID" : "860AECAD-6F0B-414D-8F03-DF6E054DC9F8",
+        "layerID" : "B885D696-8049-4582-A230-F2544E387741",
         "name" : "Panel",
         "origin" : {
           "imported" : {
@@ -269,9 +269,9 @@
         ]
       },
       {
-        "id" : "627ECF1D-03F0-4C79-8C0C-8D09B6BA766E",
+        "id" : "F450BD94-8E9A-4D7C-A8CA-7E5D06B8A67B",
         "isLocked" : false,
-        "layerID" : "332BDDDE-5389-4EA9-A28C-8DB704F24952",
+        "layerID" : "C47A4DC9-6299-4B8A-8687-A8500BA1409D",
         "name" : "LOFTLINE",
         "origin" : {
           "imported" : {
@@ -1011,9 +1011,9 @@
         ]
       },
       {
-        "id" : "5B2E8C6D-63D8-4EB0-BF11-A17BE821E57F",
+        "id" : "F78EF973-2AFA-4BD4-A369-F7F6BE580AAF",
         "isLocked" : false,
-        "layerID" : "B0F5479E-92C8-4D42-B903-088DCF832FAD",
+        "layerID" : "D00D0310-249E-4BBF-AFD5-BA2365DBAD8E",
         "name" : "Hole",
         "origin" : {
           "imported" : {
@@ -1059,9 +1059,9 @@
         ]
       },
       {
-        "id" : "724B7CAC-B412-481C-90B5-82F9B76876CA",
+        "id" : "57630F91-5B5C-4AE6-BB38-D0156446449A",
         "isLocked" : false,
-        "layerID" : "B0F5479E-92C8-4D42-B903-088DCF832FAD",
+        "layerID" : "D00D0310-249E-4BBF-AFD5-BA2365DBAD8E",
         "name" : "Hole",
         "origin" : {
           "imported" : {
@@ -1107,9 +1107,9 @@
         ]
       },
       {
-        "id" : "CDA5FDD8-5BDF-4A19-BCDF-C81CE25899C8",
+        "id" : "5132FE21-90D6-49F4-8325-DA6C2CCF56F2",
         "isLocked" : false,
-        "layerID" : "B0F5479E-92C8-4D42-B903-088DCF832FAD",
+        "layerID" : "D00D0310-249E-4BBF-AFD5-BA2365DBAD8E",
         "name" : "Hole",
         "origin" : {
           "imported" : {
@@ -1155,9 +1155,9 @@
         ]
       },
       {
-        "id" : "1E27258D-C4BC-4269-9F3D-A4219036FAFF",
+        "id" : "24B3E4ED-B8C3-4F4A-8464-963E9238FBB2",
         "isLocked" : false,
-        "layerID" : "B0F5479E-92C8-4D42-B903-088DCF832FAD",
+        "layerID" : "D00D0310-249E-4BBF-AFD5-BA2365DBAD8E",
         "name" : "Hole",
         "origin" : {
           "imported" : {
@@ -1203,9 +1203,9 @@
         ]
       },
       {
-        "id" : "70D733CD-8A98-473D-912B-87FDCEE7A9C4",
+        "id" : "0BEBB1B7-A634-4A04-996C-B454E8479353",
         "isLocked" : false,
-        "layerID" : "B0F5479E-92C8-4D42-B903-088DCF832FAD",
+        "layerID" : "D00D0310-249E-4BBF-AFD5-BA2365DBAD8E",
         "name" : "Hole",
         "origin" : {
           "imported" : {
@@ -1253,7 +1253,7 @@
     ],
     "units" : "inch"
   },
-  "formatVersion" : 2,
+  "formatVersion" : 3,
   "machineInferredFor" : "avid-pro6096-mach4-inch",
   "machineSnapshot" : {
     "id" : "avid-pro6096",
@@ -1301,11 +1301,11 @@
             }
           },
           "setup" : {
-            "id" : "3D62AF93-DDC7-4AE6-8912-99EE95555110",
+            "id" : "74B72E2C-7385-468A-8857-707D07AED49F",
             "isEnabled" : true,
             "name" : "Pocket 1",
             "shapeIDs" : [
-              "2806DC9F-85F2-40C4-95E5-3E4B896BA59D"
+              "91135125-F32E-4F12-A1A7-67B943492426"
             ],
             "toolID" : "00000000-0000-4000-8000-000000000001"
           }
@@ -1331,11 +1331,11 @@
             "useVectorStartPoints" : false
           },
           "setup" : {
-            "id" : "CCE89729-7096-410E-A84C-D4CC6B6DB37A",
+            "id" : "832AE793-26F9-43B1-8AC3-B109786E5187",
             "isEnabled" : true,
             "name" : "V-Carve 1",
             "shapeIDs" : [
-              "627ECF1D-03F0-4C79-8C0C-8D09B6BA766E"
+              "F450BD94-8E9A-4D7C-A8CA-7E5D06B8A67B"
             ],
             "toolID" : "00000000-0000-4000-8000-000000000006"
           }
@@ -1353,15 +1353,15 @@
             "startDepth" : 0
           },
           "setup" : {
-            "id" : "CAA53A85-8DA8-414E-89E3-A7FEEF25435C",
+            "id" : "AB87B330-3014-41FC-BAE2-0B2B354F0F66",
             "isEnabled" : true,
             "name" : "Drilling 1",
             "shapeIDs" : [
-              "5B2E8C6D-63D8-4EB0-BF11-A17BE821E57F",
-              "724B7CAC-B412-481C-90B5-82F9B76876CA",
-              "CDA5FDD8-5BDF-4A19-BCDF-C81CE25899C8",
-              "1E27258D-C4BC-4269-9F3D-A4219036FAFF",
-              "70D733CD-8A98-473D-912B-87FDCEE7A9C4"
+              "F78EF973-2AFA-4BD4-A369-F7F6BE580AAF",
+              "57630F91-5B5C-4AE6-BB38-D0156446449A",
+              "5132FE21-90D6-49F4-8325-DA6C2CCF56F2",
+              "24B3E4ED-B8C3-4F4A-8464-963E9238FBB2",
+              "0BEBB1B7-A634-4A04-996C-B454E8479353"
             ],
             "toolID" : "00000000-0000-4000-8000-000000000009"
           }
@@ -1376,7 +1376,7 @@
             "depth" : {
               "cutDepth" : 0.77000000000000002,
               "finalPassDepth" : 0,
-              "followsThickness" : true,
+              "overcut" : 0.02,
               "startDepth" : 0
             },
             "direction" : "climb",
@@ -1402,11 +1402,11 @@
             }
           },
           "setup" : {
-            "id" : "09C0546F-0CA7-45C2-B30F-E940E9C82F8C",
+            "id" : "F868241C-02E3-4E41-90D3-CDEF4C0A2645",
             "isEnabled" : true,
             "name" : "Profile 1",
             "shapeIDs" : [
-              "B371AE2F-7347-42D2-910E-8CFC53022745"
+              "D75A08BE-6D98-4D8C-93D9-1332ACCE565D"
             ],
             "toolID" : "00000000-0000-4000-8000-000000000001"
           }
