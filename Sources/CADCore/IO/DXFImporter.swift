@@ -27,11 +27,15 @@ public struct DXFImporter: VectorImporter {
         var pathsByLayer: [String: [Path]] = [:]
         var skipped: [String: Int] = [:]
 
+        // Block references expand at most this many entities in all: the depth cap alone still lets a block that
+        // inserts itself k times expand k^16.
+        var expansionBudget = Self.maxExpandedEntities
         func collect(_ entities: [DXFEntity], _ t: Transform2D, inheritedLayer: String?, depth: Int) {
             for e in entities {
                 let layer = (e.layer == "0" ? inheritedLayer : nil) ?? e.layer
+                if depth > 0 { expansionBudget -= 1 }
                 if e.type == "INSERT" {
-                    guard depth < 16, let name = e.string(2), let block = file.blocks[name] else {
+                    guard depth < 16, expansionBudget > 0, let name = e.string(2), let block = file.blocks[name] else {
                         skipped["INSERT", default: 0] += 1; continue
                     }
                     let sx = e.double(41) ?? 1, sy = e.double(42) ?? 1
@@ -55,6 +59,9 @@ public struct DXFImporter: VectorImporter {
             }
         }
         collect(file.entities, toDoc, inheritedLayer: nil, depth: 0)
+        if expansionBudget <= 0 {
+            warnings.append("Block references expand to more than \(Self.maxExpandedEntities) entities; the rest were not imported.")
+        }
 
         for (type, n) in skipped.sorted(by: { $0.key < $1.key }) {
             warnings.append("Skipped \(n) unsupported \(type) entit\(n == 1 ? "y" : "ies").")
@@ -83,6 +90,8 @@ public struct DXFImporter: VectorImporter {
     /// Open ends further apart than the join tolerance but within this many times it are reported:
     /// that is a slip in the drawing, where a lone open line (engraving, a V-carve centerline) is not.
     public static let nearMissFactor = 100.0
+    /// The most entities block references (INSERT) may expand to in one file; past it, further INSERTs are skipped.
+    public static let maxExpandedEntities = 100_000
 
     /// "Layer "Cabinet": 2 open vectors have ends that nearly meet, 0.1 to 0.4 mm apart. ..."
     static func gapWarning(layer: String, gaps: PathOps.EndGapReport, joinTolerance: Double, units: LengthUnit) -> String {
