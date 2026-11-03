@@ -523,3 +523,20 @@ func toolpathCheckRejectsARapidPastTheHoleBottom(mode: ZZeroMode) {
         #expect(!has(validate(program("G0 X1 Y1\nG1 G28")), "G28/G30 and a motion code on one block"))
     }
 }
+
+@Test func toolpathValidationRefusesInlayPartsAndReliefSidesWhateverTheirKind() {
+    // A merge turns an inlay or relief piece's kind into .merge; the marker, not the kind, says which
+    // part or side it cuts, so a merged pocket and plug (or top and bottom) in one program are refused.
+    let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: PostFixtures.job(), units: .inch)
+    func tp(_ kind: OperationKind, _ key: String, _ value: String) -> Toolpath {
+        var t = PostFixtures.toolpaths()[0]
+        t.id = UUID(); t.kind = kind; t.metadata[key] = value
+        return t
+    }
+    let parts = v.validate(toolpaths: [tp(.merge, "part", "female"), tp(.merge, "part", "male")])
+    #expect(parts.contains { $0.message.contains("pocket (female) and plug (male)") })
+    let sides = v.validate(toolpaths: [tp(.merge, "side", "top"), tp(.relief3D, "side", "bottom")])
+    #expect(sides.contains { $0.message.contains("top and bottom sides are in the same program") })
+    #expect(!v.validate(toolpaths: [tp(.merge, "part", "male"), tp(.inlay, "part", "male")])
+        .contains { $0.message.contains("pocket (female) and plug (male)") })
+}

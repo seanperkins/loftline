@@ -99,13 +99,14 @@ public struct GCodeValidator: Sendable {
             }
         }
         check.finish()
-        let parts = Set(toolpaths.filter { $0.kind == .inlay }.compactMap { $0.metadata["part"] })
+        // The markers, not the kind: a merge turns an inlay or relief piece's kind into .merge but keeps its marker.
+        let parts = Set(toolpaths.compactMap { $0.metadata["part"] })
         if parts.contains("female") && parts.contains("male") {
             check.issues.add("inlay-mixed-parts", .error, line: nil,
                              "Inlay pocket (female) and plug (male) are in the same program. The plug is cut in place "
                                  + "over the pocket, so cut each part on its own board and export them separately.")
         }
-        let reliefSides = Set(toolpaths.filter { $0.kind == .relief3D }.compactMap { $0.metadata["side"] })
+        let reliefSides = Set(toolpaths.compactMap { $0.metadata["side"] })
         if reliefSides.count > 1 {
             check.issues.add("relief-mixed-sides", .error, line: nil,
                              "Two-sided 3D relief: the top and bottom sides are in the same program. The bottom side "

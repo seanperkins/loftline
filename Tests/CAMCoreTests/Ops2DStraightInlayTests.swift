@@ -45,3 +45,32 @@ func ops2DStraightInlayPocketAndPlugFit(mode: ZZeroMode) throws {
         #expect(abs(Polygon2D.distance(from: p.xy, toLoop: m[0]) - (0.125 - 0.005)) < 0.003)
     }
 }
+
+@Test func ops2DStraightInlayMergeKeepsEachPartsMarker() throws {
+    // A merge must not erase which part a cut belongs to: the validator refuses pocket and plug in
+    // one program by reading this marker, so pocket and plug stay separate toolpaths, each marked.
+    let (ctx, ids) = F.document([lShape], zZero: .materialTop)
+    let params = StraightInlayParameters(part: .both, pocketDepth: 0.125, plugDepth: 0.1875, clearance: 0.005)
+    let inlay = AnyOperation.straightInlay(StraightInlayOperation(
+        setup: OperationSetup(name: "In", toolID: F.endMill.id, shapeIDs: ids), params: params))
+    let merged = try AnyOperation.merge(MergeOperation(setup: OperationSetup(name: "M", toolID: F.endMill.id),
+                                                       params: MergeParameters(children: [inlay]))).generate(in: ctx)
+    #expect(merged.map { $0.metadata["part"] } == ["female", "male"])
+}
+
+@Test func ops2DStraightInlayMergeJoinsAnUnmarkedCutIntoTheMarkedOne() throws {
+    // A same-tool cut with no marker still joins the pocket, as before markers were kept, and the joined toolpath
+    // keeps the pocket's marker.
+    let (ctx, ids) = F.document([lShape, F.rect(5, 0, 1, 1)], zZero: .materialTop)
+    let pocket = AnyOperation.straightInlay(StraightInlayOperation(
+        setup: OperationSetup(name: "In", toolID: F.endMill.id, shapeIDs: [ids[0]]),
+        params: StraightInlayParameters(part: .female, pocketDepth: 0.125, plugDepth: 0.1875, clearance: 0.005)))
+    let cut = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "Cut", toolID: F.endMill.id, shapeIDs: [ids[1]]),
+                                                    params: ProfileParameters(depth: DepthSettings(cutDepth: 0.1))))
+    let alone = try pocket.generate(in: ctx) + cut.generate(in: ctx)
+    try #require(alone.count == 2 && alone.allSatisfy { ($0.clearedDepth ?? 0) == 0 })
+    let merged = try AnyOperation.merge(MergeOperation(setup: OperationSetup(name: "M", toolID: F.endMill.id),
+                                                       params: MergeParameters(children: [pocket, cut]))).generate(in: ctx)
+    #expect(merged.count == 1)
+    #expect(merged.first?.metadata["part"] == "female")
+}
