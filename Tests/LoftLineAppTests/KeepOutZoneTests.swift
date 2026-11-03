@@ -235,3 +235,52 @@ func aFootersFeedMoveIsCheckedAndNotRouted(mode: ZZeroMode) throws {
         #expect(!r.issues.contains { $0.message.contains("not checked from the footer") }, "\(r.issues)")
     }
 }
+
+/// A program whose first toolpath starts over a lift-over clamp: the written G-code never has the tool over the clamp
+/// (grown by the tool radius) below its top. The router used to keep the opening move as it was, so after the post
+/// arrived above the clamp the tool came down into it and lifted straight up there (`docs/implicit-state-machines.md` #6).
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func aProgramThatStartsOverALiftOverClampStaysAboveIt(mode: ZZeroMode) throws {
+    var project = AppTestSupport.project() // 2x1 rectangles at (1,1) and (5,1)
+    project.document.job.zZero = mode
+    let tool = ToolLibrary.seeded.tools[0]
+    let op = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "A", toolID: tool.id,
+                                                                         shapeIDs: [project.document.shapes[0].id])))
+    let coords = MachineCoordinates(job: project.document.job)
+    // A 0.4 in clamp centred on where the profile starts (and, closed, ends): 0.5 in tall, above safe Z (0.2) and below
+    // Home Z (0.8), so the footer's move home is not part of this.
+    let bare = try op.generate(in: CAMContext(document: project.document, tools: .seeded))
+    let start = coords.materialXY(fromMachine: try #require(bare.first?.moves.first(where: { $0.target != nil })?.target).xy)
+    let outline = [Vec2(-0.2, -0.2), Vec2(0.2, -0.2), Vec2(0.2, 0.2), Vec2(-0.2, 0.2)].map { $0 + start }
+    project.document.keepOutZones = [KeepOutZone(name: "Clamp", outline: outline, height: 0.5, liftOver: true)]
+    let tps = try op.generate(in: CAMContext(document: project.document, tools: .seeded))
+    let result = GCodeExporter.export(project: project, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+    #expect(!result.issues.contains { $0.message.contains("keep-out") }, "\(result.issues)")
+    let text = try #require(result.text)
+
+    // Every position the program moves through (end points, and straight moves sampled), in machine coordinates.
+    let grown = GeomKernel.offset([outline.map { coords.machineXY($0) }], by: tool.radius, join: .round, arcTolerance: 0.0005)
+    let top = coords.z(aboveTop: 0.5)
+    var pos: Vec3?
+    var low: [String] = []
+    for line in text.split(separator: "\n").map(String.init) where !line.hasPrefix("(") {
+        func word(_ c: Character) -> Double? {
+            guard let r = line.range(of: "\(c)-?[0-9.]+", options: .regularExpression) else { return nil }
+            return Double(line[r].dropFirst())
+        }
+        let (x, y, z) = (word("X"), word("Y"), word("Z"))
+        guard x != nil || y != nil || z != nil, !line.contains("G53"), !line.contains("G28") else { continue }
+        guard let from = pos else {
+            if let x, let y, let z { pos = Vec3(x, y, z) } else if let z { pos = Vec3(0, 0, z) }
+            continue
+        }
+        let to = Vec3(x ?? from.x, y ?? from.y, z ?? from.z)
+        for i in 0...20 {
+            let t = Double(i) / 20
+            let p = Vec3(from.xy.lerp(to: to.xy, t), z: from.z + (to.z - from.z) * t)
+            if p.z < top - 1e-6, Polygon2D.regionContains(grown, p.xy) { low.append(line); break }
+        }
+        pos = to
+    }
+    #expect(low.isEmpty, "\(low)")
+}
