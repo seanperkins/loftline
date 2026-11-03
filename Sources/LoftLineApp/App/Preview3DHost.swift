@@ -10,7 +10,6 @@ struct Preview3DHost: View {
     @ObservedObject var document: LoftLineDocument
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @AppStorage(PreviewScope.storageKey) private var scope = PreviewScope.all
-    @ObservedObject private var timeStore = TimeEstimateStore.shared
     @AppStorage(SimulationPreviewModel.showVectorsKey) private var showVectors = false
 
     /// Visible design vectors on the shown side / sheet, flattened (only when drawn in 3D).
@@ -67,6 +66,5 @@ struct Preview3DHost: View {
             vectors: vectors, selectedVectors: selectedVectors,
             onDrawShape: { addDrawnShape($0, closed: $1) },
             onSelectAt: { select(at: $0, tolerance: $1) })
-        .onChange(of: timeStore.settings) { _, _ in document.refreshTimeEstimates() }
     }
 }
