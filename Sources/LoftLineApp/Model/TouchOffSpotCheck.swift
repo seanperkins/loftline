@@ -98,11 +98,19 @@ extension GCodeExporter {
 
     /// What to calculate before posting: the exported operations, and with probing every operation of the posted sheet.
     /// The missing-from-the-program errors still judge only `exported`.
+    /// A rest pass's source is calculated too: the export judges the rest pass by the source's result (`RestDependency`),
+    /// even when the source is not in this program.
     static func calculationTargets(project: LoftLineProject, exported: [UUID], scope: GCodeExportScope,
                                    profile: PostProfile) -> [UUID] {
-        guard case .on? = profile.toolChangeProbe else { return exported }
+        var targets = exported
+        for op in LoftLineDocument.flattened(project.operations) where exported.contains(op.id) {
+            if case .relief3D(let r) = op, case .operation(let id)? = r.params.finishing.rest, !targets.contains(id) {
+                targets.append(id)
+            }
+        }
+        guard case .on? = profile.toolChangeProbe else { return targets }
         let sheet = sheetOperations(project: project, sheetID: postedSheetID(project: project, scope: scope)).map(\.id)
-        return exported + sheet.filter { !exported.contains($0) }
+        return targets + sheet.filter { !targets.contains($0) }
     }
 
     /// Why a probed export cannot check its touch-off spot, or nil.

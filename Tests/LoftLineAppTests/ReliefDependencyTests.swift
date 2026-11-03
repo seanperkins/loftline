@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import Foundation
+import PostCore
 import Testing
 @testable import LoftLineApp
 
@@ -204,5 +205,16 @@ private let eighth = ToolLibrary.seeded.tools[4]    // 1/8" ball nose
             p.operations[0] = .relief3D(s)
         }
         #expect(doc.isStale(rest.setup.id))
+    }
+
+    @Test func exportingARestPassAloneCalculatesItsSource() {
+        // A rest pass exported on its own (the export sheet's single toolpath, the CLI's --toolpath) needs its source's
+        // result to be judged, so the source is calculated with it; it is still not part of the program.
+        let (p, source, rest) = project()
+        let targets = GCodeExporter.calculationTargets(project: p, exported: [rest.setup.id], scope: .operation(rest.setup.id),
+                                                       profile: BuiltInPosts.avidMach4Inch)
+        #expect(targets == [rest.setup.id, source.setup.id])
+        #expect(GCodeExporter.calculationTargets(project: p, exported: [source.setup.id], scope: .operation(source.setup.id),
+                                                 profile: BuiltInPosts.avidMach4Inch) == [source.setup.id])
     }
 }
