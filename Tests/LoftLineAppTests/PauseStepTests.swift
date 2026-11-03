@@ -86,6 +86,28 @@ import Testing
         #expect(!html.contains("Never written"))
     }
 
+    @Test func jobSheetListsExactlyTheProgramsStops() throws {
+        // The operation after the pause cut nothing (its one toolpath is empty): the program writes no stop, so neither
+        // the job sheet nor the summary may list one.
+        let (doc, _, ids) = makeDoc()
+        setPause(doc, ids[0], PauseStep(message: "Flip"))
+        var results = doc.results
+        var second = try #require(results[ids[1]])
+        second.toolpaths = second.toolpaths.map { var t = $0; t.moves = []; return t }
+        results[ids[1]] = second
+        let sheet = JobSheet.make(project: doc.project, results: results, profile: BuiltInPosts.avidMach4Inch,
+                                  groupByTool: false, rapidRate: 600, settings: TimeEstimateSettings())
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: results, groupByTool: false)
+        let text = try #require(GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch,
+                                                     jobName: "T").text)
+        let m0 = text.split(separator: "\n").filter { $0 == "M0" }.count
+        #expect(m0 == 0)
+        #expect(sheet.pauses == m0)
+        let summary = JobSummary.make(operations: doc.project.operations, results: results, groupByTool: false,
+                                      settings: TimeEstimateSettings(), rapidRate: 600, units: doc.units)
+        #expect(summary.pauses.isEmpty)
+    }
+
     @Test func theJobSheetMarksAnOptionalStop() {
         let (doc, _, ids) = makeDoc()
         setPause(doc, ids[0], PauseStep(isOptionalStop: true))

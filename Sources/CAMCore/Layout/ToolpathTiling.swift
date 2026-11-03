@@ -103,8 +103,16 @@ public enum ToolpathTiling {
             tj.datumOffset = nil
             tj.home = .zero
             let tc = MachineCoordinates(job: tj)
-            let clipped = toolpaths.compactMap {
-                clip($0, to: cell.clip, offset: cell.region.min, source: source, target: tc, units: units)
+            var clipped: [Toolpath] = []
+            for tp in toolpaths {
+                if let c = clip(tp, to: cell.clip, offset: cell.region.min, source: source, target: tc, units: units) {
+                    clipped.append(c)
+                } else if let pause = tp.pauseAfter, let op = tp.operationID,
+                          let k = clipped.lastIndex(where: { $0.operationID == op }) {
+                    // The pause rides on its operation's last toolpath; when this tile cuts none of that one, it goes
+                    // after the operation's last toolpath the tile does cut.
+                    clipped[k].pauseAfter = pause
+                }
             }
             return ToolpathTile(number: i + 1, column: cell.column, row: cell.row, region: cell.region, job: tj,
                                 toolpaths: clipped)

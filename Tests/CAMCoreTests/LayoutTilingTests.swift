@@ -59,6 +59,20 @@ import Testing
         #expect(tiles[1].toolpaths[0].moves.contains { if case .linear(_, let f) = $0 { return f == plunge } else { return false } })
     }
 
+    @Test func aTileKeepsTheStopWhenItsCarrierIsClippedAway() {
+        // Operation X cuts in both tiles; its pause rides on its last toolpath, which is only in the right tile. The left
+        // tile still cuts X, so the stop goes after X's last toolpath that survives there.
+        let x = UUID()
+        var first = line(Vec2(5, 5), Vec2(20, 5)); first.operationID = x
+        var carrier = line(Vec2(80, 5), Vec2(90, 5)); carrier.operationID = x
+        carrier.pauseAfter = PauseStep(message: "Flip")
+        let next = line(Vec2(10, 20), Vec2(30, 20))
+        let tiles = ToolpathTiling.tile([first, carrier, next], job: job, units: .inch,
+                                        settings: TilingSettings(tileWidth: 60, tileHeight: 96))
+        #expect(tiles[0].toolpaths.map(\.pauseAfter) == [PauseStep(message: "Flip"), nil])
+        #expect(tiles[1].toolpaths.map(\.pauseAfter) == [PauseStep(message: "Flip")])
+    }
+
     @Test func toolpathsOutsideATileAreLeftOut() {
         let tiles = ToolpathTiling.tile([line(Vec2(5, 5), Vec2(20, 5))], job: job, units: .inch,
                                         settings: TilingSettings(tileWidth: 60, tileHeight: 96))

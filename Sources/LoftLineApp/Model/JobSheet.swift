@@ -117,8 +117,8 @@ struct JobSheet: Equatable {
         let u = doc.units
         let coords = MachineCoordinates(job: job)
 
-        let toolpaths = GCodeExporter.toolpaths(scope: .all, operations: project.operations, results: results,
-                                                groupByTool: groupByTool)
+        let toolpaths = ProgramPauses.effective(GCodeExporter.toolpaths(scope: .all, operations: project.operations,
+                                                                        results: results, groupByTool: groupByTool))
         var steps: [Step] = []
         var toolRows: [ToolRow] = []
         var lastTool: UUID?
@@ -129,8 +129,7 @@ struct JobSheet: Equatable {
             if let w = tp.metadata["warning"] { notes.append(w) }
             // A facing changes where the top of the material is for the steps after it.
             if tp.kind == .facing, let n = tp.metadata["note"] { notes.append(n) }
-            // As in the post: no stop after the last toolpath, the program ends there.
-            let pause = i + 1 < toolpaths.count ? tp.pauseAfter : nil
+            let pause = tp.pauseAfter   // as the program writes it (`ProgramPauses.effective`)
             steps.append(Step(index: steps.count + 1, name: tp.name, kind: tp.kind.displayName,
                               tool: JobSummary.label(tp.tool), toolChange: lastTool != tp.tool.id,
                               maxDepth: depth.map { fmt(max(0, $0), u) } ?? "—",

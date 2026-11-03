@@ -73,7 +73,8 @@ struct JobSummary: Equatable {
                        estimatedSeconds: ok ? r?.estimatedSeconds : nil, isEnabled: op.setup.isEnabled,
                        error: r?.error)
         }
-        let tps = GCodeExporter.toolpaths(scope: .all, operations: operations, results: results, groupByTool: groupByTool)
+        let tps = ProgramPauses.effective(GCodeExporter.toolpaths(scope: .all, operations: operations, results: results,
+                                                                  groupByTool: groupByTool))
         // A row's own time includes the tool changes inside its operation (a pocket's clearance
         // tool, a V-carve's flat-area tool); the job total counts every stop once, below. The
         // motion is timed over the toolpaths in program order, so the rapids between them count.
