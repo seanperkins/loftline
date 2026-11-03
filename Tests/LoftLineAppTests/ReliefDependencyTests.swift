@@ -176,4 +176,33 @@ private let eighth = ToolLibrary.seeded.tools[4]    // 1/8" ball nose
         #expect(target.document.models[0].reliefSplit?.web == 0.08)
         #expect(addedReliefs(target)[0].params.twoSided?.splitNeedsReview == true)
     }
+
+    // MARK: A rest pass is stale when its source changes after both were calculated (final review)
+
+    @Test func aRestPassGoesStaleWhenItsSourceIsDisabledMovedOrRetooled() {
+        let (p, source, rest) = project()
+        func calculated() -> LoftLineDocument {
+            let doc = LoftLineDocument(project: p, toolLibrary: AppTestSupport.library())
+            doc.calculateNow([source.setup.id, rest.setup.id])
+            #expect(!doc.isStale(rest.setup.id))
+            return doc
+        }
+        var doc = calculated()
+        doc.perform("Off") { p in
+            guard case .relief3D(var s) = p.operations[0] else { return }
+            s.setup.isEnabled = false
+            p.operations[0] = .relief3D(s)
+        }
+        #expect(doc.isStale(rest.setup.id))
+        doc = calculated()
+        doc.perform("Move") { $0.operations.swapAt(0, 1) }
+        #expect(doc.isStale(rest.setup.id))
+        doc = calculated()
+        doc.perform("Retool") { p in
+            guard case .relief3D(var s) = p.operations[0] else { return }
+            s.setup.toolID = ToolLibrary.seeded.tools[2].id
+            p.operations[0] = .relief3D(s)
+        }
+        #expect(doc.isStale(rest.setup.id))
+    }
 }

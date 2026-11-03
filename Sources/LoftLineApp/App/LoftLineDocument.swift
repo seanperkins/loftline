@@ -855,6 +855,26 @@ final class LoftLineDocument: ReferenceFileDocument {
         guard let r = results[id], let op = operation(id) else { return true }
         // The pause is applied when the program is posted, so editing it leaves the result valid.
         return r.operation.withoutPostSettings != op.withoutPostSettings || r.designRevision != designRevision
+            || restSourceChanged(op, since: r)
+    }
+
+    /// A rest pass whose source is now gone, off, after it, or changed since it was calculated: its rest region (or
+    /// whether it may run at all) is no longer known, so it is calculated again, which refuses what generation refuses.
+    private func restSourceChanged(_ op: AnyOperation, since r: ToolpathResult) -> Bool {
+        guard case .relief3D(let rel) = op, rel.params.finishing.isEnabled, case .operation(let id)? = rel.params.finishing.rest
+        else { return false }
+        let ordered = Self.flattened(project.operations)
+        guard let s = ordered.firstIndex(where: { $0.id == id }), let me = ordered.firstIndex(where: { $0.id == op.id })
+        else { return true }
+        return !ordered[s].setup.isEnabled || s > me || r.restSource != ordered[s].withoutPostSettings
+    }
+
+    /// `operations` in program order with merged parts in place.
+    static func flattened(_ operations: [AnyOperation]) -> [AnyOperation] {
+        operations.flatMap { op -> [AnyOperation] in
+            if case .merge(let m) = op { return m.params.children }
+            return [op]
+        }
     }
 
     /// Generates toolpaths off the main thread; results arrive asynchronously. A request for an

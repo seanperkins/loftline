@@ -12,6 +12,9 @@ struct ToolpathResult: Sendable {
     var designRevision: Int
     /// The operation's own run time, tool changes inside it included (what its row shows).
     var estimatedSeconds: TimeInterval
+    /// A rest pass's source as it was when this was calculated (`withoutPostSettings`); a later change to the source
+    /// makes the rest pass stale (`LoftLineDocument.isStale`), since its rest region depends on the source's tool.
+    var restSource: AnyOperation? = nil
 
     init(toolpaths: [Toolpath], error: String?, operation: AnyOperation, designRevision: Int,
          estimatedSeconds: TimeInterval) {
@@ -36,9 +39,19 @@ struct ToolpathResult: Sendable {
 }
 
 enum ToolpathCalculator {
-    /// Runs the operation's generator. Never throws: failures become `error` text.
+    /// Runs the operation's generator. Never throws: failures become `error` text. A rest pass's result records its
+    /// source as it was (`restSource`).
     static func calculate(_ op: AnyOperation, project: LoftLineProject, library: ToolLibrary,
                           designRevision: Int, rapidRate: Double) -> ToolpathResult {
+        var result = generate(op, project: project, library: library, designRevision: designRevision, rapidRate: rapidRate)
+        if case .relief3D(let r) = op, case .operation(let id)? = r.params.finishing.rest {
+            result.restSource = LoftLineDocument.flattened(project.operations).first { $0.id == id }?.withoutPostSettings
+        }
+        return result
+    }
+
+    private static func generate(_ op: AnyOperation, project: LoftLineProject, library: ToolLibrary,
+                                 designRevision: Int, rapidRate: Double) -> ToolpathResult {
         var document = project.document
         switch project.machiningJob(for: op) {
         case .success(let job): document.job = job
