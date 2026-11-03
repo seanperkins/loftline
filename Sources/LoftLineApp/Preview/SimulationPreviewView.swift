@@ -97,6 +97,8 @@ struct SimulationPreviewView: View {
     var onSelectAt: ((Vec2, Double) -> Void)? = nil
 
     @StateObject private var model = SimulationPreviewModel()
+    /// The one stored "show vectors" preference (the model reads it, never a copy of it).
+    @AppStorage(SimulationPreviewModel.showVectorsKey) private var vectorsPreference = false
     @ObservedObject private var timeStore = TimeEstimateStore.shared
     @State private var showTimeSettings = false
     @ObservedObject private var appearanceStore = PreviewAppearanceStore.shared
@@ -125,6 +127,8 @@ struct SimulationPreviewView: View {
         .onChange(of: rapidRate) { _, _ in configure() }
         .onChange(of: vectors) { _, v in model.setVectors(v) }
         .onChange(of: selectedVectors) { _, v in model.setSelectedVectors(v) }
+        .onChange(of: vectorsPreference) { _, _ in model.preferenceChanged() }
+        .onChange(of: toolpaths.isEmpty) { _, empty in model.toolpathsChanged(isEmpty: empty) }
         .onChange(of: timeStore.settings) { _, _ in configure() }
         .onChange(of: appearanceStore.settings) { _, s in model.setAppearance(s.appearance) }
     }
@@ -300,7 +304,7 @@ struct SimulationPreviewView: View {
         Menu {
             Toggle("Toolpath Lines", isOn: $model.showToolpathLines)
             Toggle("Rapid Moves", isOn: $model.showRapidLines).disabled(!model.showToolpathLines)
-            Toggle("Vectors", isOn: $model.showVectors)
+            Toggle("Vectors", isOn: $vectorsPreference)
         } label: {
             Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
         }

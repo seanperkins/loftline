@@ -1,0 +1,16 @@
+{
+  "name": "3D Draw shows the design vectors with the Vectors preference off, and leaves the preference off (#20)",
+  "appearance": "light",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "project", "name": "harness/projects/reel-sign.loftline"},
+    {"op": "tab", "value": "toolpaths"},
+    {"op": "calculate"},
+    {"op": "press", "name": "3D", "value": "AXRadioButton"},
+    {"op": "wait", "seconds": 4},
+    {"op": "capture", "name": "preference-off"},
+    {"op": "press", "name": "Draw a polyline in the 3D view", "value": "AXCheckBox"},
+    {"op": "wait", "seconds": 1},
+    {"op": "capture", "name": "drawing"}
+  ]
+}

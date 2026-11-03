@@ -10,19 +10,17 @@ struct Preview3DHost: View {
     @ObservedObject var document: LoftLineDocument
     @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @AppStorage(PreviewScope.storageKey) private var scope = PreviewScope.all
-    @AppStorage(SimulationPreviewModel.showVectorsKey) private var showVectors = false
 
-    /// Visible design vectors on the shown side / sheet, flattened (only when drawn in 3D).
+    /// Visible design vectors on the shown side / sheet, flattened. Always passed: the 3D view also shows them while
+    /// drawing or selecting with the preference off.
     var vectors: [[Vec2]] {
-        guard showVectors else { return [] }
         let project = document.outputProject
         return Self.flattened(project.document.shapes.filter { project.isVisible($0) && document.isOnActiveSide($0) })
     }
 
     /// Selected vectors, flattened, for highlighting in 3D.
     var selectedVectors: [[Vec2]] {
-        guard showVectors else { return [] }
-        return Self.flattened(document.selectedShapes)
+        Self.flattened(document.selectedShapes)
     }
 
     private static func flattened(_ shapes: [Shape]) -> [[Vec2]] {

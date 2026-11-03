@@ -86,4 +86,42 @@ import Testing
         model.showVectors = false
         #expect(model.stockScene.overlayLineCount == 0)
     }
+
+    // MARK: One owner for "show vectors" (docs/implicit-state-machines.md #20)
+
+    @Test @MainActor func drawModeShowsVectorsWithoutChangingThePreference() {
+        let model = SimulationPreviewModel()
+        let saved = model.showVectors
+        defer { model.showVectors = saved; model.tool = .none }
+        model.showToolpathLines = true
+        model.showVectors = false
+        model.configure(job: job, toolpaths: [], rapidRate: 180, units: .inch)
+        model.setVectors([[Vec2(0, 0), Vec2(5, 5)]])
+        #expect(model.stockScene.overlayLineCount == 0)
+        model.tool = .draw
+        #expect(model.stockScene.overlayLineCount == 1)            // shown while drawing...
+        #expect(model.showVectors == false)                         // ...without changing the saved preference
+        #expect(UserDefaults.standard.bool(forKey: SimulationPreviewModel.showVectorsKey) == false)
+        model.tool = .none
+        #expect(model.stockScene.overlayLineCount == 0)
+    }
+
+    @Test @MainActor func bothWindowsReadOneFlag() {
+        let a = SimulationPreviewModel(), b = SimulationPreviewModel()
+        let saved = a.showVectors
+        defer { a.showVectors = saved }
+        a.showVectors = true
+        #expect(b.showVectors == true)
+        b.showVectors = false
+        #expect(a.showVectors == false)
+    }
+
+    @Test @MainActor func measureEndsWhenTheToolbarIsDisabled() {
+        let model = SimulationPreviewModel()
+        model.tool = .measure
+        model.toolpathsChanged(isEmpty: false)
+        #expect(model.tool == .measure)
+        model.toolpathsChanged(isEmpty: true)   // the toolbar is disabled with no toolpaths
+        #expect(model.tool == .none)
+    }
 }
