@@ -49,4 +49,16 @@ import Testing
         try await Task.sleep(nanoseconds: 50_000_000)
         #expect(d.alert?.title == "B")
     }
+
+    @Test func closingASheetDoesNotReplaceAnAlertThatIsShowing() {
+        // An alert shows, a sheet opens over it, something in the sheet reports: closing the sheet keeps the first
+        // alert, and the held one waits for it.
+        let d = doc()
+        d.report(AlertMessage(title: "A", message: "first"))
+        d.sheet = .jobSetup
+        d.report(AlertMessage(title: "B", message: "second"))
+        d.sheet = nil
+        d.sheetDismissed()
+        #expect(d.alert?.title == "A")
+    }
 }
