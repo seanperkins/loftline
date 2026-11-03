@@ -210,6 +210,8 @@ import Testing
         var project = try LoftLineProject.decode(from: Data(contentsOf: URL(fileURLWithPath: sign)))
         for i in project.operations.indices {
             guard case .profile(var p) = project.operations[i] else { continue }
+            // A fixed depth: the sample's profile is a through cut, whose depth the project derives from its overcut.
+            p.params.depth.overcut = nil
             p.params.depth.cutDepth = project.document.job.thickness + 1
             project.operations[i] = .profile(p)
         }

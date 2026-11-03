@@ -13,13 +13,6 @@ extension LoftLineProject {
         return document.side(ofShapes: op.setup.shapeIDs)
     }
 
-    /// Sheet an operation machines (from its vectors' layers). nil = vectors on several sheets.
-    /// Operations without vectors (3D relief) belong to the primary sheet.
-    func sheetID(of op: AnyOperation) -> UUID? {
-        guard document.isMultiSheet else { return document.currentSheetID }
-        if op.setup.shapeIDs.isEmpty { return MaterialSheet.primaryID }
-        return document.sheetID(ofShapes: op.setup.shapeIDs)
-    }
 
     /// Job setup an operation is machined with (its sheet and side), or an error message.
     func machiningJob(for op: AnyOperation) -> Result<JobSetup, ToolpathSetupError> {

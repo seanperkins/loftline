@@ -45,14 +45,44 @@ public struct DepthSettings: Codable, Hashable, Sendable {
     /// Keep every pass exactly the pass depth apart (the remainder goes in the last roughing pass)
     /// instead of dividing the depth evenly (toolpaths-2d addition; nil = even).
     public var exactStep: Bool?
-    /// The cut depth was set from the material thickness (a through cut): when Job Setup changes
-    /// the thickness, the cut depth moves by the same amount, so it stays the same distance past
-    /// the bottom. nil = a fixed depth. Kept outside the generators: `cutDepth` is always absolute.
+    /// A through cut: how far past the material bottom it goes. `cutDepth` is then derived from the thickness of the
+    /// sheet the operation cuts (`LoftLineProject.resolvingThroughDepths`), whatever changes the thickness. nil = a
+    /// fixed `cutDepth`. Generators read only `cutDepth`, which older versions of the app also read correctly.
+    public var overcut: Double?
+    /// Files from before `overcut` marked a through cut with this flag. Read, never written:
+    /// `resolvingThroughDepths` turns it into an overcut.
     public var followsThickness: Bool?
 
     public init(startDepth: Double = 0, cutDepth: Double = 0.25, passDepth: Double? = nil, finalPassDepth: Double = 0) {
         self.startDepth = startDepth; self.cutDepth = cutDepth; self.passDepth = passDepth
         self.finalPassDepth = finalPassDepth
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case startDepth, cutDepth, passDepth, finalPassDepth, customPasses, exactStep, overcut, followsThickness
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        startDepth = try c.decode(Double.self, forKey: .startDepth)
+        cutDepth = try c.decode(Double.self, forKey: .cutDepth)
+        passDepth = try c.decodeIfPresent(Double.self, forKey: .passDepth)
+        finalPassDepth = try c.decode(Double.self, forKey: .finalPassDepth)
+        customPasses = try c.decodeIfPresent([Double].self, forKey: .customPasses)
+        exactStep = try c.decodeIfPresent(Bool.self, forKey: .exactStep)
+        overcut = try c.decodeIfPresent(Double.self, forKey: .overcut)
+        followsThickness = try c.decodeIfPresent(Bool.self, forKey: .followsThickness)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(startDepth, forKey: .startDepth)
+        try c.encode(cutDepth, forKey: .cutDepth)
+        try c.encodeIfPresent(passDepth, forKey: .passDepth)
+        try c.encode(finalPassDepth, forKey: .finalPassDepth)
+        try c.encodeIfPresent(customPasses, forKey: .customPasses)
+        try c.encodeIfPresent(exactStep, forKey: .exactStep)
+        try c.encodeIfPresent(overcut, forKey: .overcut)
     }
 
     /// Pass depths from startDepth (exclusive) to cutDepth (inclusive), evenly spaced and

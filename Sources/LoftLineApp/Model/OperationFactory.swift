@@ -29,31 +29,6 @@ extension AnyOperation {
         }
     }
 
-    /// The depth settings of an operation that has them (profile, pocket, fluting, quick engrave, facing).
-    var editableDepth: DepthSettings? {
-        get {
-            switch self {
-            case .profile(let o): return o.params.depth
-            case .pocket(let o): return o.params.depth
-            case .fluting(let o): return o.params.depth
-            case .engrave(let o): return o.params.depth
-            case .facing(let o): return o.params.depth
-            default: return nil
-            }
-        }
-        set {
-            guard let d = newValue else { return }
-            switch self {
-            case .profile(var o): o.params.depth = d; self = .profile(o)
-            case .pocket(var o): o.params.depth = d; self = .pocket(o)
-            case .fluting(var o): o.params.depth = d; self = .fluting(o)
-            case .engrave(var o): o.params.depth = d; self = .engrave(o)
-            case .facing(var o): o.params.depth = d; self = .facing(o)
-            default: break
-            }
-        }
-    }
-
     /// The operation without its post-time settings (operator pause, coolant), to compare what affects the toolpath.
     var withoutPostSettings: AnyOperation {
         var copy = self
@@ -167,7 +142,7 @@ enum OperationFactory {
         case .profile:
             var p = ProfileParameters().scaled(by: f)
             p.depth.cutDepth = thickness
-            p.depth.followsThickness = true
+            p.depth.overcut = 0
             return .profile(ProfileOperation(setup: setup, params: p))
         case .pocket:
             var p = PocketParameters().scaled(by: f)
@@ -237,30 +212,3 @@ enum OperationFactory {
     }
 }
 
-/// Cut depths that were set from the material thickness follow it (`DepthSettings.followsThickness`).
-enum DepthFollow {
-    /// `operations` after the material thickness changed from `old` to `new`: every following cut
-    /// depth moves by the difference, so a through cut stays through and an overcut keeps its
-    /// overcut. Hand-edited passes at or past the new depth are dropped (the cut depth is always
-    /// the last pass).
-    /// `affected` limits the change to the operations on the sheet whose thickness changed; a
-    /// merged operation's parts are adjusted one by one, since each keeps its own depth.
-    static func adjusted(_ operations: [AnyOperation], thicknessFrom old: Double, to new: Double,
-                         where affected: (AnyOperation) -> Bool = { _ in true }) -> [AnyOperation] {
-        let delta = new - old
-        guard abs(delta) > 1e-12 else { return operations }
-        return operations.map { op in
-            guard affected(op) else { return op }
-            if case .merge(var m) = op {
-                m.params.children = adjusted(m.params.children, thicknessFrom: old, to: new)
-                return .merge(m)
-            }
-            guard var d = op.editableDepth, d.followsThickness == true else { return op }
-            d.cutDepth += delta
-            if let passes = d.customPasses { d.customPasses = passes.filter { $0 < d.cutDepth - 1e-9 } }
-            var copy = op
-            copy.editableDepth = d
-            return copy
-        }
-    }
-}

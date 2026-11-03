@@ -16,21 +16,27 @@ struct DepthForm: View {
 
     var body: some View {
         LengthField("Start depth", value: $depth.startDepth, units: units, help: "Depth below the material top where cutting starts")
+        // A through cut's depth is the thickness plus its overcut, worked out by the project; shown, not typed.
         LengthField("Cut depth", value: $depth.cutDepth, units: units, help: "Final depth below the material top")
+            .disabled(materialThickness != nil && depth.overcut != nil)
         FluteLengthNote(tool: tool, cutDepth: depth.cutDepth, startDepth: depth.startDepth, units: units)
         if let thickness = materialThickness {
-            Toggle("Follow the material thickness", isOn: Binding(get: { depth.followsThickness == true }, set: { on in
-                depth.followsThickness = on ? true : nil
-                if on, depth.cutDepth < thickness { depth.cutDepth = thickness }
+            Toggle("Cut through the material", isOn: Binding(get: { depth.overcut != nil }, set: { on in
+                if on {
+                    let over = max(0, depth.cutDepth - thickness)
+                    depth.overcut = over
+                    depth.cutDepth = thickness + over
+                } else {
+                    depth.overcut = nil
+                }
             }))
-            .fieldHelp("Follow the material thickness")
-            if depth.followsThickness == true {
-                let past = depth.cutDepth - thickness
-                let tol = units == .inch ? 0.0005 : 0.01
-                Text(past > tol
-                     ? "Stays \(RulerTicks.label((past * 10000).rounded() / 10000)) \(units.abbreviation) past the material bottom when Job Setup changes the thickness."
-                     : "Stays at the material bottom when Job Setup changes the thickness.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            .fieldHelp("Cut through the material")
+            if let over = depth.overcut {
+                LengthField("Past the bottom", value: Binding(get: { over }, set: { v in
+                    depth.overcut = max(0, v)
+                    depth.cutDepth = thickness + max(0, v)
+                }), units: units)
+                .fieldHelp("Past the bottom")
             }
         }
         PassEditor(depth: $depth, units: units, showFinalPass: showFinalPass, toolStepdown: tool?.stepdown)

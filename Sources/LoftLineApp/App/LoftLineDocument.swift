@@ -403,6 +403,8 @@ final class LoftLineDocument: ReferenceFileDocument {
         // switches the post, a unit conversion and a template all end up with the right copy without knowing about it.
         p = ProjectPost.syncing(p, profiles: postCatalog.profiles, machines: machineCatalog.machines)
         p = ToolSync.carrying(p, library: toolLibrary.library)
+        // Last, so every thickness writer above (Job Setup, a variable link, a gadget) moves the through cuts.
+        p = p.resolvingThroughDepths(from: project)
         guard p != project else { return }
         replaceProject(p, actionName: actionName)
     }
@@ -705,6 +707,7 @@ final class LoftLineDocument: ReferenceFileDocument {
             p.upsertOperation(op)
             VariableLinks.reconcile(&p, old: project, pending: expressionRecorder.take())
             p = ToolSync.carrying(p, library: toolLibrary.library)
+            p = p.resolvingThroughDepths(from: project)   // as `perform` does: an overcut edited live moves the cut depth
             guard p != project else { return }
             if Self.toolContentChanged(from: project.tools, to: p.tools) { designRevision += 1 }
             project = p  // the open undo step already restores the state before the first edit

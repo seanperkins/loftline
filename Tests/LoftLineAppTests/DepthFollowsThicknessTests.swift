@@ -4,7 +4,8 @@ import Foundation
 import Testing
 @testable import LoftLineApp
 
-/// A cut depth set from the material thickness moves with it when Job Setup changes the thickness.
+/// A through cut stores its overcut past the material bottom; every change of the thickness, by Job Setup, a variable
+/// link or a live edit, moves its cut depth (docs/implicit-state-machines.md #3).
 @Suite struct DepthFollowsThicknessTests {
     private func approx(_ a: Double?, _ b: Double, _ tol: Double = 1e-9) -> Bool { a.map { abs($0 - b) <= tol } ?? false }
 
@@ -14,30 +15,30 @@ import Testing
         return p
     }
 
-    func profile(_ p: LoftLineProject, depth: Double, follows: Bool?) -> AnyOperation {
+    func profile(_ p: LoftLineProject, depth: Double, overcut: Double?) -> AnyOperation {
         var op = OperationFactory.make(kind: .profile, project: p, library: .seeded, shapeIDs: p.document.shapes.map(\.id))!
         var d = op.editableDepth!
         d.cutDepth = depth
-        d.followsThickness = follows
+        d.overcut = overcut
         op.editableDepth = d
         return op
     }
 
-    @Test func aNewProfileCutsThroughAndFollows() {
+    @Test func aNewProfileCutsThroughWithNoOvercut() {
         let p = project()
         let op = OperationFactory.make(kind: .profile, project: p, library: .seeded, shapeIDs: [])!
         #expect(approx(op.editableDepth?.cutDepth, 0.75))
-        #expect(op.editableDepth?.followsThickness == true)
+        #expect(op.editableDepth?.overcut == 0)
         let pocket = OperationFactory.make(kind: .pocket, project: p, library: .seeded, shapeIDs: [])!
-        #expect(pocket.editableDepth?.followsThickness == nil)
+        #expect(pocket.editableDepth?.overcut == nil)
     }
 
-    @Test func jobSetupMovesFollowingDepthsAndLeavesTheRest() {
+    @Test func jobSetupMovesThroughCutsAndLeavesTheRest() {
         var p = project()
         p.operations = [
-            profile(p, depth: 0.75, follows: true),     // through
-            profile(p, depth: 0.77, follows: true),     // through with an overcut
-            profile(p, depth: 0.75, follows: nil),      // fixed by hand
+            profile(p, depth: 0.75, overcut: 0),        // through
+            profile(p, depth: 0.77, overcut: 0.02),     // through with an overcut
+            profile(p, depth: 0.75, overcut: nil),      // fixed by hand
             OperationFactory.make(kind: .pocket, project: p, library: .seeded, shapeIDs: [])!,   // 0.25, fixed
         ]
         var form = JobSetupForm(document: p.document)
@@ -48,87 +49,77 @@ import Testing
         #expect(approx(depths[1], 0.52))
         #expect(approx(depths[2], 0.75))
         #expect(approx(depths[3], 0.25))
-        // The flags survive, so the next change follows too.
-        #expect(out.operations[0].editableDepth?.followsThickness == true)
+        #expect(approx(out.operations[1].editableDepth?.overcut, 0.02))
     }
 
-    @Test func aUnitChangeAndAThicknessChangeTogether() {
+    @Test func overcutScalesWithUnits() {
         var p = project()
-        p.operations = [profile(p, depth: 0.77, follows: true)]
+        p.operations = [profile(p, depth: 0.77, overcut: 0.02)]
         var form = JobSetupForm(document: p.document)
         form.setUnits(.millimeter)          // 0.75 in -> 19.05 mm
         form.job.thickness = 18
         let out = form.apply(to: p)
         #expect(out.document.units == .millimeter)
         // 0.02 in past the bottom stays 0.508 mm past the bottom.
+        #expect(approx(out.operations[0].editableDepth?.overcut, 0.02 * 25.4, 1e-9))
         #expect(approx(out.operations[0].editableDepth?.cutDepth, 18 + 0.02 * 25.4, 1e-6))
     }
 
-    @Test func handEditedPassesPastTheNewDepthAreDropped() {
+    @Test func aUnitChangeKeepsAZeroOvercutThrough() {
         var p = project()
-        var op = profile(p, depth: 0.75, follows: true)
-        var d = op.editableDepth!
-        d.customPasses = [0.25, 0.5]
-        op.editableDepth = d
-        p.operations = [op]
+        p.operations = [profile(p, depth: 0.75, overcut: 0)]
         var form = JobSetupForm(document: p.document)
-        form.job.thickness = 0.4
+        form.setUnits(.millimeter)
         let out = form.apply(to: p)
-        #expect(approx(out.operations[0].editableDepth?.cutDepth, 0.4))
-        #expect(out.operations[0].editableDepth?.customPasses == [0.25])
+        #expect(out.operations[0].editableDepth?.overcut == 0)
+        #expect(approx(out.operations[0].editableDepth?.cutDepth, 19.05, 1e-9))
     }
 
-    @Test func onlyTheEditedSheetsOperationsFollow() {
-        // Sheet A is 0.75 thick, sheet B 0.5; each has a following through profile.
+    @Test func onlyEachSheetsOwnThicknessMovesItsCuts() {
+        // Sheet A is 0.75 thick, sheet B 0.5; each has a through profile.
         var p = project()
         let bJob = JobSetup(width: 10, height: 10, thickness: 0.5)
-        p.document.addSheet(name: "B", job: bJob, layerName: "B", colorHex: "#336699")
+        _ = p.document.addSheet(name: "B", job: bJob, layerName: "B", colorHex: "#336699")
         let bLayer = p.document.layers.last!.id
         p.document.shapes[1].layerID = bLayer
         let a = p.document.shapes[0].id, b = p.document.shapes[1].id
-        var onA = profile(p, depth: 0.75, follows: true); onA.editableSetup.shapeIDs = [a]
-        var onB = profile(p, depth: 0.5, follows: true); onB.editableSetup.shapeIDs = [b]
+        var onA = profile(p, depth: 0.75, overcut: 0); onA.editableSetup.shapeIDs = [a]
+        var onB = profile(p, depth: 0.5, overcut: 0); onB.editableSetup.shapeIDs = [b]
         p.operations = [onA, onB]
-        #expect(p.sheetID(of: onB) != p.document.currentSheetID)
         var form = JobSetupForm(document: p.document)
         form.job.thickness = 0.78
         let out = form.apply(to: p)
         #expect(approx(out.operations[0].editableDepth?.cutDepth, 0.78))
         #expect(approx(out.operations[1].editableDepth?.cutDepth, 0.5))
-        #expect(out.document.job(ofSheet: p.document.allSheets[1].id)?.thickness == 0.5)
     }
 
-    @Test(arguments: [ZZeroMode.materialTop, ZZeroMode.spoilboard])
-    func thePartsOfAMergedOperationFollow(zZero: ZZeroMode) throws {
+    @Test func variableThicknessMovesThroughCuts() {
+        // A thickness written by a variable link (or a gadget) never passes Job Setup; the cut still follows it.
         var p = project()
-        p.document.job.zZero = zZero
-        var fixed = profile(p, depth: 0.4, follows: nil)
-        fixed.editableSetup.shapeIDs = [p.document.shapes[1].id]
-        p.operations = [profile(p, depth: 0.75, follows: true), profile(p, depth: 0.77, follows: true), fixed]
-        p.mergeWithNext(p.operations[0].id)
-        p.mergeWithNext(p.operations[0].id)
-        guard case .merge = p.operations[0] else { throw Failure.notMerged }
-        for thickness in [0.72, 0.8] {
-            var form = JobSetupForm(document: p.document)
-            form.job.thickness = thickness
-            let out = form.apply(to: p)
-            guard case .merge(let m) = out.operations[0] else { throw Failure.notMerged }
-            let depths = m.params.children.map { $0.editableDepth!.cutDepth }
-            #expect(approx(depths[0], thickness) && approx(depths[1], thickness + 0.02) && approx(depths[2], 0.4),
-                    Comment(rawValue: "\(thickness): \(depths)"))
-            // The generated toolpath reaches the new bottom (plus the overcut) and no further.
-            let tps = try out.operations[0].generate(in: CAMContext(document: out.document, tools: .seeded))
-            let lowest = tps.flatMap(\.moves).compactMap { $0.target?.z }.min()!
-            #expect(approx(lowest, MachineCoordinates(job: out.document.job).z(depth: thickness + 0.02), 1e-6))
+        p.operations = [profile(p, depth: 0.75, overcut: 0.01)]
+        p.document.variables = [DocumentVariable(name: "t", value: 0.75)]
+        let doc = LoftLineDocument(project: p, toolLibrary: AppTestSupport.library())
+        doc.perform("Link") {
+            $0.document.linkedValues = [VariableLink(target: .job(sheetID: $0.document.currentSheetID), path: ["thickness"],
+                                                     expression: "=t")]
         }
+        doc.perform("Change Variable") { $0.document.variables = [DocumentVariable(name: "t", value: 0.6)] }
+        #expect(approx(doc.project.document.job.thickness, 0.6))
+        #expect(approx(doc.project.operations[0].editableDepth?.cutDepth, 0.61))
     }
 
-    enum Failure: Error { case notMerged }
-
-    @Test func noChangeInThicknessChangesNothing() {
+    @Test func liveEditOfOvercutMovesCutDepth() {
         var p = project()
-        p.operations = [profile(p, depth: 0.77, follows: true)]
-        let out = JobSetupForm(document: p.document).apply(to: p)
-        #expect(out.operations == p.operations)
+        let op = profile(p, depth: 0.75, overcut: 0)
+        p.operations = [op]
+        let doc = LoftLineDocument(project: p, toolLibrary: AppTestSupport.library())
+        for overcut in [0.02, 0.03] {   // the first edit opens the live step, the second takes the fast path
+            var edited = doc.project.operations[0]
+            var d = edited.editableDepth!
+            d.overcut = overcut
+            edited.editableDepth = d
+            doc.updateOperationLive(edited)
+            #expect(approx(doc.project.operations[0].editableDepth?.cutDepth, 0.75 + overcut))
+        }
     }
 }

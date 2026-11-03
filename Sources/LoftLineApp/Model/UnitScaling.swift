@@ -11,6 +11,7 @@ extension DepthSettings {
         var d = self
         d.startDepth *= f; d.cutDepth *= f; d.passDepth = passDepth.map { $0 * f }; d.finalPassDepth *= f
         d.customPasses = customPasses.map { $0.map { $0 * f } }
+        d.overcut = overcut.map { $0 * f }
         return d
     }
 }

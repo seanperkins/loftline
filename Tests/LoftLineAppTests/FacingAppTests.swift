@@ -71,9 +71,10 @@ import Testing
             Issue.record("not a facing"); return
         }
         f.params.depth.cutDepth = 0.75
-        f.params.depth.followsThickness = true
+        f.params.depth.overcut = 0
         p.operations = [.facing(f)]
-        let moved = DepthFollow.adjusted(p.operations, thicknessFrom: 0.75, to: 0.5)
+        p.document.job.thickness = 0.5
+        let moved = p.resolvingThroughDepths().operations
         #expect(moved.first?.editableDepth?.cutDepth == 0.5)
     }
 

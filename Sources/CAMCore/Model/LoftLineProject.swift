@@ -48,7 +48,7 @@ public struct LoftLineProject: Codable, Hashable, Sendable {
     public static func decode(from data: Data) throws -> LoftLineProject {
         var p = try LoftLineFile.decode(LoftLineProject.self, from: data)
         p.document = p.document.repairingLayers()
-        return p
+        return p.resolvingThroughDepths()
     }
 
     /// The tools this project cuts with: its own tools (the copies the file carries), and the library's for anything the
