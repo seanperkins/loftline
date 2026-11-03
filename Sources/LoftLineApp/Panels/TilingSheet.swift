@@ -79,7 +79,8 @@ struct TilingSheet: View {
             run()
         }
         .onDisappear { calcTask?.cancel() }
-        .onChange(of: settings) { _, _ in if calcTask == nil { post() } }
+        // run(), not post(): after Stop, results may still be stale, and only run() checks (it posts at once when fresh).
+        .onChange(of: settings) { _, _ in if calcTask == nil { run() } }
         .onChange(of: currentInputs) { _, now in if now != postedFrom { run() } }
         .alert("The validator reported errors", isPresented: $confirmErrors) {
             Button("Save Anyway", role: .destructive) { save() }
@@ -134,6 +135,14 @@ struct TilingSheet: View {
 
     private func post() {
         failure = nil
+        // Tiles are cut from the stored results, so none may be stale. Not run() from here: run() posts, and a disagreement
+        // between the two staleness checks must not loop.
+        guard !document.outputProject.operations.contains(where: { $0.setup.isEnabled && document.isStale($0.id) }) else {
+            files = []
+            postedFrom = nil
+            failure = "Some toolpaths changed since they were calculated. Close this sheet and export again."
+            return
+        }
         postedFrom = currentInputs
         guard settings.tileWidth > 0, settings.tileHeight > 0 else { files = []; return }
         files = Self.tileFiles(document: document, groupByTool: groupByTool, settings: settings)

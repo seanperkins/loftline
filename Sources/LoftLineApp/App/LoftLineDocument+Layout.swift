@@ -16,8 +16,13 @@ extension LoftLineDocument {
         panel.message = "Save a printable operator sheet (origin, tools and toolpath order)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         Task { @MainActor in
-            let stale = project.operations.filter { $0.setup.isEnabled && isStale($0.id) }.map(\.id)
-            if !stale.isEmpty { _ = await calculateAndWait(stale) }
+            // The sheet lists what the program cuts, so it prints only fresh results (as the export sheets post them).
+            let targets = project.operations.filter(\.setup.isEnabled).map(\.id)
+            guard await calculateUntilFresh(targets: targets) else {
+                report(AlertMessage(title: "Job sheet not saved",
+                                    message: "The project changed while it was being calculated. Export the job sheet again."))
+                return
+            }
             let html = JobSheetHTML.render(makeJobSheet(settings: TimeEstimateStore.shared.settings))
             do {
                 try html.write(to: url, atomically: true, encoding: .utf8)
