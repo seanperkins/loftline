@@ -18,8 +18,21 @@ entry where the choice is not obvious.
     stops being key. A single `CanvasSession` type is still the full fix.
   - #17: every document window now refreshes its stored times when the settings change. This is view wiring, so it
     has no unit test.
-- **Decided 2026-11-03, planned:** #3, #5, #7, #8 and #28 in `docs/superpowers/plans/2026-11-03-implicit-state-gcode.md`;
-  #10, #13, #14, #16, #18, #20 and #26 in `docs/superpowers/plans/2026-11-03-implicit-state-app.md`.
+- **Fixed after Sean's decisions of 2026-11-03** (branch `fix/implicit-state-decisions`, plans in
+  `docs/superpowers/plans/2026-11-03-implicit-state-gcode.md` and `docs/superpowers/plans/2026-11-03-implicit-state-app.md`):
+  - #3: through cuts store their overcut.
+  - #5: pauses are worked out once.
+  - #7: a mid-program units change, or motion in G91, is an error.
+  - #8: rest passes name their source, and a relief's split is its model's. This is project format 3 and template
+    format 2.
+  - #10: expressions link within their form.
+  - #13: layers keep their sheet and side.
+  - #14: one sheet at a time, and alerts queue.
+  - #16: one-file order follows the preference.
+  - #18: a missing machine is reported.
+  - #20: one show-vectors owner.
+  - #26: one window attach step.
+  - #28: export states its expected steps.
 - **Left as is:** #23 is reachable only from tests and the harness.
 - **Deferred within decided items:** #13's nest-sheet offset after a width change (the mixed-sheets warning covers it)
   and #14's app-wide gadget panel blocking other windows.
