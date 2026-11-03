@@ -65,7 +65,10 @@ extension LoftLineProject {
                 d.overcut = d.cutDepth >= t - tol ? d.cutDepth - t : nil
             }
             d.followsThickness = nil
-            if let o = before[op.id], let over = d.overcut, o.overcut == over, abs(o.cutDepth - d.cutDepth) > 1e-12 {
+            // A depth that is already this sheet's thickness plus the overcut was derived (Job Setup resolves before
+            // `perform` resolves again), not typed.
+            let derived = thickness.map { t in d.overcut.map { abs(d.cutDepth - (t + $0)) <= 1e-9 } ?? false } ?? false
+            if let o = before[op.id], let over = d.overcut, o.overcut == over, abs(o.cutDepth - d.cutDepth) > 1e-12, !derived {
                 d.overcut = nil
             }
             if let over = d.overcut, let t = thickness {

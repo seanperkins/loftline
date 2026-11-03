@@ -122,4 +122,18 @@ import Testing
             #expect(approx(doc.project.operations[0].editableDepth?.cutDepth, 0.75 + overcut))
         }
     }
+
+    @Test func twoJobSetupChangesInARowKeepAThroughCutThrough() {
+        // Job Setup's own result is resolved again by `perform`: the depth it derived is not a hand edit.
+        var p = project()
+        p.operations = [profile(p, depth: 0.75, overcut: 0)]
+        let doc = LoftLineDocument(project: p, toolLibrary: AppTestSupport.library())
+        for thickness in [0.5, 0.25] {
+            var form = JobSetupForm(project: doc.project, machines: MachineCatalog.shared.machines)
+            form.job.thickness = thickness
+            doc.applyJobSetup(form)
+            #expect(doc.project.operations[0].editableDepth?.overcut == 0, "\(thickness)")
+            #expect(approx(doc.project.operations[0].editableDepth?.cutDepth, thickness), "\(thickness)")
+        }
+    }
 }
