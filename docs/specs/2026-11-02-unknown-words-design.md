@@ -30,22 +30,21 @@ does with a word it does not know. The owner may know that their controller read
 - **Compared on written programs**, so every word the builder writes counts: coolant, units, `G90.1` (absolute arcs),
   rendered stops (`{STOP}`), the tool length line as written, a probed tool change. `UnknownWords.issues(text:job:profile:)`
   (PostCore) takes the exported text, the `PostJob` and the post. The reference is the built-in post given the copy's units,
-  limits, rapid rate, max feed, spindle range and probe setting (what a machine applies, `MachineDefinition.applied(to:)`), so
+  number precision, limits, rapid rate, max feed, spindle range and probe setting (what a machine applies, `MachineDefinition.applied(to:)`), so
   only the dialect differs. It is posted with the same job; if that throws, it is posted again without the probe setting (a
   built-in that cannot probe); if that throws too, the check is silent (no false warning).
 - **Words**: the G and M codes of each program, read with `GCodeParser` in each post's comment style. Units words
-  (`G20`, `G21`, `G70`, `G71`) are left out (`postProblem` already keeps a family's units words, and the reference has the
-  copy's units). A code the validator does not model is left out too: it already gets `unknown-g`/`unknown-m`.
+  count: the reference writes the family's form in the copy's units, so an added `G20` on a Syntec copy is warned. A code the validator does not model is left out too: it already gets `unknown-g`/`unknown-m`.
 - **Message**: "<post name> writes <codes>, which the built-in <built-in name> post does not: <consequence> Check that your
   controller reads them." Codes in first-seen order, `NumberFormat.compact` (G64, G90.1, M7).
   - MASSO: "MASSO skips a whole line with a word it does not know." (the same claim as the G43 error, #107)
   - Centroid: "CNC12 cancels the job at a word it does not know (error 502)." (#99's research)
-  - UCCNC: "UCCNC runs, skips or stops at a word it does not know, as its Unknown g-codes setting says." (#99; TESTING's
+  - UCCNC: "UCCNC may run past, skip or stop at a code it does not know, as its settings say." (#99; TESTING's
     UCCNC check)
   - any other family: "A controller may ignore, skip or refuse a word it does not know."
 - **Where**: `GCodeExporter.export`, after posting, beside `validate(gcode:)`; the CLI goes through it. Not in the post editor:
   its sample report blocks Save on any issue, and this is a warning the owner may accept.
-- A post equal to its built-in by value skips the work.
+- A post equal to its reference (a built-in with only a machine's settings applied) skips the work.
 
 No output changes.
 

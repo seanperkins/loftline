@@ -11,19 +11,18 @@ public enum UnknownWords {
         BuiltInPosts.massoG3MM.id: "MASSO skips a whole line with a word it does not know.",
         BuiltInPosts.centroidInch.id: "CNC12 cancels the job at a word it does not know (error 502).",
         BuiltInPosts.centroidMM.id: "CNC12 cancels the job at a word it does not know (error 502).",
-        BuiltInPosts.uccncInch.id: "UCCNC runs, skips or stops at a word it does not know, as its Unknown g-codes setting says.",
-        BuiltInPosts.uccncMM.id: "UCCNC runs, skips or stops at a word it does not know, as its Unknown g-codes setting says.",
+        BuiltInPosts.uccncInch.id: "UCCNC may run past, skip or stop at a code it does not know, as its settings say.",
+        BuiltInPosts.uccncMM.id: "UCCNC may run past, skip or stop at a code it does not know, as its settings say.",
     ]
     static let general = "A controller may ignore, skip or refuse a word it does not know."
-    /// A family keeps its units words (`postProblem`), and the reference takes the post's units.
-    static let unitsG: Set<Double> = [20, 21, 70, 71]
-
     public static func issues(text: String, job: PostJob, profile: PostProfile) -> [GCodeIssue] {
-        guard let family = BuiltInPosts.family(of: profile.id), let builtIn = BuiltInPosts.profile(id: family),
-              builtIn != profile else { return [] }
-        // The built-in with what a machine applies (MachineDefinition.applied(to:)) and the post's units: only the dialect
-        // differs. A built-in that cannot probe is posted without the probe; if it still cannot post the job, stay silent.
+        guard let family = BuiltInPosts.family(of: profile.id), let builtIn = BuiltInPosts.profile(id: family) else { return [] }
+        // The built-in with what a machine applies (MachineDefinition.applied(to:)), the post's units (so its units word is the
+        // family's form in the post's units) and its number precision (a probe feed may need it): only the dialect differs.
+        // A built-in that cannot probe is posted without the probe; if it still cannot post the job, stay silent.
         var reference = builtIn
+        reference.decimals = profile.decimals
+        reference.feedDecimals = profile.feedDecimals
         reference.units = profile.units
         reference.limits = profile.limits
         reference.rapidRate = profile.rapidRate
@@ -31,6 +30,10 @@ public enum UnknownWords {
         reference.minRPM = profile.minRPM
         reference.maxRPM = profile.maxRPM
         reference.toolChangeProbe = profile.toolChangeProbe
+        // A built-in with only a machine's settings applied is its own reference: nothing to compare, no second post.
+        var plain = profile
+        plain.name = reference.name; plain.id = reference.id
+        if plain == reference { return [] }
         var referenceText = try? TemplatePostProcessor(profile: reference).post(job)
         if referenceText == nil {
             reference.toolChangeProbe = nil
@@ -52,12 +55,12 @@ public enum UnknownWords {
 
     struct Word: Hashable { var letter: Character; var value: Double }
 
-    /// The G and M codes of a program in order, without units words and without codes the validator does not model (it warns
-    /// of those itself: `unknown-g`, `unknown-m`).
+    /// The G and M codes of a program in order, without codes the validator does not model (it warns of those itself:
+    /// `unknown-g`, `unknown-m`).
     static func words(_ text: String, comments: GCodeParser.Comments) -> [Word] {
         GCodeParser.parse(text, comments: comments).blocks.flatMap(\.words).compactMap { w in
             switch w.letter {
-            case "G" where GCodeValidator.knownG.contains(w.value) && !unitsG.contains(w.value): return Word(letter: "G", value: w.value)
+            case "G" where GCodeValidator.knownG.contains(w.value): return Word(letter: "G", value: w.value)
             case "M" where GCodeValidator.knownM.contains(w.value): return Word(letter: "M", value: w.value)
             default: return nil
             }

@@ -20,5 +20,12 @@ import Testing
         #expect(r.issues.contains { $0.severity == .warning && $0.message.contains("writes G64, which the built-in MASSO G3") })
         let builtIn = GCodeExporter.export(project: project, toolpaths: tps, profile: BuiltInPosts.massoG3Inch, jobName: "T")
         #expect(!builtIn.issues.contains { $0.message.contains("which the built-in") })
+        // A code the validator does not model keeps its own warning, and only that one.
+        var m98 = BuiltInPosts.massoG3Inch
+        m98.id = "masso-g3-inch-custom-2"
+        m98.preamble.append("M98")
+        let r98 = GCodeExporter.export(project: project, toolpaths: tps, profile: m98, jobName: "T")
+        #expect(r98.issues.contains { $0.message.hasPrefix("M98 is not a code this validator knows") })
+        #expect(!r98.issues.contains { $0.message.contains("which the built-in") })
     }
 }
