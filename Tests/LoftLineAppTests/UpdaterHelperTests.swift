@@ -326,6 +326,40 @@ struct UpdaterHelperTests {
         #expect(opened == target.appendingPathComponent("LoftLine.app").path + "\n")
     }
 
+    @Test func relaunchOneReopensTheOldAppWhenTheUpdateIsRefused() throws {
+        // The app has already quit for Install and Restart: a refusal must not leave the user with no app running.
+        let box = try Scratch()
+        let target = try box.folder("Applications")
+        try box.app(in: target, marker: "old")
+        let stub = try stubOpen(in: box)
+
+        let result = try Self.run(archive: box.newArchive(appName: "Other.app"), target: target, pid: Self.deadPID(),
+                                  relaunch: 1, env: ["PATH": stub.path])
+
+        #expect(result.status != 0)
+        #expect(try Self.marker(of: target.appendingPathComponent("LoftLine.app")) == "old")
+        let opened = try String(contentsOf: stub.log, encoding: .utf8)
+        #expect(opened == target.appendingPathComponent("LoftLine.app").path + "\n")
+    }
+
+    @Test func aRefusalWhileTheAppStillRunsOpensNothing() throws {
+        let box = try Scratch()
+        let target = try box.folder("Applications")
+        try box.app(in: target, marker: "old")
+        let stub = try stubOpen(in: box)
+        let sleeper = Process()
+        sleeper.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        sleeper.arguments = ["30"]
+        try sleeper.run()
+        defer { sleeper.terminate(); sleeper.waitUntilExit() }
+
+        let result = try Self.run(archive: box.newArchive(), target: target, pid: sleeper.processIdentifier, relaunch: 1,
+                                  env: ["PATH": stub.path, "LOFTLINE_UPDATER_WAIT_SECONDS": "1"])
+
+        #expect(result.status != 0)
+        #expect(!FileManager.default.fileExists(atPath: stub.log.path))
+    }
+
     // MARK: binding the install to the archive the app verified (docs/DECISIONS.md `updater-handoff`)
 
     @Test func refusesAnArchiveThatIsNotTheOneTheAppVerified() throws {
@@ -688,6 +722,9 @@ struct UpdaterHelperTests {
 
         #expect(result.status == 1, "\(result.err)")
         #expect(result.err.contains("an earlier update stopped halfway"), "\(result.err)")
+        // The app's copy of the helper deletes itself when it ends, so the hint names the rename that recovers, not it.
+        #expect(result.err.contains("rename \(target.appendingPathComponent("LoftLine.old-123").path) to LoftLine.app"),
+                "\(result.err)")
         #expect(try Self.snapshot(of: target) == before)
     }
 }

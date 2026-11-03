@@ -42,7 +42,18 @@ set -u
 export LC_ALL=C
 
 ME="$(basename "$0")"
-die() { echo "$ME: $*" >&2; exit 1; }
+# Set once the app has quit. From then on, with --relaunch 1, a refusal or failure reopens the app that is in place (the old
+# one, intact), so Install and Restart never just quits.
+APP_QUIT=0 APP="" RELAUNCH=0
+die() {
+  echo "$ME: $*" >&2
+  if [ "$APP_QUIT" = 1 ] && [ "$RELAUNCH" = "1" ] && [ -n "$APP" ] && [ -e "$APP" ]; then
+    open "$APP" || echo "$ME: could not relaunch $APP" >&2
+  fi
+  exit 1
+}
+# How to undo a swap that stopped halfway. Not "--recover" with this script's name: the app's copy deletes itself on exit.
+recover_hint() { echo "rename $1 to LoftLine.app"; }
 
 # The copy the app starts is named loftline-updater-<uuid>.sh in the temp folder and removes itself when it ends. The
 # repository's macos.sh, and anything else run by hand, is never deleted.
@@ -73,7 +84,7 @@ lock_folder() {
   exit "$status"
 }
 
-ARCHIVE="" SHA256="" VERSION="" TARGET="" PID="" RELAUNCH=0 STATE="" RECOVER=""
+ARCHIVE="" SHA256="" VERSION="" TARGET="" PID="" STATE="" RECOVER=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --print-requirement) echo "$DEFAULT_REQUIREMENT"; exit 0 ;;
@@ -138,14 +149,15 @@ while kill -0 "$PID" 2>/dev/null; do
   waited=$((waited + 1))
 done
 
+APP_QUIT=1
 APP="$TARGET/LoftLine.app"
 OLD="$TARGET/LoftLine.old-$PID"
 STAGE="$TARGET/.LoftLine-update-$PID"
-[ ! -e "$OLD" ] || die "$OLD already exists; run '$ME --recover \"$TARGET\"' first"
+[ ! -e "$OLD" ] || die "$OLD already exists; if no LoftLine.app is beside it, $(recover_hint "$OLD") first"
 # With no app, the version check below has nothing to compare with, and a leftover old bundle would stay beside the new one.
 if [ ! -e "$APP" ]; then
   for f in "$TARGET"/LoftLine.old-*; do
-    [ ! -e "$f" ] || die "an earlier update stopped halfway; run '$ME --recover \"$TARGET\"' first"
+    [ ! -e "$f" ] || die "an earlier update stopped halfway; $(recover_hint "$f") first"
   done
 fi
 
@@ -194,8 +206,10 @@ if [ -e "$APP" ] && CURRENT_VERSION="$(plist_version "$APP")" && [ -n "$CURRENT_
   newer "$NEW_VERSION" "$CURRENT_VERSION" || { rm -rf "$STAGE"; die "the new LoftLine.app ($NEW_VERSION) is not newer than the installed one ($CURRENT_VERSION); not installing"; }
 fi
 
+HAD_APP=0
 if [ -e "$APP" ]; then
   mv "$APP" "$OLD" || { rm -rf "$STAGE"; die "could not move the current LoftLine.app aside"; }
+  HAD_APP=1
 fi
 if [ "${LOFTLINE_UPDATER_FAULT:-}" = "between-renames" ]; then
   echo "$ME: injected fault between the two renames" >&2
@@ -204,9 +218,10 @@ fi
 if ! mv "$STAGE/LoftLine.app" "$APP"; then
   if [ -e "$OLD" ] && ! mv "$OLD" "$APP"; then
     rm -rf "$STAGE"
-    die "swap failed and the old app could not be put back; run '$ME --recover \"$TARGET\"'"
+    die "swap failed and the old app could not be put back; $(recover_hint "$OLD")"
   fi
   rm -rf "$STAGE"
+  [ "$HAD_APP" = 1 ] || die "swap failed; nothing was installed"
   die "swap failed; rolled back to the previous LoftLine.app"
 fi
 
