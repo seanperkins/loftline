@@ -28,6 +28,12 @@ struct OperationEditor: View {
     private var library: ToolLibrary { document.mergedLibrary }
 
     var body: some View {
+        // An expression typed in this editor links only to this toolpath's fields.
+        Group { editorContent }
+            .environment(\.expressionTarget, .operation(draft.id))
+    }
+
+    @ViewBuilder private var editorContent: some View {
         InspectorSection(title: draft.kind.displayName + " Toolpath", helpTopic: HelpTopic.forOperation(draft.kind)) {
             TextField("Name", text: setupBinding(\.name))
             Toggle("Include in export", isOn: setupBinding(\.isEnabled))

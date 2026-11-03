@@ -35,20 +35,34 @@ extension EnvironmentValues {
         get { self[ExpressionRecorderKey.self] }
         set { self[ExpressionRecorderKey.self] = newValue }
     }
+
+    /// The project form a numeric field is in (a toolpath's editor, a sheet's Job Setup); fields elsewhere record no
+    /// expressions to link.
+    var expressionTarget: VariableLink.Target? {
+        get { self[ExpressionTargetKey.self] }
+        set { self[ExpressionTargetKey.self] = newValue }
+    }
 }
 
 /// Number format whose parser accepts arithmetic, variables and unit suffixes.
+private struct ExpressionTargetKey: EnvironmentKey {
+    static let defaultValue: VariableLink.Target? = nil
+}
+
 struct ExpressionNumberStyle: ParseableFormatStyle {
     var variables: [String: Double]
     var units: LengthUnit?
     var recorder: ExpressionRecorder?
+    /// The form the field is in; nil records nothing (a drawing option, a transform dialog).
+    var target: VariableLink.Target?
 
-    init(variables: [String: Double], units: LengthUnit?, recorder: ExpressionRecorder? = nil) {
-        self.variables = variables; self.units = units; self.recorder = recorder
+    init(variables: [String: Double], units: LengthUnit?, recorder: ExpressionRecorder? = nil,
+         target: VariableLink.Target? = nil) {
+        self.variables = variables; self.units = units; self.recorder = recorder; self.target = target
     }
 
     var parseStrategy: ExpressionParseStrategy {
-        ExpressionParseStrategy(variables: variables, units: units, recorder: recorder)
+        ExpressionParseStrategy(variables: variables, units: units, recorder: recorder, target: target)
     }
 
     func format(_ value: Double) -> String { decimalFormat.format(value) }
@@ -63,14 +77,16 @@ struct ExpressionParseStrategy: ParseStrategy {
     var variables: [String: Double]
     var units: LengthUnit?
     var recorder: ExpressionRecorder?
+    var target: VariableLink.Target?
 
-    init(variables: [String: Double], units: LengthUnit?, recorder: ExpressionRecorder? = nil) {
-        self.variables = variables; self.units = units; self.recorder = recorder
+    init(variables: [String: Double], units: LengthUnit?, recorder: ExpressionRecorder? = nil,
+         target: VariableLink.Target? = nil) {
+        self.variables = variables; self.units = units; self.recorder = recorder; self.target = target
     }
 
     func parse(_ value: String) throws -> Double {
         let v = try ExpressionEvaluator.evaluate(value, variables: variables, units: units)
-        recorder?.note(value, value: v, units: units)
+        recorder?.note(value, value: v, units: units, target: target)
         return v
     }
 
@@ -87,11 +103,12 @@ struct ExpressionTextField: View {
     @Environment(\.documentVariables) private var variables
     @Environment(\.expressionUnits) private var units
     @Environment(\.expressionRecorder) private var recorder
+    @Environment(\.expressionTarget) private var target
 
     var body: some View {
         TextField(label, value: Binding(get: { value }, set: { new in
             value = recorder?.valueToWrite(new, current: value) ?? new
-        }), format: ExpressionNumberStyle(variables: variables, units: units, recorder: recorder))
+        }), format: ExpressionNumberStyle(variables: variables, units: units, recorder: recorder, target: target))
             .help("Type a number or an expression: + − × ÷ ^ ( ), variables such as =thickness (the field stays linked to it), units like 1/4in or 6mm")
     }
 }
