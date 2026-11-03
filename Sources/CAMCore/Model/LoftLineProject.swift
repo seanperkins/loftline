@@ -4,7 +4,7 @@ import Foundation
 /// A native `.loftline` file: the design plus its toolpath operations (JSON).
 public struct LoftLineProject: Codable, Hashable, Sendable {
     public static let fileExtension = "loftline"
-    public static let currentFormatVersion = 2
+    public static let currentFormatVersion = 3
 
     public var formatVersion: Int
     public var document: Document
@@ -48,7 +48,7 @@ public struct LoftLineProject: Codable, Hashable, Sendable {
     public static func decode(from data: Data) throws -> LoftLineProject {
         var p = try LoftLineFile.decode(LoftLineProject.self, from: data)
         p.document = p.document.repairingLayers()
-        return p.resolvingThroughDepths()
+        return p.upgradingReliefs().resolvingThroughDepths()
     }
 
     /// The tools this project cuts with: its own tools (the copies the file carries), and the library's for anything the

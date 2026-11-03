@@ -65,18 +65,49 @@ public struct FinishingSettings: Codable, Hashable, Sendable {
     public var angle: Double
     /// Pass pattern; nil = raster (files from before strategies existed).
     public var strategy: FinishingStrategy?
-    /// Rest machining: the larger tool that already finished this surface. When set, only the
-    /// areas that tool could not reach are machined. nil = the whole area.
-    public var restToolID: UUID?
+    /// Rest machining: the earlier toolpath whose (larger) finishing tool already finished this surface; only the
+    /// areas it could not reach are machined. nil = no rest machining, the whole area.
+    public var rest: RestSource?
 
     public init(isEnabled: Bool = true, stepover: Double? = nil, angle: Double = 0,
                 strategy: FinishingStrategy? = nil) {
         self.isEnabled = isEnabled; self.stepover = stepover; self.angle = angle; self.strategy = strategy
     }
+
+    private enum CodingKeys: String, CodingKey { case isEnabled, stepover, angle, strategy, rest, restToolID }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        isEnabled = try c.decode(Bool.self, forKey: .isEnabled)
+        stepover = try c.decodeIfPresent(Double.self, forKey: .stepover)
+        angle = try c.decode(Double.self, forKey: .angle)
+        strategy = try c.decodeIfPresent(FinishingStrategy.self, forKey: .strategy)
+        rest = try c.decodeIfPresent(RestSource.self, forKey: .rest)
+        // Older files named the rest tool, not the toolpath: it is never read as "no rest" (a whole-area pass).
+        if rest == nil, let tool = try c.decodeIfPresent(UUID.self, forKey: .restToolID) { rest = .unresolved(toolID: tool) }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(isEnabled, forKey: .isEnabled)
+        try c.encodeIfPresent(stepover, forKey: .stepover)
+        try c.encode(angle, forKey: .angle)
+        try c.encodeIfPresent(strategy, forKey: .strategy)
+        try c.encodeIfPresent(rest, forKey: .rest)
+    }
 }
 
-/// Two-sided 3D machining: the model is cut from the top down to `splitDepth`, then the board is
-/// flipped and the underside is cut from the new top down to the split plane, leaving `web`.
+/// The toolpath a rest pass follows.
+public enum RestSource: Codable, Hashable, Sendable {
+    /// An earlier 3D finish (its operation id).
+    case operation(UUID)
+    /// From an older file that named only the rest tool and had no earlier finish with it. Never generates: the user
+    /// chooses the toolpath this rests after.
+    case unresolved(toolID: UUID)
+}
+
+/// Two-sided 3D machining: which side this toolpath cuts. The split (flip, split depth, web) is the model's
+/// (`PlacedModel.reliefSplit`), shared by both sides.
 public struct TwoSidedSettings: Codable, Hashable, Sendable {
     public enum Side: String, Codable, CaseIterable, Sendable {
         /// First side, as placed (material top up).
@@ -85,24 +116,30 @@ public struct TwoSidedSettings: Codable, Hashable, Sendable {
         case bottom
     }
 
-    /// How the board is turned over between the sides.
-    public enum Flip: String, Codable, CaseIterable, Sendable {
-        /// Turned over around its vertical centre line (X mirrored).
-        case leftRight
-        /// Turned over around its horizontal centre line (Y mirrored).
-        case topBottom
+    public var side: Side
+    /// An older file stored the split on each side's toolpath and the two disagreed: the model took the top side's,
+    /// and this toolpath is not cut until the user confirms it (Use These Settings).
+    public var splitNeedsReview: Bool?
+    /// The split an older file stored on this toolpath. Decoded only, for the upgrade that moves it to the model.
+    public var legacySplit: ReliefSplit?
+
+    public init(side: Side = .top) { self.side = side }
+
+    private enum CodingKeys: String, CodingKey { case side, splitNeedsReview, flip, splitDepth, web }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        side = try c.decode(Side.self, forKey: .side)
+        splitNeedsReview = try c.decodeIfPresent(Bool.self, forKey: .splitNeedsReview)
+        if let flip = try c.decodeIfPresent(FlipAxis.self, forKey: .flip) {
+            legacySplit = ReliefSplit(flip: flip, splitDepth: try c.decodeIfPresent(Double.self, forKey: .splitDepth),
+                                      web: try c.decodeIfPresent(Double.self, forKey: .web) ?? 0)
+        }
     }
 
-    public var side: Side
-    public var flip: Flip
-    /// Depth below the (first side's) material top of the plane that separates the two sides;
-    /// nil = halfway between the model's top and bottom.
-    public var splitDepth: Double?
-    /// Material left between the two sides at the split plane around the model, so the part stays
-    /// attached to the board (trim it off afterwards). 0 = the sides meet.
-    public var web: Double
-
-    public init(side: Side = .top, flip: Flip = .leftRight, splitDepth: Double? = nil, web: Double = 0.04) {
-        self.side = side; self.flip = flip; self.splitDepth = splitDepth; self.web = web
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(side, forKey: .side)
+        try c.encodeIfPresent(splitNeedsReview, forKey: .splitNeedsReview)
     }
 }

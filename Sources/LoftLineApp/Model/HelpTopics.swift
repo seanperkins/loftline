@@ -524,6 +524,7 @@ enum FieldHelp {
         "Machine from both sides": "Cut the top of the model, then flip the board and cut the bottom",
         "This toolpath cuts": "Which face of the board this toolpath is for",
         "Flip board": "The axis the board turns over on between the two sides",
+        "Rest after": "The earlier 3D finish of this model whose larger tool already finished the surface; only what it could not reach is cut",
         "Split depth": "Depth of the plane where the two sides meet (off = half the thickness)",
         "Web": "Material left at the split plane so the part stays in the board",
         "Rough first": "Clear most of the material in flat levels before the finishing passes",

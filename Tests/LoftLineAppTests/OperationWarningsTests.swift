@@ -270,7 +270,7 @@ import Testing
         func relief(rough: Bool, roughTool: UUID?, finishing: Bool, rest: UUID?) -> AnyOperation {
             var params = Relief3DParameters(modelID: UUID(), roughing: RoughingSettings(isEnabled: rough, toolID: roughTool))
             params.finishing.isEnabled = finishing
-            params.finishing.restToolID = rest
+            params.finishing.rest = rest.map { .unresolved(toolID: $0) }
             return .relief3D(Relief3DOperation(setup: OperationSetup(name: "R", toolID: finish.id), params: params))
         }
         // Finish tool broken: judged when finishing runs, or when it also roughs; not when only another tool roughs.

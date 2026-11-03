@@ -47,16 +47,16 @@ import Testing
 
     @Test func newerVersionIsRejected() {
         let data = Data(#"{"formatVersion": 99, "document": {}}"#.utf8)
-        #expect(throws: LoftLineIOError.unsupportedFormat("LoftLine file version 99 is newer than this app supports (2).")) {
+        #expect(throws: LoftLineIOError.unsupportedFormat("LoftLine file version 99 is newer than this app supports (3).")) {
             try DocumentFile.decode(from: data)
         }
     }
 
-    @Test func documentFileReadsVersionOneAndWritesVersionTwo() throws {
-        #expect(LoftLineFile.currentVersion == 2)
+    @Test func documentFileReadsVersionOneAndWritesTheCurrentVersion() throws {
+        #expect(LoftLineFile.currentVersion == 3)
         let d = sampleDocument()
         let written = try DocumentFile.encode(d)
-        #expect(try LoftLineFile.formatVersion(of: written) == 2)
+        #expect(try LoftLineFile.formatVersion(of: written) == 3)
         var obj = try #require(JSONSerialization.jsonObject(with: written) as? [String: Any])
         obj["formatVersion"] = 1
         let v1 = try JSONSerialization.data(withJSONObject: obj)

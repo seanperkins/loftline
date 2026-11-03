@@ -184,7 +184,11 @@ struct OperationEditor: View {
         case .relief3D(let o):
             Relief3DForm(params: paramsBinding(o.params) { .relief3D(Relief3DOperation(setup: draft.setup, params: $0)) },
                          units: units, library: library, models: document.document.models,
-                         selection: document.selectedShapes.map(\.id))
+                         selection: document.selectedShapes.map(\.id),
+                         split: Binding(get: { document.document.model(id: o.params.modelID)?.reliefSplit },
+                                        set: { document.setReliefSplit($0, model: o.params.modelID) }),
+                         onUseSplit: { document.useReliefSplit(model: o.params.modelID) },
+                         restCandidates: Self.restCandidates(before: draft.id, model: o.params.modelID, in: document.project))
         }
     }
 
@@ -313,5 +317,21 @@ struct OptionalToolPicker: View {
             Text("None").tag(UUID?.none)
             ForEach(library.tools.filter { kinds.contains($0.kind) }) { t in Text(ToolSearch.pickerLabel(t)).tag(Optional(t.id)) }
         }
+    }
+}
+
+extension OperationEditor {
+    /// The 3D finishes of `model` that come before `id` in the program, as rest sources.
+    static func restCandidates(before id: UUID, model: UUID, in project: LoftLineProject) -> [(id: UUID, name: String)] {
+        var out: [(UUID, String)] = []
+        for op in project.operations {
+            let ops: [AnyOperation]
+            if case .merge(let m) = op { ops = m.params.children } else { ops = [op] }
+            for o in ops {
+                if o.id == id { return out }
+                if case .relief3D(let r) = o, r.params.finishing.isEnabled, r.params.modelID == model { out.append((o.id, o.setup.name)) }
+            }
+        }
+        return out
     }
 }

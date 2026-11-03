@@ -48,7 +48,6 @@ extension AnyOperation {
         case .inlay(let o): ids += o.params.clearanceToolIDs
         case .relief3D(let o):
             if let c = o.params.roughing.toolID { ids.append(c) }
-            if let r = o.params.finishing.restToolID { ids.append(r) }
         case .merge: return toolIDs
         default: break
         }

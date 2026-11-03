@@ -110,8 +110,6 @@ extension Relief3DParameters {
         p.roughing.allowance *= f
         p.roughing.passDepth = roughing.passDepth.map { $0 * f }
         p.finishing.stepover = finishing.stepover.map { $0 * f }
-        p.twoSided?.splitDepth = twoSided?.splitDepth.map { $0 * f }
-        p.twoSided?.web = (twoSided?.web ?? 0) * f
         return p
     }
 }
@@ -218,6 +216,7 @@ extension PlacedModel {
         var m = self
         m.mesh.vertices = mesh.vertices.map { $0 * f }
         m.offset = offset * f; m.depth *= f; m.zTop *= f
+        m.reliefSplit = reliefSplit?.scaled(by: f)
         return m
     }
 }
@@ -265,5 +264,14 @@ extension LoftLineProject {
         p.document = document.converted(to: target)
         p.operations = operations.map { $0.scaled(by: f) }
         return p
+    }
+}
+
+extension ReliefSplit {
+    func scaled(by f: Double) -> ReliefSplit {
+        var s = self
+        s.splitDepth = splitDepth.map { $0 * f }
+        s.web *= f
+        return s
     }
 }

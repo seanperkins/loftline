@@ -48,7 +48,9 @@ enum ToolpathCalculator {
         }
         // Extra nesting sheets parked beside the material are not machined.
         let onMaterial = NestSheets.activeDocument(document)
-        let context = CAMContext(document: onMaterial, tools: project.mergedTools(with: library))
+        var context = CAMContext(document: onMaterial, tools: project.mergedTools(with: library))
+        context.operations = project.operations   // a rest pass finds the finish it follows
+
         if onMaterial.shapes.count != project.document.shapes.count, !op.setup.shapeIDs.isEmpty,
            op.setup.shapeIDs.allSatisfy({ onMaterial.shape(id: $0) == nil && project.document.shape(id: $0) != nil }) {
             let keepOut = Fixtures.keepOutLayerIDs(in: project.document)
