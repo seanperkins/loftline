@@ -281,16 +281,16 @@ enum LoftLineCLI {
                                           groupByTool: options.groupByTool)
         let jobName = options.name ?? project.document.name
         let sheet = GCodeExporter.sheetToolpathsIfProbing(project: project, results: results, scope: scope, profile: profile)
-        var result = GCodeExporter.export(project: outputProject, toolpaths: tps, profile: profile, jobName: jobName,
-                                          sheetToolpaths: sheet)
         // A toolpath asked for by name is judged even when it is switched off, as the one that is missing from this program.
         let asked = targets.map { op -> AnyOperation in
             var setup = op.editableSetup
             setup.isEnabled = true
             return op.with(setup: setup)
         }
-        let missing = GCodeExporter.missingOperationIssues(asked, results: results)
-        result.issues.insert(contentsOf: issues + missing, at: 0)
+        var result = GCodeExporter.export(project: outputProject, toolpaths: tps, profile: profile, jobName: jobName,
+                                          expected: .operations(asked, results: results), sheetToolpaths: sheet)
+        let missing = result.missingSteps
+        result.issues.insert(contentsOf: issues, at: 0)
 
         for issue in result.issues {
             output.standardError("\(issue.severity.rawValue): \(issue.line.map { "line \($0): " } ?? "")\(issue.message)\n")

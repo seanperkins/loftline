@@ -36,7 +36,7 @@ import Testing
         let tps = GCodeExporter.toolpaths(scope: scope, operations: doc.outputProject.operations, results: doc.results,
                                           groupByTool: false)
         let r = GCodeExporter.export(project: doc.outputProject(for: scope), toolpaths: tps, profile: doc.postProfile,
-                                     jobName: doc.document.name)
+                                     jobName: doc.document.name, expected: .notChecked(because: "test"))
         return try #require(r.text)
     }
 
@@ -220,6 +220,26 @@ import Testing
         return url.path
     }
 
+    @Test func cliRefusesAPartialProgramEvenWithForce() throws {
+        // One toolpath calculates, one fails: --force overrides validator errors, never a step missing from the program.
+        var project = try LoftLineProject.decode(from: Data(contentsOf: URL(fileURLWithPath: Self.sign)))
+        guard let first = project.operations.first else { Issue.record("the sample has no toolpaths"); return }
+        var broken = first.withID(UUID())
+        var setup = broken.editableSetup
+        setup.name = "Broken"
+        setup.toolID = UUID()   // not a tool: it fails to calculate
+        broken.editableSetup = setup
+        project.operations.append(broken)
+        let folder = Self.folder()
+        let file = folder.appendingPathComponent("partial.loftline")
+        try project.encoded().write(to: file)
+        let out = folder.appendingPathComponent("out")
+        let forced = Self.run(["export", file.path, "--out", out.path, "--force"])
+        #expect(forced.status != 0)
+        #expect(forced.err.contains("Broken is missing from the program"))
+        #expect(!FileManager.default.fileExists(atPath: out.appendingPathComponent("partial.tap").path))
+    }
+
     @Test func validatorErrorsFailTheRunAndWriteNothingUnlessForced() throws {
         let folder = Self.folder()
         let file = try Self.deepSign(into: folder)
@@ -372,7 +392,7 @@ import Testing
         let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.outputProject.operations, results: doc.results,
                                           groupByTool: false)
         let app = GCodeExporter.export(project: doc.outputProject(for: .all), toolpaths: tps, profile: doc.postProfile,
-                                       jobName: doc.document.name)
+                                       jobName: doc.document.name, expected: .notChecked(because: "test"))
         #expect(bottom.out == app.text)
     }
 }

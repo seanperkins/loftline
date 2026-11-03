@@ -94,7 +94,7 @@ struct EndToEndSignTests {
         }
         let tps = GCodeExporter.toolpaths(scope: .all, operations: project.operations, results: results,
                                           groupByTool: true)
-        return GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "Sign")
+        return GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "Sign", expected: .notChecked(because: "test"))
     }
 
     @Test("Fixture SVG imports onto four layers")

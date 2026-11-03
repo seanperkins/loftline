@@ -24,7 +24,7 @@ import Testing
         let op = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "Cut", toolID: library.tools[0].id,
                                                                              shapeIDs: project.document.shapes.map(\.id))))
         let tps = try op.generate(in: CAMContext(document: project.document, tools: library))
-        let r = GCodeExporter.export(project: project, toolpaths: tps, profile: BuiltInPosts.genericGRBLInch, jobName: "T")
+        let r = GCodeExporter.export(project: project, toolpaths: tps, profile: BuiltInPosts.genericGRBLInch, jobName: "T", expected: .notChecked(because: "test"))
         #expect(r.text == nil)
         #expect(r.errorMessage == "\(tps[0].name) has no spindle speed (below 1 RPM): set the tool's spindle speed.")
     }

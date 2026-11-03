@@ -14,14 +14,14 @@ import Testing
     let ctx = CAMContext(document: project.document, tools: .seeded)
     let tps = try op.generate(in: ctx)
     let profile = BuiltInPosts.avidMach4Inch
-    let clean = GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T")
+    let clean = GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T", expected: .notChecked(because: "test"))
     #expect(!clean.issues.contains { $0.message.contains("keep-out") })
     // A clamp over the left end of the first rectangle.
     let clamp = KeepOutEditing.zones(from: [AppTestSupport.rect(0.5, 1.2, 0.8, 0.5, layer: project.document.defaultLayerID)],
                                      height: 1, tolerance: 0.0005, existing: 0)
     #expect(clamp.count == 1 && clamp[0].outline.count == 4)
     project.document.keepOutZones = clamp
-    let blocked = GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T")
+    let blocked = GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T", expected: .notChecked(because: "test"))
     #expect(blocked.issues.contains { $0.severity == .error && $0.message.contains("keep-out zone") })
 }
 
@@ -46,7 +46,7 @@ import Testing
     let ctx = CAMContext(document: project.document, tools: .seeded)
     let tps = try a.generate(in: ctx) + b.generate(in: ctx)
     let profile = BuiltInPosts.avidMach4Inch
-    let lifted = GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T")
+    let lifted = GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T", expected: .notChecked(because: "test"))
     #expect(!lifted.issues.contains { $0.message.contains("keep-out") })
     let text = try #require(lifted.text)
     let lines = text.split(separator: "\n").map(String.init)
@@ -59,7 +59,7 @@ import Testing
     project.document.keepOutZones = [zone]
     let ctx2 = CAMContext(document: project.document, tools: .seeded)
     let plain = try a.generate(in: ctx2) + b.generate(in: ctx2)
-    let blocked = GCodeExporter.export(project: project, toolpaths: plain, profile: profile, jobName: "T")
+    let blocked = GCodeExporter.export(project: project, toolpaths: plain, profile: profile, jobName: "T", expected: .notChecked(because: "test"))
     #expect(blocked.issues.contains { $0.severity == .error && $0.message.contains("B rapids over keep-out zone") })
 }
 
@@ -80,21 +80,21 @@ func keepOutHomeMoveIsCheckedAndLifted(mode: ZZeroMode) throws {
     let profile = BuiltInPosts.avidMach4Inch
     let ctx = CAMContext(document: project.document, tools: .seeded)
     let plain = try b.generate(in: ctx)
-    let blocked = GCodeExporter.export(project: project, toolpaths: plain, profile: profile, jobName: "T")
+    let blocked = GCodeExporter.export(project: project, toolpaths: plain, profile: profile, jobName: "T", expected: .notChecked(because: "test"))
     #expect(blocked.issues.contains { $0.severity == .error && $0.message.contains(GCodeExporter.homeMoveName) },
             "\(blocked.issues)")
     // A low zone (below Home Z) is fine.
     var low = zone
     low.height = 0.5
     project.document.keepOutZones = [low]
-    let ok = GCodeExporter.export(project: project, toolpaths: plain, profile: profile, jobName: "T")
+    let ok = GCodeExporter.export(project: project, toolpaths: plain, profile: profile, jobName: "T", expected: .notChecked(because: "test"))
     #expect(!ok.issues.contains { $0.message.contains(GCodeExporter.homeMoveName) }, "\(ok.issues)")
 
     zone.liftOver = true
     project.document.keepOutZones = [zone]
     let ctx2 = CAMContext(document: project.document, tools: .seeded)
     let tps = try b.generate(in: ctx2)
-    let lifted = GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T")
+    let lifted = GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T", expected: .notChecked(because: "test"))
     #expect(!lifted.issues.contains { $0.message.contains("keep-out") }, "\(lifted.issues)")
     let text = try #require(lifted.text)
     let lines = text.split(separator: "\n").map(String.init)
@@ -124,7 +124,7 @@ func keepOutHomeLiftIsPinned(mode: ZZeroMode) throws {
                                                                                Vec2(3.4, 3)], height: 1, liftOver: true)]
     let ctx = CAMContext(document: project.document, tools: .seeded)
     let result = GCodeExporter.export(project: project, toolpaths: try b.generate(in: ctx),
-                                      profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+                                      profile: BuiltInPosts.avidMach4Inch, jobName: "T", expected: .notChecked(because: "test"))
     let lines = try #require(result.text).split(separator: "\n").map(String.init)
     let start = try #require(lines.lastIndex { $0.contains("Toolpath: B") })
     let pinned: [ZZeroMode: [String]] = [
@@ -154,7 +154,7 @@ enum FooterTravelExport {
         let b = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "B", toolID: ToolLibrary.seeded.tools[0].id,
                                                                             shapeIDs: [ids[1]])))
         let tps = try b.generate(in: CAMContext(document: project.document, tools: .seeded))
-        return GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T")
+        return GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T", expected: .notChecked(because: "test"))
     }
 
     static func project(_ mode: ZZeroMode) -> LoftLineProject {
@@ -254,7 +254,7 @@ func aProgramThatStartsOverALiftOverClampStaysAboveIt(mode: ZZeroMode) throws {
     let outline = [Vec2(-0.2, -0.2), Vec2(0.2, -0.2), Vec2(0.2, 0.2), Vec2(-0.2, 0.2)].map { $0 + start }
     project.document.keepOutZones = [KeepOutZone(name: "Clamp", outline: outline, height: 0.5, liftOver: true)]
     let tps = try op.generate(in: CAMContext(document: project.document, tools: .seeded))
-    let result = GCodeExporter.export(project: project, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+    let result = GCodeExporter.export(project: project, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch, jobName: "T", expected: .notChecked(because: "test"))
     #expect(!result.issues.contains { $0.message.contains("keep-out") }, "\(result.issues)")
     let text = try #require(result.text)
 

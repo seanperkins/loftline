@@ -147,9 +147,9 @@ struct SaveAllToolpathsSheet: View {
         let sheet = GCodeExporter.sheetToolpathsIfProbing(project: document.project, results: document.results, scope: .all,
                                                           profile: profile)
         posted = GCodeBatchExport.post(files, project: document.outputProject, profile: profile, jobName: document.document.name,
+                                       expected: .operations(document.outputProject.operations, results: document.results),
                                        sheetToolpaths: sheet)
         let missing = document.postProfileIssues(includingPost: profileID == initialProfileID)
-            + GCodeExporter.missingOperationIssues(document.outputProject.operations, results: document.results)
         if !missing.isEmpty {
             posted = posted.map { item in
                 var r = item.result

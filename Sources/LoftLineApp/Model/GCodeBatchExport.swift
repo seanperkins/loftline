@@ -98,8 +98,10 @@ enum GCodeBatchExport {
 
     /// Posts every planned file (validator included). `GCodeFileSet(posted:)` writes the result.
     static func post(_ files: [PlannedGCodeFile], project: LoftLineProject, profile: PostProfile,
-                     jobName: String, sheetToolpaths: SheetToolpaths? = nil) -> [(file: PlannedGCodeFile, result: GCodeExportResult)] {
+                     jobName: String, expected: ExpectedSteps,
+                     sheetToolpaths: SheetToolpaths? = nil) -> [(file: PlannedGCodeFile, result: GCodeExportResult)] {
         files.map { ($0, GCodeExporter.export(project: project, toolpaths: $0.toolpaths, profile: profile, jobName: jobName,
+                                               expected: expected,
                                                sheetToolpaths: sheetToolpaths)) }
     }
 }

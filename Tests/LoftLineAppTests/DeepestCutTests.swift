@@ -88,7 +88,7 @@ import Testing
         }
         let toolpaths = GCodeExporter.toolpaths(scope: .all, operations: project.operations, results: results,
                                                 groupByTool: false)
-        let r = GCodeExporter.export(project: project, toolpaths: toolpaths, profile: profile, jobName: "Sign")
+        let r = GCodeExporter.export(project: project, toolpaths: toolpaths, profile: profile, jobName: "Sign", expected: .notChecked(because: "test"))
         let cut = try #require(r.deepestCut)
         let thickness = project.document.job.thickness
         #expect(cut.depthBelowTop > 0 && cut.depthBelowTop <= thickness + 0.1)

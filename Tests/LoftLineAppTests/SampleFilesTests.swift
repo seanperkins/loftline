@@ -121,7 +121,7 @@ struct SampleFilesTests {
         let tps = GCodeExporter.toolpaths(scope: .all, operations: project.operations, results: results,
                                           groupByTool: false)
         let result = GCodeExporter.export(project: project, toolpaths: tps, profile: profile,
-                                          jobName: "Sign")
+                                          jobName: "Sign", expected: .notChecked(because: "test"))
         #expect(result.errorMessage == nil)
         #expect(result.issues.isEmpty, "\(result.issues)")   // no warnings either: the sample ships clean
         let text = try #require(result.text)
@@ -171,7 +171,7 @@ struct SampleFilesTests {
         }
         let tps = GCodeExporter.toolpaths(scope: .all, operations: project.operations, results: results,
                                           groupByTool: false)
-        let result = GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "Faced board")
+        let result = GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "Faced board", expected: .notChecked(because: "test"))
         #expect(result.errorMessage == nil)
         #expect(result.issues.isEmpty, "\(result.issues)")
         return try #require(result.text)
@@ -223,7 +223,7 @@ struct SampleFilesTests {
         let tps = GCodeExporter.toolpaths(scope: .all, operations: project.operations, results: results,
                                           groupByTool: false)
         let result = GCodeExporter.export(project: project, toolpaths: tps, profile: profile,
-                                          jobName: "Sign")
+                                          jobName: "Sign", expected: .notChecked(because: "test"))
         let text = try #require(result.text)
         #expect(result.issues.isEmpty, "\(result.issues)")
         let committed = String(decoding: try read("sign.tap"), as: UTF8.self)

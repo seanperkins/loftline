@@ -50,8 +50,11 @@ enum TiledExport {
                 ? GCodeExporter.refused("Tiled jobs cannot be posted with touch-plate tool changes yet: the touch-off spot is not "
                                         + "defined per tile. Switch probing off in Preferences > Machines to post the tiles.",
                                         toolpathCount: tile.toolpaths.count)
-                : GCodeExporter.export(project: p, toolpaths: tile.toolpaths, profile: profile, jobName: title)
-            r.issues.insert(contentsOf: extraIssues + missing, at: 0)
+                : GCodeExporter.export(project: p, toolpaths: tile.toolpaths, profile: profile, jobName: title,
+                                       expected: .operations(project.operations, results: results))
+            // The probing refusal above never reaches `export`, so it is given the missing steps here.
+            if probing { r.issues.insert(contentsOf: missing, at: 0); r.missingSteps = missing }
+            r.issues.insert(contentsOf: extraIssues, at: 0)
             let name = String(format: "%@_tile%02d.%@", stem, tile.number, GCodeExporter.fileExtension(for: profile))
             return File(tile: tile, fileName: name, title: title, result: r)
         }

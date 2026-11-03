@@ -14,7 +14,7 @@ import Testing
         let op = AnyOperation.profile(ProfileOperation(setup: OperationSetup(name: "Cut", toolID: ToolLibrary.seeded.tools[0].id,
                                                                              shapeIDs: ids)))
         let tps = try op.generate(in: CAMContext(document: project.document, tools: .seeded))
-        return GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T")
+        return GCodeExporter.export(project: project, toolpaths: tps, profile: profile, jobName: "T", expected: .notChecked(because: "test"))
     }
 
     @Test func massoFilesAreCRLFAndItsTextIsNot() throws {

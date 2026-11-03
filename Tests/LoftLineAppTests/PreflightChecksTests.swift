@@ -202,7 +202,7 @@ import Testing
         doc.perform("Add") { $0.operations.append(o) }
         doc.calculateNow([o.id])
         let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
-        let r = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+        let r = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch, jobName: "T", expected: .notChecked(because: "test"))
         #expect(r.text != nil)
         #expect(!r.hasErrors)
         #expect(r.issues.contains { $0.severity == .warning && $0.message.contains("with tabs off") })
@@ -226,12 +226,61 @@ import Testing
         second.tool = try #require(AppTestSupport.library().tools.first { $0.id != second.tool.id && $0.diameter == second.tool.diameter }
                                    ?? AppTestSupport.library().tools.first { $0.id != second.tool.id })
         let split = { (r: GCodeExportResult) in r.issues.contains { $0.severity == .warning && $0.message.contains("one file per tool") } }
-        let linux = GCodeExporter.export(project: doc.project, toolpaths: tps + [second], profile: BuiltInPosts.linuxCNCInch, jobName: "T")
+        let linux = GCodeExporter.export(project: doc.project, toolpaths: tps + [second], profile: BuiltInPosts.linuxCNCInch, jobName: "T", expected: .notChecked(because: "test"))
         #expect(split(linux))
-        let avid = GCodeExporter.export(project: doc.project, toolpaths: tps + [second], profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+        let avid = GCodeExporter.export(project: doc.project, toolpaths: tps + [second], profile: BuiltInPosts.avidMach4Inch, jobName: "T", expected: .notChecked(because: "test"))
         #expect(!split(avid))
-        let one = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.linuxCNCInch, jobName: "T")
+        let one = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.linuxCNCInch, jobName: "T", expected: .notChecked(because: "test"))
         #expect(!split(one))
+    }
+
+    @Test func everyExportResultCarriesMissingSteps() throws {
+        // `export` itself reports an enabled operation with no toolpaths (docs/implicit-state-machines.md #28), in a
+        // posted program and in a refusal alike, so a new export path cannot forget the check.
+        let doc = calculated { self.profile($0, depth: 0.1, tabs: false) }
+        let missing = profile(doc.project, name: "Never calculated", depth: 0.1, tabs: false)
+        doc.perform("Add") { $0.operations.append(missing) }
+        let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
+        let expected = ExpectedSteps.operations(doc.project.operations, results: doc.results)
+        let posted = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch,
+                                          jobName: "T", expected: expected)
+        #expect(posted.issues.first?.message == "Never calculated is missing from the program: not calculated")
+        #expect(posted.missingSteps.count == 1 && posted.hasErrors)
+        var dwell = BuiltInPosts.avidMach4Inch
+        dwell.id = "shop-grbl"; dwell.controller = .grbl; dwell.dwell = "G4 P{MILLISECONDS}"
+        let refused = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: dwell, jobName: "T", expected: expected)
+        #expect(refused.text == nil)
+        #expect(refused.missingSteps.count == 1 && refused.issues.contains { $0.message.contains("Never calculated is missing") })
+    }
+
+    @Test func failedSourceBlocksTheRestPassAtExport() throws {
+        // The rest pass generated normally, but the finish it rests after failed: the surface is unfinished, so the
+        // program is refused, not just warned (Save Anyway cannot write it).
+        let quarter = ToolLibrary.seeded.tools[3], eighth = ToolLibrary.seeded.tools[4]
+        var p = project()
+        let model = PlacedModel(name: "M", mesh: Mesh3D(vertices: [], indices: []), depth: 0.5, zTop: 0)
+        p.document.models = [model]
+        let source = Relief3DOperation(setup: OperationSetup(name: "Finish", toolID: quarter.id),
+                                       params: Relief3DParameters(modelID: model.id))
+        var restParams = Relief3DParameters(modelID: model.id)
+        restParams.finishing.rest = .operation(source.setup.id)
+        let rest = Relief3DOperation(setup: OperationSetup(name: "Rest", toolID: eighth.id), params: restParams)
+        p.operations = [.relief3D(source), .relief3D(rest)]
+        var cut = Toolpath(name: "Rest (Finishing)", operationID: rest.setup.id, kind: .relief3D, tool: eighth, moves: [
+            .rapid(to: Vec3(1, 1, 0.2)), .linear(to: Vec3(1, 1, -0.1), feed: 20), .linear(to: Vec3(2, 1, -0.1), feed: 60),
+            .rapid(to: Vec3(2, 1, 0.2)),
+        ])
+        cut.metadata["pass"] = "finishing"
+        let results: [UUID: ToolpathResult] = [
+            source.setup.id: ToolpathResult(toolpaths: [], error: "missing 3D model", operation: .relief3D(source),
+                                            designRevision: 0, estimatedSeconds: 0),
+            rest.setup.id: ToolpathResult(toolpaths: [cut], error: nil, operation: .relief3D(rest), designRevision: 0,
+                                          estimatedSeconds: 0),
+        ]
+        let r = GCodeExporter.export(project: p, toolpaths: [cut], profile: BuiltInPosts.avidMach4Inch, jobName: "T",
+                                     expected: .operations([.relief3D(rest)], results: results))
+        #expect(r.text == nil)
+        #expect(r.errorMessage == "Rest after \"Finish\": it has no finishing toolpath")
     }
 
     @Test func aPostThatWouldDwellInTheWrongUnitIsRefusedWithItsReason() throws {
@@ -244,18 +293,18 @@ import Testing
         post.id = "shop-grbl"
         post.controller = .grbl
         post.dwell = "G4 P{MILLISECONDS}"
-        let r = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: post, jobName: "T")
+        let r = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: post, jobName: "T", expected: .notChecked(because: "test"))
         #expect(r.text == nil)
         #expect(r.errorMessage?.contains("cannot be used") == true && r.errorMessage?.contains("seconds") == true)
         var long = try #require(tps.first)
         long.moves.append(.dwell(seconds: 4000))
-        let d = GCodeExporter.export(project: doc.project, toolpaths: [long], profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+        let d = GCodeExporter.export(project: doc.project, toolpaths: [long], profile: BuiltInPosts.avidMach4Inch, jobName: "T", expected: .notChecked(because: "test"))
         #expect(d.text == nil)
         #expect(d.errorMessage?.contains("dwells 4000 s") == true)
         // A drill dwell far past Int.max is refused with its message, not a crash while formatting it.
         var huge = try #require(tps.first)
         huge.moves.append(.dwell(seconds: 1e20))
-        let h = GCodeExporter.export(project: doc.project, toolpaths: [huge], profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+        let h = GCodeExporter.export(project: doc.project, toolpaths: [huge], profile: BuiltInPosts.avidMach4Inch, jobName: "T", expected: .notChecked(because: "test"))
         #expect(h.text == nil && h.errorMessage?.contains("more than the 3600 s") == true)
     }
 
@@ -267,7 +316,7 @@ import Testing
         doc.perform("Add") { $0.operations.append(op) }
         doc.calculateNow([op.id])
         let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
-        let r = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.othermillInch, jobName: "T")
+        let r = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.othermillInch, jobName: "T", expected: .notChecked(because: "test"))
         #expect(r.text != nil)
         #expect(r.issues.contains { $0.severity == .error && $0.message.contains("material top") })
     }
@@ -281,7 +330,7 @@ import Testing
         let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
         var small = BuiltInPosts.avidMach4Inch
         small.limits.xTravel = 5.5
-        let r = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: small, jobName: "T")
+        let r = GCodeExporter.export(project: doc.project, toolpaths: tps, profile: small, jobName: "T", expected: .notChecked(because: "test"))
         #expect(r.text != nil)
         #expect(r.issues.filter { $0.severity == .error && $0.message.hasPrefix("X travel") }.count == 1, "\(r.issues)")
         #expect(!r.issues.contains { $0.message.hasPrefix("Y travel") })
@@ -293,7 +342,7 @@ import Testing
         doc.perform("Add") { $0.operations.append(op) }
         doc.calculateNow([op.id])
         let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
-        return GCodeExporter.export(project: doc.project, toolpaths: tps, profile: post, jobName: "T")
+        return GCodeExporter.export(project: doc.project, toolpaths: tps, profile: post, jobName: "T", expected: .notChecked(because: "test"))
     }
 
     /// #128: a post whose pause never stops is refused at export, even for a one-tool job with no pause.
@@ -328,7 +377,7 @@ import Testing
 
     func exportAll(_ doc: LoftLineDocument) -> GCodeExportResult {
         let tps = GCodeExporter.toolpaths(scope: .all, operations: doc.project.operations, results: doc.results, groupByTool: false)
-        return GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+        return GCodeExporter.export(project: doc.project, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch, jobName: "T", expected: .notChecked(because: "test"))
     }
 
     @Test func operationWarningsAreOnePerToolpathInOrder() {

@@ -167,7 +167,7 @@ private enum Job {
         #expect(files[1].fileName.hasPrefix("02_Sign_T6_"))
         #expect(files[2].fileName.hasPrefix("03_Sign_T1_"))
         for f in files { #expect(Set(f.toolpaths.map(\.tool.id)).count == 1) }
-        let posted = GCodeBatchExport.post(files, project: p, profile: Job.post, jobName: "Sign")
+        let posted = GCodeBatchExport.post(files, project: p, profile: Job.post, jobName: "Sign", expected: .notChecked(because: "test"))
         let dir = AppTestSupport.tempDir()
         let urls = try GCodeFileSet(posted: posted).write(to: dir)
         #expect(urls.count == 3)
