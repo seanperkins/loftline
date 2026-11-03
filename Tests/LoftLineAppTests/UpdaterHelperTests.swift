@@ -553,4 +553,141 @@ struct UpdaterHelperTests {
         #expect(FileManager.default.fileExists(atPath: otherCopy.path), "a copy under any other name is never deleted")
         #expect(FileManager.default.fileExists(atPath: source.path))
     }
+
+    // MARK: one helper per folder (docs/DECISIONS.md `updater-lock`, issue #117)
+
+    static let refusal = "another LoftLine update or recovery is running in"
+
+    /// Runs `command args` while this test holds the folder's lock, the way a first helper would.
+    static func runHolding(_ folder: URL, _ command: String, _ args: [String], env: [String: String] = [:]) throws -> ScriptRunner.Output {
+        try ScriptRunner.exec("/usr/bin/lockf", ["-n", "-k", "-t", "0", folder.path, command] + args, env: env)
+    }
+
+    /// The update arguments `run` would pass, for a helper started some other way.
+    static func updateArguments(archive: URL, target: URL, pid: Int32, relaunch: Int = 0) throws -> [String] {
+        ["--archive", archive.path, "--target", target.path, "--pid", String(pid), "--relaunch", String(relaunch),
+         "--sha256", try sha256(of: archive), "--version", "2.0.0"]
+    }
+
+    static let testEnvironment = ["LOFTLINE_UPDATER_WAIT_SECONDS": "5", "LOFTLINE_UPDATER_SKIP_CODESIGN": "1"]
+
+    /// Every entry beside the app with each bundle's marker, so "nothing changed" covers what is inside them too.
+    static func snapshot(of dir: URL) throws -> [String] {
+        try names(in: dir).map { name in
+            let url = dir.appendingPathComponent(name)
+            return "\(name):\((try? marker(of: url)) ?? "-")"
+        }
+    }
+
+    @Test func aHeldFolderRefusesAnUpdateWithAnotherPid() throws {
+        let box = try Scratch()
+        let target = try box.folder("Applications")
+        try box.app(in: target, marker: "old")
+        let zip = try box.newArchive()
+        let before = try Self.snapshot(of: target)
+
+        let path = ScriptRunner.root.appendingPathComponent(Self.helper).path
+        let result = try Self.runHolding(target, path, Self.updateArguments(archive: zip, target: target, pid: Self.deadPID()),
+                                         env: Self.testEnvironment)
+
+        #expect(result.status == 1, "\(result.err)")
+        #expect(result.err.contains(Self.refusal), "\(result.err)")
+        #expect(try Self.snapshot(of: target) == before)
+        #expect(FileManager.default.fileExists(atPath: zip.path))
+    }
+
+    @Test func aHeldFolderRefusesAnUpdateWithTheSamePidAndKeepsItsStagingFolder() throws {
+        let box = try Scratch()
+        let target = try box.folder("Applications")
+        try box.app(in: target, marker: "old")
+        let pid = try Self.deadPID()
+        try box.app(in: try box.folder("Applications/.LoftLine-update-\(pid)"), marker: "staged")
+        let zip = try box.newArchive()
+        let before = try Self.snapshot(of: target)
+        let staged = target.appendingPathComponent(".LoftLine-update-\(pid)/LoftLine.app")
+
+        let path = ScriptRunner.root.appendingPathComponent(Self.helper).path
+        let result = try Self.runHolding(target, path, Self.updateArguments(archive: zip, target: target, pid: pid),
+                                         env: Self.testEnvironment)
+
+        #expect(result.status == 1, "\(result.err)")
+        #expect(result.err.contains(Self.refusal), "\(result.err)")
+        #expect(try Self.snapshot(of: target) == before)
+        #expect(try Self.marker(of: staged) == "staged", "the first helper's staged app is not touched")
+    }
+
+    @Test func aHeldFolderRefusesRecoverMidSwap() throws {
+        let box = try Scratch()
+        let target = try box.folder("Applications")
+        try box.app(in: target, named: "LoftLine.old-123", marker: "old")
+        let before = try Self.snapshot(of: target)
+
+        let path = ScriptRunner.root.appendingPathComponent(Self.helper).path
+        let result = try Self.runHolding(target, path, ["--recover", target.path])
+
+        #expect(result.status == 1, "\(result.err)")
+        #expect(result.err.contains(Self.refusal), "\(result.err)")
+        #expect(try Self.snapshot(of: target) == before, "the old app stays aside while the other helper is between its renames")
+    }
+
+    @Test func theHelperHoldsTheFolderWhileItWorks() throws {
+        let box = try Scratch()
+        let target = try box.folder("Applications")
+        try box.app(in: target, marker: "old")
+        let bin = try box.folder("probe-bin")
+        let log = box.dir.appendingPathComponent("probe.log")
+        let probe = bin.appendingPathComponent("open")
+        try Data("#!/bin/sh\n/usr/bin/lockf -n -k -t 0 '\(target.path)' /usr/bin/true 2>/dev/null\necho $? >> '\(log.path)'\n".utf8)
+            .write(to: probe)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: probe.path)
+
+        let result = try Self.run(archive: box.newArchive(), target: target, pid: Self.deadPID(), relaunch: 1,
+                                  env: ["PATH": "\(bin.path):\(Self.systemPath)"])
+
+        #expect(result.status == 0, "\(result.err)")
+        #expect(try String(contentsOf: log, encoding: .utf8) == "75\n", "another lockf on the folder is refused while the helper runs")
+    }
+
+    @Test func theAppsTempCopyRemovesItselfAfterAnInstallAndAfterARefusal() throws {
+        let box = try Scratch()
+        let target = try box.folder("Applications")
+        let source = ScriptRunner.root.appendingPathComponent(Self.helper)
+
+        func appsCopy() throws -> URL {
+            let copy = box.dir.appendingPathComponent("loftline-updater-\(UUID().uuidString).sh")
+            try FileManager.default.copyItem(at: source, to: copy)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: copy.path)
+            return copy
+        }
+
+        try box.app(in: target, marker: "old")
+        let installer = try appsCopy()
+        let installed = try ScriptRunner.exec("/bin/bash", [installer.path] + Self.updateArguments(
+            archive: box.newArchive(), target: target, pid: Self.deadPID()), env: Self.testEnvironment)
+        #expect(installed.status == 0, "\(installed.err)")
+        #expect(try Self.marker(of: target.appendingPathComponent("LoftLine.app")) == "new")
+        #expect(!FileManager.default.fileExists(atPath: installer.path), "removed after an install")
+
+        let refused = try appsCopy()
+        let zip = try box.newArchive(marker: "newer", version: "3.0.0")
+        var args = try Self.updateArguments(archive: zip, target: target, pid: Self.deadPID())
+        args[args.count - 1] = "3.0.0"
+        let result = try Self.runHolding(target, "/bin/bash", [refused.path] + args, env: Self.testEnvironment)
+        #expect(result.status == 1, "\(result.err)")
+        #expect(result.err.contains(Self.refusal), "\(result.err)")
+        #expect(!FileManager.default.fileExists(atPath: refused.path), "removed after a refusal")
+    }
+
+    @Test func refusesToInstallBesideALeftoverOldBundle() throws {
+        let box = try Scratch()
+        let target = try box.folder("Applications")
+        try box.app(in: target, named: "LoftLine.old-123", marker: "old")
+        let before = try Self.snapshot(of: target)
+
+        let result = try Self.run(archive: box.newArchive(), target: target, pid: Self.deadPID())
+
+        #expect(result.status == 1, "\(result.err)")
+        #expect(result.err.contains("an earlier update stopped halfway"), "\(result.err)")
+        #expect(try Self.snapshot(of: target) == before)
+    }
 }

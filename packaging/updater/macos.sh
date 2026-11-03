@@ -24,7 +24,14 @@
 # restores the mode bits and metadata that the signature covers. The whole bundle is swapped, never its contents.
 #
 # The swap is TWO renames, not an atomic exchange: the current app moves to LoftLine.old-<pid>, then the staged app
-# moves into place. A crash between them leaves no app at the target; `--recover` puts the old one back.
+# moves into place. A crash between them leaves no app at the target; `--recover` puts the old one back, and until it has,
+# no update installs beside the leftover LoftLine.old-*.
+#
+# One helper per folder (issue #117): an update and `--recover` each lock the folder that holds the app for their whole run,
+# from before the wait for the app to quit until cleanup, and a second one refuses at once. The lock is a flock(2) on the
+# folder itself, held by /usr/bin/lockf while this script runs again as its command (marked LOFTLINE_UPDATER_LOCKED=1), so
+# the kernel drops it however the run ends and nothing is ever created beside the app. Only the `lockf file command` form is
+# used: the fd form is newer than macOS 14. Without lockf nothing is updated; an unlocked run would bring the race back.
 #
 # Environment: LOFTLINE_UPDATER_WAIT_SECONDS (default 120) is how long to wait for the app to exit;
 # LOFTLINE_UPDATER_SKIP_CODESIGN=1, LOFTLINE_UPDATER_REQUIREMENT (replaces DEFAULT_REQUIREMENT) and
@@ -52,6 +59,20 @@ trap cleanup EXIT
 TEAM_ID="HH3SJBAS42"
 DEFAULT_REQUIREMENT="identifier \"com.seanperkins.loftline\" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$TEAM_ID\""
 
+# Kept for the run under the lock: the loop below shifts them away.
+ORIGINAL_ARGS=("$@")
+
+# Runs this script again as the command of a lock on folder $1, unless this run is that one, and exits with its status.
+lock_folder() {
+  [ "${LOFTLINE_UPDATER_LOCKED:-}" != "1" ] || return 0
+  [ -x /usr/bin/lockf ] || die "cannot lock $1: /usr/bin/lockf is missing; not updating"
+  local status=0
+  LOFTLINE_UPDATER_LOCKED=1 /usr/bin/lockf -n -k -t 0 "$1" /bin/bash "$0" "${ORIGINAL_ARGS[@]}" || status=$?
+  # 75 is lockf's EX_TEMPFAIL: another process holds the folder. Anything else is the locked run's own status, or lockf's.
+  [ "$status" -ne 75 ] || die "another LoftLine update or recovery is running in $1; not starting a second"
+  exit "$status"
+}
+
 ARCHIVE="" SHA256="" VERSION="" TARGET="" PID="" RELAUNCH=0 STATE="" RECOVER=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -75,6 +96,7 @@ done
 
 if [ -n "$RECOVER" ]; then
   [ -d "$RECOVER" ] || die "not a folder: $RECOVER"
+  lock_folder "$RECOVER"
   if [ -e "$RECOVER/LoftLine.app" ]; then
     echo "$ME: LoftLine.app is in place; nothing to restore"
     exit 0
@@ -105,6 +127,7 @@ WAIT="${LOFTLINE_UPDATER_WAIT_SECONDS:-120}"
 case "$WAIT" in ''|*[!0-9]*) die "LOFTLINE_UPDATER_WAIT_SECONDS must be a number" ;; esac
 [ -f "$ARCHIVE" ] || die "archive not found: $ARCHIVE"
 [ -d "$TARGET" ] || die "target folder not found: $TARGET"
+lock_folder "$TARGET"
 
 # The app quits right after starting us. Wait until it has, and swap nothing if it has not: replacing the bundle of a
 # running document app would pull it out from under unsaved work.
@@ -119,6 +142,12 @@ APP="$TARGET/LoftLine.app"
 OLD="$TARGET/LoftLine.old-$PID"
 STAGE="$TARGET/.LoftLine-update-$PID"
 [ ! -e "$OLD" ] || die "$OLD already exists; run '$ME --recover \"$TARGET\"' first"
+# With no app, the version check below has nothing to compare with, and a leftover old bundle would stay beside the new one.
+if [ ! -e "$APP" ]; then
+  for f in "$TARGET"/LoftLine.old-*; do
+    [ ! -e "$f" ] || die "an earlier update stopped halfway; run '$ME --recover \"$TARGET\"' first"
+  done
+fi
 
 # A private copy of the archive, hashed and then unpacked, so the bytes that were checked are the bytes that are installed.
 # Nothing is staged beside the app until the digest matches.
