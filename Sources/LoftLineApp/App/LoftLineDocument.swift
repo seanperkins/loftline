@@ -104,7 +104,15 @@ final class LoftLineDocument: ReferenceFileDocument {
     @Published private(set) var designRevision = 0
 
     // Editing state (not saved).
-    @Published var selection: Set<UUID> = []
+    @Published var selection: Set<UUID> = [] {
+        // Nodes are edited only on selected shapes (the canvas shows no others), so a shape leaving the selection takes
+        // its selected nodes with it: arrow keys and Delete would otherwise edit a shape that is not selected.
+        didSet {
+            guard !nodeSelection.isEmpty else { return }
+            let kept = nodeSelection.filter { selection.contains($0.shapeID) }
+            if kept != nodeSelection { nodeSelection = kept }
+        }
+    }
     /// Selection order (first = primary, e.g. the shape others are subtracted from).
     private(set) var selectionOrder: [UUID] = []
     @Published var selectedOperationID: UUID?

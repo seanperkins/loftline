@@ -183,6 +183,27 @@ import Testing
         #expect(doc.project.nodePosition(NodeRef(shapeID: s.id, path: 0, node: 1)) == Vec2(3, 0))
     }
 
+    @Test func nodesOfAShapeThatLeavesTheSelectionAreDropped() {
+        // Duplicate (or Tab, or a sheet switch) changes the selection: arrow keys and Delete must not then edit nodes of
+        // a shape that is no longer selected.
+        let (doc, _) = makeDoc()
+        let s = doc.document.shapes[0]
+        doc.setSelection([s.id])
+        doc.activeTool = .nodeEdit
+        doc.nodeSelection = [NodeRef(shapeID: s.id, path: 0, node: 1)]
+        doc.duplicateSelection()
+        #expect(!doc.selection.contains(s.id))
+        #expect(doc.nodeSelection.isEmpty)
+        // Adding to the selection keeps the nodes of shapes still in it.
+        doc.setSelection([s.id])
+        doc.nodeSelection = [NodeRef(shapeID: s.id, path: 0, node: 1)]
+        doc.setSelection([s.id, doc.document.shapes[1].id])
+        #expect(doc.nodeSelection == [NodeRef(shapeID: s.id, path: 0, node: 1)])
+        // A sheet or side switch clears the selection, and the nodes with it.
+        doc.clearSelection()
+        #expect(doc.nodeSelection.isEmpty)
+    }
+
     @Test func leavingNodeToolClearsNodeSelection() {
         let (doc, _) = makeDoc()
         let s = doc.document.shapes[0]
