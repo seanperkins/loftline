@@ -136,4 +136,16 @@ import Testing
             #expect(approx(doc.project.operations[0].editableDepth?.cutDepth, thickness), "\(thickness)")
         }
     }
+
+    @Test func theFormMeasuresAThroughCutAgainstItsOwnSheet() {
+        // Sheet A (shown) is 0.75 thick, the toolpath's vectors are on sheet B (0.5): the form's "Past the bottom" is
+        // measured from B, as the project resolves it; vectors on both sheets have no one thickness.
+        var p = project()
+        _ = p.document.addSheet(name: "B", job: JobSetup(width: 10, height: 10, thickness: 0.5), layerName: "B", colorHex: "#336699")
+        p.document.shapes[1].layerID = p.document.layers.last!.id
+        var onB = profile(p, depth: 0.5, overcut: 0); onB.editableSetup.shapeIDs = [p.document.shapes[1].id]
+        #expect(OperationEditor.throughThickness(of: onB, in: p) == 0.5)
+        let both = profile(p, depth: 0.5, overcut: 0)
+        #expect(OperationEditor.throughThickness(of: both, in: p) == nil)
+    }
 }

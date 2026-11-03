@@ -142,7 +142,7 @@ struct OperationEditor: View {
         case .profile(let o):
             ProfileForm(params: paramsBinding(o.params) { .profile(ProfileOperation(setup: draft.setup, params: $0)) }, units: units,
                         shapes: document.document.shapes(ids: draft.setup.shapeIDs), isEditingTabs: editingTabsBinding,
-                        materialThickness: document.document.job.thickness, tool: primaryTool)
+                        materialThickness: Self.throughThickness(of: draft, in: document.project), tool: primaryTool)
         case .pocket(let o):
             PocketForm(params: paramsBinding(o.params) { .pocket(PocketOperation(setup: draft.setup, params: $0)) },
                        units: units, library: library, finishToolID: draft.setup.toolID, tool: primaryTool)
@@ -339,5 +339,13 @@ extension OperationEditor {
             }
         }
         return out
+    }
+}
+
+extension OperationEditor {
+    /// The thickness a through cut of `op` is measured from: its own sheet's, as `resolvingThroughDepths` uses (not the
+    /// sheet being shown). nil when its vectors span sheets, where no through cut is offered.
+    static func throughThickness(of op: AnyOperation, in project: LoftLineProject) -> Double? {
+        project.sheetID(of: op).flatMap { project.document.job(ofSheet: $0)?.thickness }
     }
 }
