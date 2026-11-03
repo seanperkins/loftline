@@ -209,6 +209,14 @@ public struct GCodeValidator: Sendable {
                         carried.add("units-mismatch", .warning, line: b.line,
                                     "Program units \(u.abbreviation) differ from the profile's \(profile.units.abbreviation)")
                     }
+                    // A program is written in one unit: a units word that changes the units already in force (a G21 in
+                    // an inch post's tool change template) makes every later coordinate mean something else.
+                    if let was = gUnits, u != was {
+                        carried.add("units-change", .error, line: b.line,
+                                    "G\(NumberFormat.compact(word, maxDecimals: 1)) switches the program from \(was.abbreviation) to "
+                                        + "\(u.abbreviation) mid-program: every later coordinate would be read in \(u.abbreviation). "
+                                        + "Remove it from the post's templates.")
+                    }
                     if u != (gUnits ?? profile.units) {
                         // Restart the checker in the new units, keeping what it found so far.
                         let old = check
@@ -321,6 +329,13 @@ public struct GCodeValidator: Sendable {
             }
             if !nonMotion, bx != nil || by != nil || bz != nil {
                 if let m = reference ? 0 : motion {
+                    // The program's coordinates are absolute; a template's G91 makes the controller add them up instead.
+                    // A G28/G30 is the footer's own move home ("G91 G28 Z0"), not the program's coordinates.
+                    if !absolute, !reference {
+                        carried.add("incremental-motion", .error, line: b.line,
+                                    "Motion in incremental distance mode (G91): the program's coordinates are absolute, so the "
+                                        + "machine would add them up. Remove the G91 from the post, or follow it with G90.")
+                    }
                     if !sawAbsolute, absolute {
                         sawAbsolute = true   // report once
                         carried.add("no-absolute", .warning, line: b.line,
