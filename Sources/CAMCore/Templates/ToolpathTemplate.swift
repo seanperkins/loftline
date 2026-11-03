@@ -114,11 +114,15 @@ public struct ToolpathTemplate: Codable, Hashable, Sendable {
     /// names its source's fresh id.
     public func resolve(in document: Document) -> [(operation: AnyOperation, matched: Int, split: ReliefSplit?)] {
         var out: [(AnyOperation, Int, ReliefSplit?)] = []
-        let fresh = Dictionary(uniqueKeysWithValues: entries.map { ($0.operation.id, UUID()) })
+        // The first entry with an id is the one a rest pass names; a repeated id (a file from before #123) is not a
+        // reason to crash, and each repeat gets its own fresh id.
+        let fresh = Dictionary(entries.map { ($0.operation.id, UUID()) }, uniquingKeysWith: { first, _ in first })
+        var used = Set<UUID>()
         for e in entries {
             var op = e.operation.detachedFromDesign()
             var setup = op.setup
-            setup.id = fresh[e.operation.id] ?? UUID()
+            let id = fresh[e.operation.id] ?? UUID()
+            setup.id = used.insert(id).inserted ? id : UUID()
             if case .relief3D(var r) = op {
                 guard let model = document.models.first else { continue }
                 r.params.modelID = model.id

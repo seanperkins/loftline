@@ -217,4 +217,16 @@ private let eighth = ToolLibrary.seeded.tools[4]    // 1/8" ball nose
         #expect(GCodeExporter.calculationTargets(project: p, exported: [source.setup.id], scope: .operation(source.setup.id),
                                                  profile: BuiltInPosts.avidMach4Inch) == [source.setup.id])
     }
+
+    @Test func aTemplateWithRepeatedEntryIDsAppliesInsteadOfCrashing() throws {
+        // Files written before #123 could repeat an operation id; a template saved from one must still apply.
+        let (p, _, _) = project()
+        var template = ToolpathTemplate.make(from: p, library: .seeded)
+        template.entries.append(template.entries[0])
+        var (target, _, _) = project()
+        target.operations = []
+        TemplateService.apply(template, to: &target, library: .seeded)
+        #expect(target.operations.count == 3)
+        #expect(Set(target.operations.map(\.id)).count == 3)
+    }
 }
