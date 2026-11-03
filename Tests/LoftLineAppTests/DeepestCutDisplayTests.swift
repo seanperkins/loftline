@@ -49,7 +49,7 @@ import Testing
     @Test func everySaveAllFileCarriesItsOwnDeepestCut() throws {
         let doc = calculatedDoc()
         let files = GCodeBatchExport.plan(mode: .filePerToolpath, operations: doc.project.operations, results: doc.results,
-                                          jobName: "T", profile: BuiltInPosts.avidMach4Inch)
+                                          jobName: "T", profile: BuiltInPosts.avidMach4Inch, groupByTool: false)
         let posted = GCodeBatchExport.post(files, project: doc.project, profile: BuiltInPosts.avidMach4Inch, jobName: "T", expected: .notChecked(because: "test"))
         #expect(posted.count == 2)
         let texts = try posted.map { try #require($0.result.deepestCut).text(units: .inch) }

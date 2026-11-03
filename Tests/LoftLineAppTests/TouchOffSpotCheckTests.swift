@@ -87,7 +87,7 @@ import Testing
         let (doc, ids) = makeDoc(spot: Vec2(6, 4))
         expectRefused(export(doc, scope: .operation(ids[0])), "single operation over another toolpath's cut")
         let files = GCodeBatchExport.plan(mode: .filePerTool, operations: doc.outputProject.operations, results: doc.results,
-                                          jobName: "J", profile: Self.probing)
+                                          jobName: "J", profile: Self.probing, groupByTool: false)
         let sheet = GCodeExporter.sheetToolpathsIfProbing(project: doc.project, results: doc.results, scope: .all, profile: Self.probing)
         for (_, r) in GCodeBatchExport.post(files, project: doc.outputProject, profile: Self.probing, jobName: "J",
                                                 expected: .notChecked(because: "test"), sheetToolpaths: sheet) {
