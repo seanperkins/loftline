@@ -20,6 +20,16 @@ enum PreflightChecks {
             + duplicateToolNumbers(tools)
             + toolNameMismatches(tools)
             + modelsDeeperThanStock(project.document)
+            + [mixedSheets(project.document)].compactMap { $0 }
+    }
+
+    /// Nest sheets (extra sheets of parts parked beside the material) and material sheets (a job of several boards) are
+    /// two kinds of sheet that do not know about each other: nesting places parts by the first sheet's size.
+    static func mixedSheets(_ doc: Document) -> GCodeIssue? {
+        guard doc.isMultiSheet, doc.layers.contains(where: { $0.sheet != nil }) else { return nil }
+        return GCodeIssue(severity: .warning, message: "Nest sheets and material sheets are both used: nesting places parts by "
+                            + "the first sheet's size and does not know the other material sheets. Check every part's "
+                            + "position before cutting.")
     }
 
     // MARK: Operation warnings

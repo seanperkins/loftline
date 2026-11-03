@@ -57,12 +57,20 @@ extension LoftLineProject {
     // MARK: Layers
 
     @discardableResult
+    /// A new layer on the current sheet (a layer with no sheet is on the primary one, so one added while another sheet
+    /// is shown would be hidden there).
     mutating func addLayer(named name: String? = nil) -> UUID {
         let palette = ["#1E90FF", "#E4572E", "#17BEBB", "#76B041", "#FFC914", "#9B5DE5"]
         let n = document.layers.count + 1
-        let layer = Layer(name: name ?? "Layer \(n)", colorHex: palette[(n - 1) % palette.count])
+        var layer = Layer(name: name ?? "Layer \(n)", colorHex: palette[(n - 1) % palette.count])
+        layer.sheetID = document.currentSheetID == MaterialSheet.primaryID ? nil : document.currentSheetID
         document.layers.append(layer)
         return layer.id
+    }
+
+    /// The current sheet's layer named `name`, if there is one (import reuses it instead of adding another).
+    func layerOnCurrentSheet(named name: String) -> UUID? {
+        document.layers.first { $0.name == name && document.sheetID(ofLayer: $0.id) == document.currentSheetID }?.id
     }
 
     /// Deletes a layer. Its shapes move to another ordinary layer of the same sheet and side so
@@ -78,10 +86,17 @@ extension LoftLineProject {
             document.pruneSingletonGroups()
             return
         }
+        guard document.shapes.contains(where: { $0.layerID == id }) else { return }
         let ordinary = document.layers.filter { $0.keepOut == nil && $0.sheet == nil }
-        let target = ordinary.first { $0.side == gone.side && $0.sheetID == gone.sheetID }
-            ?? ordinary.first ?? document.layers[0]
-        for i in document.shapes.indices where document.shapes[i].layerID == id { document.shapes[i].layerID = target.id }
+        // Never another side or sheet: with no ordinary layer left there, one is made.
+        let target = ordinary.first { $0.side == gone.side && $0.sheetID == gone.sheetID }?.id ?? {
+            var layer = Layer(name: "Layer \(document.layers.count + 1)", colorHex: gone.colorHex)
+            layer.side = gone.side
+            layer.sheetID = gone.sheetID
+            document.layers.append(layer)
+            return layer.id
+        }()
+        for i in document.shapes.indices where document.shapes[i].layerID == id { document.shapes[i].layerID = target }
     }
 
     mutating func updateLayer(_ layer: Layer) {
