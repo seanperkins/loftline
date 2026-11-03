@@ -117,8 +117,12 @@ final class LoftLineDocument: ReferenceFileDocument {
     private(set) var selectionOrder: [UUID] = []
     @Published var selectedOperationID: UUID?
     @Published var hiddenToolpaths: Set<UUID> = []
-    /// Profile operation whose tabs the canvas is editing (click to add, drag to move).
-    @Published var tabEditingOperationID: UUID?
+    /// Profile operation whose tabs the canvas is editing (click to add, drag to move). The canvas runs one session at a
+    /// time (tab editing, envelope, kerning): starting tab editing ends the others, and `beginEnvelopeEdit` and
+    /// `beginKerning` end it.
+    @Published var tabEditingOperationID: UUID? {
+        didSet { if tabEditingOperationID != nil { envelopeEdit = nil; kerningShapeID = nil } }
+    }
     /// Envelope distortion with draggable corners in progress on the canvas.
     @Published var envelopeEdit: EnvelopeEdit?
     /// Live text whose letters are being dragged on the canvas (interactive kerning).
@@ -141,7 +145,11 @@ final class LoftLineDocument: ReferenceFileDocument {
     private var generationCounter = 0
     private var resultGeneration: [UUID: Int] = [:]
     @Published var activeTool: CanvasTool = .select {
-        didSet { if activeTool != .nodeEdit { nodeSelection = [] } }
+        didSet {
+            if activeTool != .nodeEdit { nodeSelection = [] }
+            // Envelope and kerning run on the select tool; another tool ends them rather than leave them taking clicks.
+            if activeTool != .select { envelopeEdit = nil; kerningShapeID = nil }
+        }
     }
     /// Selected anchors while the node-edit tool is active.
     @Published var nodeSelection: Set<NodeRef> = []
@@ -449,6 +457,7 @@ final class LoftLineDocument: ReferenceFileDocument {
         let opIDs = Set(project.operations.map(\.id))
         if let sel = selectedOperationID, !opIDs.contains(sel) { selectedOperationID = nil }
         if let t = tabEditingOperationID, operation(t)?.profileTabs == nil { tabEditingOperationID = nil }
+        if let e = envelopeEdit, !e.shapeIDs.allSatisfy(ids.contains) { envelopeEdit = nil }
         results = results.filter { opIDs.contains($0.key) }
     }
 

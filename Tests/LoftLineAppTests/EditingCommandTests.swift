@@ -204,6 +204,32 @@ import Testing
         #expect(doc.nodeSelection.isEmpty)
     }
 
+    @Test func theCanvasRunsOneSessionAtATime() {
+        // Tab editing, an envelope and kerning each take the canvas's clicks; two at once stacked their banners and left
+        // tab editing unresponsive.
+        let (doc, _) = makeDoc()
+        let opID = UUID()
+        doc.setSelection(doc.document.shapes.map(\.id))
+        doc.beginEnvelopeEdit()
+        #expect(doc.envelopeEdit != nil)
+        doc.tabEditingOperationID = opID
+        #expect(doc.envelopeEdit == nil)
+        doc.beginEnvelopeEdit()
+        #expect(doc.tabEditingOperationID == nil && doc.envelopeEdit != nil)
+        // Another tool ends the envelope rather than leave it taking clicks.
+        doc.activeTool = .rectangle
+        #expect(doc.envelopeEdit == nil)
+    }
+
+    @Test func deletingTheEnvelopesShapesEndsIt() {
+        let (doc, _) = makeDoc()
+        doc.setSelection([doc.document.shapes[0].id])
+        doc.beginEnvelopeEdit()
+        #expect(doc.envelopeEdit != nil)
+        doc.deleteSelection()
+        #expect(doc.envelopeEdit == nil)
+    }
+
     @Test func leavingNodeToolClearsNodeSelection() {
         let (doc, _) = makeDoc()
         let s = doc.document.shapes[0]
