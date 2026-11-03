@@ -280,6 +280,8 @@ struct ToolChangeProbeSection: View {
     @Binding var machine: MachineDefinition
     /// The installed posts (a user file replaces the built-in of its id), for the "none can probe" warning.
     var posts: [PostProfile]
+    /// The probe switched off while this editor is open, so switching back on restores it (`setToolChangeProbe`).
+    @State private var stash: ProbeStash?
 
     private func value<T>(_ kp: WritableKeyPath<ToolChangeProbe, T>, _ fallback: T) -> Binding<T> {
         Binding(get: { machine.toolChangeProbe?[keyPath: kp] ?? fallback }, set: { machine.toolChangeProbe?[keyPath: kp] = $0 })
@@ -290,7 +292,7 @@ struct ToolChangeProbeSection: View {
         Section("Tool change: park and probe") {
             Toggle("Park and re-zero Z on a touch plate at every tool change",
                    isOn: Binding(get: { machine.toolChangeProbe != nil },
-                                 set: { machine.toolChangeProbe = $0 ? ToolChangeProbe.defaults(for: machine) : nil }))
+                                 set: { machine.setToolChangeProbe(on: $0, stash: &stash) }))
                 .help("The program parks the gantry for a manual tool swap, then probes a plate on the material and sets Z")
             if let probe = machine.toolChangeProbe {
                 Picker("Controller", selection: value(\.controller, .mach4)) {
