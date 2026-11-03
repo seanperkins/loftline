@@ -74,7 +74,7 @@ public struct ToolpathTemplate: Codable, Hashable, Sendable {
         var tools: [Tool] = []
         // A merged toolpath is stored as its children (each needs its own vectors).
         let ops = project.operations.filter { operationIDs?.contains($0.id) ?? true }.flatMap { op -> [AnyOperation] in
-            if case .merge(let m) = op { return m.params.children }
+            if case .merge(let m) = op { return m.standaloneParts }
             return [op]
         }
         for op in ops {

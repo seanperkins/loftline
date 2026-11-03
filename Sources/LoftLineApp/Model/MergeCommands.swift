@@ -41,18 +41,7 @@ extension LoftLineProject {
     /// Puts a merged operation's toolpaths back in its place; its pause goes back on the last one.
     mutating func splitMerged(_ id: UUID) {
         guard let i = operationIndex(id), case .merge(let m) = operations[i] else { return }
-        var children = m.params.children.map { child in
-            var c = child, s = child.editableSetup
-            s.coolant = m.setup.coolant
-            c.editableSetup = s
-            return c
-        }
-        if let last = children.indices.last {
-            var s = children[last].editableSetup
-            s.pauseAfter = m.setup.pauseAfter
-            children[last].editableSetup = s
-        }
-        operations.replaceSubrange(i...i, with: children)
+        operations.replaceSubrange(i...i, with: m.standaloneParts)
         // Parts of a duplicated merge written before #123 may repeat ids already at the top level.
         operations = operations.givingRepeatedIDsNewOnes()
     }

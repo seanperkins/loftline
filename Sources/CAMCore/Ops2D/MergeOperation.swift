@@ -70,6 +70,19 @@ public struct MergeOperation: ToolpathOperation {
         }
     }
 
+    /// The parts as standalone operations (Split, and a template, which stores a merge as its parts): each takes the
+    /// merge's on/off and coolant, and the last takes its pause, since inside the merge only the whole has those.
+    public var standaloneParts: [AnyOperation] {
+        let children = params.children
+        return children.indices.map { i in
+            var s = children[i].setup
+            s.isEnabled = setup.isEnabled
+            s.coolant = setup.coolant
+            s.pauseAfter = i == children.count - 1 ? setup.pauseAfter : nil
+            return children[i].with(setup: s)
+        }
+    }
+
     /// A merge of `ops` (merges among them are flattened), named `name`.
     public static func merging(_ ops: [AnyOperation], name: String) -> MergeOperation? {
         var children: [AnyOperation] = []

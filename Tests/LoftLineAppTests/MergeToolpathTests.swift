@@ -50,3 +50,27 @@ private func project() -> LoftLineProject {
     let t = ToolpathTemplate.make(from: p, library: lib)
     #expect(t.entries.map(\.operation.setup.name) == ["Pocket", "Cut", "Drill"])
 }
+
+@Test func splittingATurnedOffMergeLeavesItsPartsOff() throws {
+    // The parts of a merge are always on (only the merge is cut or not); splitting a merge that is off must not turn
+    // every part back on.
+    var p = project()
+    let merged = p.mergeWithNext(p.operations[0].id)
+    let id = try #require(merged)
+    p.operations[0].editableSetup.isEnabled = false
+    p.splitMerged(id)
+    #expect(p.operations.map(\.setup.isEnabled) == [false, false, true])
+}
+
+@Test func aTemplateFromAMergeKeepsItsPauseAndOnOff() {
+    // A template stores a merge as its parts, so the merge's pause goes on the last part (as Split does) and a merge
+    // that is off stays off.
+    var p = project()
+    let merged = p.mergeWithNext(p.operations[0].id)
+    #expect(merged != nil)
+    p.operations[0].editableSetup.pauseAfter = PauseStep(message: "Flip")
+    p.operations[0].editableSetup.isEnabled = false
+    let t = ToolpathTemplate.make(from: p, library: lib)
+    #expect(t.entries.map { $0.operation.setup.pauseAfter?.message } == [nil, "Flip", nil])
+    #expect(t.entries.map(\.operation.setup.isEnabled) == [false, false, true])
+}
