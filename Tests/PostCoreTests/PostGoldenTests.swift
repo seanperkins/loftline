@@ -143,7 +143,10 @@ private struct PostNumbers: Sendable, CustomStringConvertible {
     var description: String { id }
 }
 
-private let newPostNumbers = [
+// Built in steps with the element type spelled out: as one literal joined with `+`, the macos-15 runner's compiler gave up
+// type-checking it ("unable to type-check this expression in reasonable time").
+private let newPostNumbers: [PostNumbers] = {
+  var rows: [PostNumbers] = [
     PostNumbers(id: "generic-grbl-inch", name: "Generic GRBL (inch)", ext: "nc", units: .inch, decimals: 4, feedDecimals: 1,
                 x: 29.5, y: 29.5, z: 2.55, spoilboard: 0.039, rapid: 314.9, feed: 314.9, minRPM: 0, maxRPM: 30000,
                 arcTolerance: 0.0005),
@@ -169,15 +172,20 @@ private let newPostNumbers = [
                 arcTolerance: 0.0005),
     PostNumbers(id: "carbide-motion-mm", name: "Carbide Motion (mm)", ext: "nc", units: .millimeter, decimals: 3, feedDecimals: 0,
                 x: 623, y: 623, z: 155, spoilboard: 1.0, rapid: 8000, feed: 8000, minRPM: 0, maxRPM: 30000, arcTolerance: 0.01),
-] + genericController("masso-g3", "MASSO G3", mmFeedDecimals: 1) + genericController("uccnc", "UCCNC", mmFeedDecimals: 0)
-  + genericController("centroid", "Centroid CNC12", mmFeedDecimals: 0)
-  + [PostNumbers(id: "shopbot-gcode-inch", name: "ShopBot G-code (inch)", ext: "tap", units: .inch, decimals: 4, feedDecimals: 1,
-                 x: 48, y: 48, z: 6, spoilboard: 0.05, rapid: 360, feed: 240, minRPM: 0, maxRPM: 24000, arcTolerance: 0.0005)]
-  + genericController("syntec", "Syntec", mmFeedDecimals: 1, rapid: (1500, 38100), feed: (1500, 38100))
-  + genericController("haas", "Haas", mmFeedDecimals: 1, rapid: (710, 18034), feed: (650, 16510))
-  + [PostNumbers(id: "ncstudio-mm", name: "NcStudio (mm)", ext: "nc", units: .millimeter, decimals: 3, feedDecimals: 0,
-                 x: 1219.2, y: 1219.2, z: 152.4, spoilboard: 1.27, rapid: 5080, feed: 5080, minRPM: 0, maxRPM: 24000,
-                 arcTolerance: 0.01)]
+]
+  rows += genericController("masso-g3", "MASSO G3", mmFeedDecimals: 1)
+  rows += genericController("uccnc", "UCCNC", mmFeedDecimals: 0)
+  rows += genericController("centroid", "Centroid CNC12", mmFeedDecimals: 0)
+  rows.append(PostNumbers(id: "shopbot-gcode-inch", name: "ShopBot G-code (inch)", ext: "tap", units: .inch, decimals: 4,
+                          feedDecimals: 1, x: 48, y: 48, z: 6, spoilboard: 0.05, rapid: 360, feed: 240, minRPM: 0,
+                          maxRPM: 24000, arcTolerance: 0.0005))
+  rows += genericController("syntec", "Syntec", mmFeedDecimals: 1, rapid: (1500, 38100), feed: (1500, 38100))
+  rows += genericController("haas", "Haas", mmFeedDecimals: 1, rapid: (710, 18034), feed: (650, 16510))
+  rows.append(PostNumbers(id: "ncstudio-mm", name: "NcStudio (mm)", ext: "nc", units: .millimeter, decimals: 3, feedDecimals: 0,
+                          x: 1219.2, y: 1219.2, z: 152.4, spoilboard: 1.27, rapid: 5080, feed: 5080, minRPM: 0, maxRPM: 24000,
+                          arcTolerance: 0.01))
+  return rows
+}()
 
 /// MASSO, UCCNC and Centroid run on many machines: the posts carry the LinuxCNC posts' generic envelope, which a machine replaces.
 private func genericController(_ id: String, _ name: String, mmFeedDecimals: Int, rapid: (Double, Double) = (200, 5080),
