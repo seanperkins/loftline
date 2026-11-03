@@ -161,10 +161,30 @@ final class LoftLineDocument: ReferenceFileDocument {
     @Published var centerMode: CenterMode = .design2D
     /// Side shown and edited in a two-sided job.
     @Published var activeSide: JobSide = .top
-    @Published var sheet: DocumentSheet?
+    /// The sheet shown on the document window. Opening one while another is open beeps and changes nothing: a menu
+    /// shortcut must not throw away the open sheet's draft. Closing (nil) always works; a sheet that opens another on
+    /// purpose uses `replaceSheet`.
+    var sheet: DocumentSheet? {
+        get { presentedSheet }
+        set {
+            if newValue == nil || presentedSheet == nil || newValue == presentedSheet {
+                presentedSheet = newValue
+            } else {
+                NSSound.beep()
+            }
+        }
+    }
+    @Published private(set) var presentedSheet: DocumentSheet?
     /// Shown by ContentView on the document window. Never set it while a sheet is up: SwiftUI drops an
     /// alert under a sheet. A sheet shows its own failure (`SheetErrorRow`) or reports with `report(_:)`.
-    @Published var alert: AlertMessage?
+    /// A report held while it showed (`report`) appears once it is dismissed.
+    @Published var alert: AlertMessage? {
+        didSet {
+            guard alert == nil, oldValue != nil, deferredAlert != nil else { return }
+            // On the next turn of the run loop: SwiftUI drops an alert presented while the last one is closing.
+            DispatchQueue.main.async { [weak self] in self?.showDeferredAlert() }
+        }
+    }
     @Published var canvasRequest = CanvasRequest(kind: .fit, serial: 0)
     /// Cursor position in document units (for the status bar).
     @Published var cursorPosition: Vec2?
@@ -1029,7 +1049,7 @@ final class LoftLineDocument: ReferenceFileDocument {
     /// it), because an alert cannot show over a sheet. Every message for the user goes through here: a command
     /// that can run while a sheet is up (a menu item, a dialog's own action) never sets `alert` itself.
     func report(_ message: AlertMessage) {
-        if sheet == nil && !platformSheetOpen { alert = message } else { hold(message) }
+        if sheet == nil && !platformSheetOpen && alert == nil { alert = message } else { hold(message) }
     }
 
     /// Keeps a report for `sheetDismissed()`. Reports held together are joined, each under its own
@@ -1048,6 +1068,17 @@ final class LoftLineDocument: ReferenceFileDocument {
     /// (an applied sheet consumed them in its edit; the Job Setup sheet also drops them when it
     /// opens), so they cannot latch onto whatever parameter next takes their value. Then the next
     /// queued placement, then any deferred import report.
+    /// Swaps the open sheet on purpose (a sheet's own button that opens another, such as Save All's Check Toolpaths).
+    func replaceSheet(_ s: DocumentSheet) { presentedSheet = s }
+
+    /// The held report, unless something is showing by now (a sheet, or an alert reported meanwhile): then it stays
+    /// held for the next dismissal.
+    private func showDeferredAlert() {
+        guard alert == nil, sheet == nil, !platformSheetOpen, let a = deferredAlert else { return }
+        deferredAlert = nil
+        alert = a
+    }
+
     func sheetDismissed() {
         _ = expressionRecorder.take()
         if !pendingPlacements.isEmpty {

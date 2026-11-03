@@ -62,7 +62,7 @@ struct SaveAllToolpathsSheet: View {
             }
             SheetErrorRow(message: failure)
             HStack {
-                Button("Check Toolpaths…") { document.sheet = .validation }
+                Button("Check Toolpaths…") { document.replaceSheet(.validation) }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(mode.isSingleFile ? "Save…" : "Choose Folder…") {
