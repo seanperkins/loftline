@@ -18,10 +18,21 @@ mkdir -p "$OUT"
 Xvfb :9 -screen 0 1440x900x24 >/dev/null 2>&1 &
 export DISPLAY=:9
 sleep 2
-dbus-run-session -- "$app" samples/sign.loftline > "$OUT/app.log" 2>&1 &
+LOFTLINE_VIEW=split dbus-run-session -- "$app" samples/sign.loftline > "$OUT/app.log" 2>&1 &
 pid=$!
-sleep 12
+sleep 25
 import -window root "$OUT/linux-app.png"
 if ! kill -0 "$pid" 2>/dev/null; then echo "FAIL: the app exited" >&2; cat "$OUT/app.log" >&2; exit 1; fi
+kill "$pid" || true
+
+# The same front end driven end to end against this Linux core, in Chromium.
+cd desktop
+npx playwright install --with-deps chromium-headless-shell >&2
+swift build --package-path .. --scratch-path "../$scratch" --product loftline-cli >&2
+cli="$(swift build --package-path .. --scratch-path "../$scratch" --show-bin-path)/loftline-cli"
+node tools/serve.mjs "$LOFTLINE_CORE" 5174 >/dev/null 2>&1 &
+sleep 2
+node tools/e2e.mjs "$cli" | tail -6
+cd ..
 ls -la "$app" "$LOFTLINE_CORE" | awk '{print $5, $9}'
 echo "ran: $OUT/linux-app.png"

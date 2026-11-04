@@ -65,6 +65,61 @@ async function exportVectors() {
   try { await call("exportVectors", { path, ids: app.selection.size ? [...app.selection] : undefined }); } catch (e) { sheets.openAlert("Export", e instanceof Error ? e.message : String(e)); }
 }
 
+async function command(name: string, extra: Record<string, unknown> = {}) {
+  try {
+    const done = await call<{ state: State; selection?: string[]; note?: string }>("command", { name, ids: [...app.selection], ...extra });
+    if (done.selection) app.selection = new Set(done.selection);
+    setState(done.state);
+    if (done.note) sheets.openAlert("LoftLine", done.note);
+  } catch (e) { sheets.openAlert("LoftLine", e instanceof Error ? e.message : String(e)); }
+}
+
+const u = () => unitLabel(doc().units);
+const step = () => (doc().units === "inch" ? 0.25 : 5);
+
+async function offsetCommand() {
+  const r = await sheets.askNumbers("Offset", [{ key: "d", label: "Distance", value: step(), unit: u() }], { label: "Sharp corners", value: false });
+  if (r) await command("offset", { number: r.values.d, flag: r.flag });
+}
+async function joinCommand() {
+  const r = await sheets.askNumbers("Join Open Vectors", [{ key: "t", label: "Tolerance", value: doc().units === "inch" ? 0.001 : 0.025, unit: u() }]);
+  if (r) await command("join", { number: r.values.t });
+}
+async function rectArray() {
+  const r = await sheets.askNumbers("Rectangular Array", [
+    { key: "rows", label: "Rows", value: 2, integer: true }, { key: "columns", label: "Columns", value: 2, integer: true },
+    { key: "x", label: "X spacing", value: step() * 4, unit: u() }, { key: "y", label: "Y spacing", value: step() * 4, unit: u() },
+  ], { label: "Spacing is the gap between copies", value: false });
+  if (r) await command("rectangularArray", { rows: r.values.rows, columns: r.values.columns, x: r.values.x, y: r.values.y, flag: r.flag });
+}
+async function circularArray() {
+  const r = await sheets.askNumbers("Circular Array", [
+    { key: "count", label: "Copies", value: 6, integer: true }, { key: "step", label: "Angle between", value: 60, unit: "°" },
+    { key: "x", label: "Center X", value: doc().job.width / 2, unit: u() }, { key: "y", label: "Center Y", value: doc().job.height / 2, unit: u() },
+  ], { label: "Rotate the copies", value: true });
+  if (r) await command("circularArray", { count: r.values.count, number: r.values.step, center: { x: r.values.x, y: r.values.y }, flag: r.flag });
+}
+async function corners(kind: "fillet" | "chamfer") {
+  const r = await sheets.askNumbers(kind === "fillet" ? "Fillet Corners" : "Chamfer Corners", [{ key: "v", label: kind === "fillet" ? "Radius" : "Distance", value: step(), unit: u() }]);
+  if (r) await command(kind, { number: r.values.v });
+}
+async function jobSheet() {
+  const path = await sheets.pickSave("Export Job Sheet", `${app.state?.title ?? "Job"}.html`, "html");
+  if (!path) return;
+  try { await call("jobSheet", { path }); } catch (e) { sheets.openAlert("Job Sheet", e instanceof Error ? e.message : String(e)); }
+}
+
+let clipboard: unknown[] = [];
+const copy = () => { clipboard = doc().shapes.filter((s) => app.selection.has(s.id)); };
+async function paste() {
+  if (!clipboard.length) return;
+  try {
+    const done = await call<{ state: State; selection: string[] }>("paste", { shapes: clipboard });
+    app.selection = new Set(done.selection);
+    setState(done.state);
+  } catch (e) { sheets.openAlert("Paste", e instanceof Error ? e.message : String(e)); }
+}
+
 const setCenter = (m: typeof app.center) => {
   app.center = m;
   layout();
@@ -85,10 +140,14 @@ const menus: [string, Item[]][] = [
     { label: "Import…", keys: "Ctrl+I", run: () => void importFile() },
     { label: "Export Vectors…", run: () => void exportVectors() },
     { label: "Export G-code…", keys: "Ctrl+E", run: () => void sheets.openExport(null) },
+    { label: "Export Job Sheet…", run: () => void jobSheet() },
   ]],
   ["Edit", [
     { label: "Undo", keys: "Ctrl+Z", run: () => void apply("undo"), enabled: () => !!app.state?.undoAction },
     { label: "Redo", keys: "Ctrl+Shift+Z", run: () => void apply("redo"), enabled: () => !!app.state?.redoAction }, "-",
+    { label: "Copy", keys: "Ctrl+C", run: copy, enabled: hasSelection },
+    { label: "Paste", keys: "Ctrl+V", run: () => void paste(), enabled: () => clipboard.length > 0 },
+    { label: "Duplicate", keys: "Ctrl+D", run: () => { copy(); void paste(); }, enabled: hasSelection },
     { label: "Delete", keys: "Del", run: () => void apply("deleteShapes", { ids: [...app.selection] }), enabled: hasSelection },
     { label: "Select All", keys: "Ctrl+A", run: () => { app.selection = new Set(doc().shapes.map((s) => s.id)); refresh(); } },
   ]],
@@ -99,13 +158,50 @@ const menus: [string, Item[]][] = [
     { label: "Toolpaths", run: () => { app.showToolpaths = !app.showToolpaths; refresh(); } },
     { label: "Inspector", run: () => { app.showInspector = !app.showInspector; layout(); refresh(); } },
   ]],
+  ["Design", [
+    { label: "Align Left", run: () => void command("align", { mode: "left" }), enabled: hasSelection },
+    { label: "Align Centers Horizontally", run: () => void command("align", { mode: "centerX" }), enabled: hasSelection },
+    { label: "Align Right", run: () => void command("align", { mode: "right" }), enabled: hasSelection },
+    { label: "Align Top", run: () => void command("align", { mode: "top" }), enabled: hasSelection },
+    { label: "Align Centers Vertically", run: () => void command("align", { mode: "centerY" }), enabled: hasSelection },
+    { label: "Align Bottom", run: () => void command("align", { mode: "bottom" }), enabled: hasSelection },
+    { label: "Center on Material", run: () => void command("align", { mode: "materialCenter" }), enabled: hasSelection }, "-",
+    { label: "Distribute Horizontally", run: () => void command("distribute", { flag: true }), enabled: hasSelection },
+    { label: "Distribute Vertically", run: () => void command("distribute", { flag: false }), enabled: hasSelection }, "-",
+    { label: "Group", keys: "Ctrl+G", run: () => void command("group"), enabled: hasSelection },
+    { label: "Ungroup", run: () => void command("ungroup"), enabled: hasSelection },
+    { label: "Combine Vectors", run: () => void command("combine"), enabled: hasSelection },
+    { label: "Break Apart", run: () => void command("breakApart"), enabled: hasSelection }, "-",
+    { label: "Weld (Union)", run: () => void command("boolean", { mode: "union" }), enabled: hasSelection },
+    { label: "Subtract", run: () => void command("boolean", { mode: "subtract" }), enabled: hasSelection },
+    { label: "Intersect", run: () => void command("boolean", { mode: "intersect" }), enabled: hasSelection }, "-",
+    { label: "Offset…", run: () => void offsetCommand(), enabled: hasSelection },
+    { label: "Join Open Vectors…", run: () => void joinCommand(), enabled: hasSelection },
+    { label: "Close Open Vectors", run: () => void command("close"), enabled: hasSelection },
+    { label: "Fillet Corners…", run: () => void corners("fillet"), enabled: hasSelection },
+    { label: "Chamfer Corners…", run: () => void corners("chamfer"), enabled: hasSelection },
+    { label: "Delete Duplicate Vectors", run: () => void command("deleteDuplicates"), enabled: hasSelection }, "-",
+    { label: "Rotate 90° Left", run: () => void command("rotate", { number: 90 }), enabled: hasSelection },
+    { label: "Rotate 90° Right", run: () => void command("rotate", { number: -90 }), enabled: hasSelection },
+    { label: "Mirror Horizontally", run: () => void apply("mirrorShapes", { ids: [...app.selection], horizontally: true }), enabled: hasSelection },
+    { label: "Mirror Vertically", run: () => void apply("mirrorShapes", { ids: [...app.selection], horizontally: false }), enabled: hasSelection },
+    { label: "Rectangular Array…", run: () => void rectArray(), enabled: hasSelection },
+    { label: "Circular Array…", run: () => void circularArray(), enabled: hasSelection },
+    { label: "Convert Text to Curves", run: () => void command("textToCurves"), enabled: hasSelection },
+  ]],
   ["Toolpaths", [
     { label: "Calculate All", run: () => void busy("Calculating…", () => apply("calculate", {})) },
     { label: "Check Toolpaths…", run: () => void sheets.openValidation() },
+    { label: "Save All Toolpaths…", run: () => void sheets.openSaveAll() },
     { label: "Tool Database…", run: () => void sheets.openTools() },
   ]],
   ["Job", [{ label: "Job Setup…", keys: "Ctrl+J", run: () => void sheets.openJobSetup() }]],
-  ["Help", [{ label: "About LoftLine", run: () => sheets.openAbout(info.platform) }]],
+  ["Help", [
+    { label: "LoftLine Help", keys: "F1", run: () => void sheets.openHelp() },
+    { label: "Keyboard Shortcuts", run: () => void sheets.openHelp("shortcuts") },
+    { label: "Running a Safe Air Cut", run: () => void sheets.openHelp("airCut") }, "-",
+    { label: "About LoftLine", run: () => sheets.openAbout(info.platform) },
+  ]],
 ];
 
 function createMenuBar() {
@@ -130,6 +226,7 @@ function createMenuBar() {
 }
 
 window.addEventListener("keydown", (e) => {
+  if (e.key === "F1") { e.preventDefault(); void sheets.openHelp(); return; }
   if (!(e.ctrlKey || e.metaKey)) return;
   const k = e.key.toLowerCase();
   const inField = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
@@ -142,6 +239,10 @@ window.addEventListener("keydown", (e) => {
   else if (k === "j") run(() => void sheets.openJobSetup());
   else if (k === "0") run(() => document.querySelector(".canvas-host")?.dispatchEvent(new Event("loftline-fit")));
   else if (!inField && k === "z") run(() => void apply(e.shiftKey ? "redo" : "undo"));
+  else if (!inField && k === "c") run(copy);
+  else if (!inField && k === "v") run(() => void paste());
+  else if (!inField && k === "d") run(() => { copy(); void paste(); });
+  else if (!inField && k === "g") run(() => void command("group"));
   else if (!inField && k === "a") run(() => { app.selection = new Set(doc().shapes.map((s) => s.id)); refresh(); });
 });
 
@@ -221,6 +322,8 @@ async function start() {
       const shell = window.__TAURI_INTERNALS__!;
       const opened = (await shell.invoke("opened_file")) as string | null;
       if (opened) await openProject(opened);
+      const view = (await shell.invoke("start_view")) as typeof app.center | null;
+      if (view) { await apply("calculate", {}); setCenter(view); }
     }
   } catch (e) {
     replace(root, h("div", { class: "fatal" }, h("h1", {}, "LoftLine could not start its core"), h("p", {}, e instanceof Error ? e.message : String(e))));

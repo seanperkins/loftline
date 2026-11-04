@@ -1,3 +1,5 @@
+// These run scripts/update-feed.sh and OpenSSL by their Unix paths; the Mac and Linux cover the signature code.
+#if !os(Windows)
 import Foundation
 import Testing
 import UpdateCore
@@ -303,3 +305,4 @@ private enum Fixture {
         try git(repo, "commit", "-q", "-m", message)
     }
 }
+#endif

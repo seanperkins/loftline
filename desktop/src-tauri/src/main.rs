@@ -80,11 +80,17 @@ fn opened_file() -> Option<String> {
     std::env::args().skip(1).find(|a| a.to_lowercase().ends_with(".loftline"))
 }
 
+/// The view to start in, for the Linux check (scripts/linux-desktop.sh): LOFTLINE_VIEW=split.
+#[tauri::command]
+fn start_view() -> Option<String> {
+    std::env::var("LOFTLINE_VIEW").ok()
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(CoreState(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![core_call, opened_file])
+        .invoke_handler(tauri::generate_handler![core_call, opened_file, start_view])
         .run(tauri::generate_context!())
         .expect("LoftLine could not start");
 }

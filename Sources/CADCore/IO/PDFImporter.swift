@@ -262,15 +262,27 @@ enum PDFImageDecoder {
     }
 }
 #else
-/// PDF import needs Core Graphics' content-stream scanner, so it is Mac-only for now (docs/PLATFORMS.md). The importer stays
-/// registered so the message names the reason.
+/// PDF and PDF-based Illustrator import off the Mac, through `PortablePDFImporter`.
 public struct PDFImporter: VectorImporter {
     public static let fileExtensions = ["pdf"]
     public init() {}
     public typealias EmbeddedImage = ImportedImage
 
+    static func imageByteCount(width: Int, height: Int, components: Int) -> Int? {
+        let (wh, o1) = width.multipliedReportingOverflow(by: height)
+        let (n, o2) = wh.multipliedReportingOverflow(by: components)
+        return o1 || o2 ? nil : n
+    }
+
     public func importVectors(from data: Data, targetUnits: LengthUnit) throws -> ImportResult {
-        throw LoftLineIOError.malformed("PDF import works only on the Mac so far. Export DXF, SVG or EPS instead.")
+        let (r, images) = try PortablePDFImporter.importPage(from: data, targetUnits: targetUnits, includeImages: true)
+        var result = r
+        result.images = images
+        return result
+    }
+
+    public func importPage(from data: Data, targetUnits: LengthUnit, includeImages: Bool) throws -> (result: ImportResult, images: [EmbeddedImage]) {
+        try PortablePDFImporter.importPage(from: data, targetUnits: targetUnits, includeImages: includeImages)
     }
 }
 #endif

@@ -3,7 +3,7 @@ import type { Layer, Operation } from "./model";
 import { kindTitles, opBody, opKind, shapeBounds } from "./model";
 import { colorFor } from "./canvas";
 import { app, apply, busy, doc, project, refresh, status, subscribe } from "./state";
-import { openExport, openValidation } from "./sheets";
+import { openSaveAll, openValidation } from "./sheets";
 
 /** The left column: Design (layers and vectors) and Toolpaths, with the same two tabs as the Mac. */
 export function createSidebar(): HTMLElement {
@@ -99,7 +99,7 @@ function toolpaths() {
         h("button", { class: "button", disabled: ops.length === 0, onclick: () => void busy("Calculating…", () => apply("calculate", {})) }, "Calculate All"),
         h("span", { class: "spacer" }),
         h("button", { class: "button icon-only", title: "Check Toolpaths", "aria-label": "Check Toolpaths", disabled: ops.length === 0, onclick: () => openValidation() }, icon(icons.shield, 16)),
-        h("button", { class: "button", disabled: ops.length === 0, onclick: () => openExport(null) }, "Save All…")),
+        h("button", { class: "button", disabled: ops.length === 0, onclick: () => void openSaveAll() }, "Save All…")),
       h("div", { class: "foot-row small" },
         h("strong", {}, job.hasEstimate ? `Estimated time: ${job.duration}` : "Not calculated"),
         h("span", { class: "spacer" }),

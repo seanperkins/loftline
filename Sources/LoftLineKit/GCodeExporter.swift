@@ -296,7 +296,22 @@ public enum GCodeExporter {
         if let op = operationName { base += "_" + op }
         var clean = String(base.unicodeScalars.map { fileNameCharacters.contains($0) ? Character($0) : "_" })
         if clean.hasPrefix(".") { clean = "_" + clean.dropFirst() }
+        #if os(Windows)
+        clean = windowsSafeName(clean)
+        #endif
         return clean + "." + fileExtension(for: profile)
+    }
+
+    /// `name` with a Windows device name (CON, PRN, AUX, NUL, COM1–9, LPT1–9, in any case) made safe, and without the trailing dots and
+    /// spaces Windows drops. A file called CON.tap can't be created there, whatever its extension.
+    public static func windowsSafeName(_ name: String) -> String {
+        var out = name
+        while let last = out.last, last == "." || last == " " { out.removeLast() }
+        if out.isEmpty { return "Untitled" }
+        let stem = out.split(separator: ".", omittingEmptySubsequences: false).first.map { $0.uppercased() } ?? ""
+        let devices: Set<String> = Set(["CON", "PRN", "AUX", "NUL"] + (1...9).flatMap { ["COM\($0)", "LPT\($0)"] })
+        if devices.contains(stem) { out = "_" + out }
+        return out
     }
 
     /// The post profile's extension, cleaned: a profile is any JSON file a user dropped in.

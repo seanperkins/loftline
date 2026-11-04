@@ -72,6 +72,17 @@ import Testing
         #expect((try Self.call(s, "export", ["postID": "no-such-post"])["error"] as? String)?.contains("no-such-post") == true)
     }
 
+    @Test func windowsDeviceNamesAreMadeSafe() {
+        for device in ["CON", "con", "PRN", "AUX", "NUL", "COM1", "com9", "LPT1", "lpt9", "CON.part"] {
+            #expect(GCodeExporter.windowsSafeName(device) == "_" + device, "\(device)")
+        }
+        #expect(GCodeExporter.windowsSafeName("Sign ") == "Sign")
+        #expect(GCodeExporter.windowsSafeName("Sign..") == "Sign")
+        #expect(GCodeExporter.windowsSafeName("...") == "Untitled")
+        #expect(GCodeExporter.windowsSafeName("CONSOLE") == "CONSOLE")
+        #expect(GCodeExporter.windowsSafeName("COM10") == "COM10")
+    }
+
     @Test func malformedInputGetsAnErrorReply() throws {
         let s = Self.service()
         for bad in ["", "not json", "{}", "{\"id\": 3}", "[1,2]"] {

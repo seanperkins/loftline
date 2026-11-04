@@ -176,3 +176,8 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .busy-mark.on { display: block; }
 .fatal { padding: 40px; user-select: text; }
 .tool-sequence { margin: 4px 0 0 18px; padding: 0; }
+.export-status.tall { max-height: 340px; }
+.help-text { flex: 1; overflow: auto; max-height: 60vh; user-select: text; padding-right: 8px; }
+.help-text p { margin: 8px 0; line-height: 1.45; }
+.help-text code { font: 12px ui-monospace, Consolas, "Liberation Mono", monospace; background: var(--surface); padding: 0 3px; border-radius: 3px; }
+.no-webgl { color: #ddd; padding: 40px 24px; text-align: center; }

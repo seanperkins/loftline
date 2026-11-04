@@ -239,6 +239,15 @@ public final class CoreService {
             let p = try params(line, P.self)
             try s.perform("Edit Text") { try VectorCommands.updateText(p.id, spec: p.spec, in: &$0) }
             return try reply(id, state())
+        case "paste":
+            struct P: Decodable { var shapes: [Shape] }
+            struct Pasted: Encodable { var state: State; var selection: [UUID] }
+            let shapes = try params(line, P.self).shapes
+            var selection: [UUID] = []
+            let doc = s.project.document
+            let offset = ShapeClipboard.pasteOffset(for: shapes, existing: Set(doc.shapes.map(\.id)), grid: doc.gridSpacing)
+            s.perform("Paste") { selection = $0.paste(shapes, offset: offset, fallbackLayer: doc.defaultLayerID) }
+            return try reply(id, Pasted(state: state(), selection: selection))
         case "replaceShape":
             let shape = try params(line, ReplaceShape.self).shape
             s.perform("Edit Shape") { project in
@@ -268,6 +277,18 @@ public final class CoreService {
                 VectorCommands.mirror(p.ids, horizontally: p.horizontally, pivot: .selectionCenter, keepOriginal: false, in: &project)
             }
             return try reply(id, state())
+
+        // The Design menu's commands on the selection.
+        case "command":
+            struct Command: Decodable {
+                var name: String; var ids: [UUID]; var mode: String?; var number: Double?; var count: Int?; var rows: Int?; var columns: Int?
+                var x: Double?; var y: Double?; var flag: Bool?; var center: Vec2?
+            }
+            struct Done: Encodable { var state: State; var selection: [UUID]?; var note: String? }
+            let c = try params(line, Command.self)
+            let (selection, note) = try runCommand(c.name, ids: c.ids, mode: c.mode, number: c.number, count: c.count, rows: c.rows, columns: c.columns,
+                                                   x: c.x, y: c.y, flag: c.flag, center: c.center)
+            return try reply(id, Done(state: state(), selection: selection, note: note))
 
         // Layers
         case "addLayer":
@@ -366,6 +387,49 @@ public final class CoreService {
                                         hasErrors: r.hasErrors, toolpathCount: r.toolpathCount,
                                         fileName: GCodeExporter.suggestedFileName(jobName: s.project.document.name, operationName: operationName, profile: profile),
                                         post: profile.name, written: written))
+        // Save All: the planned files as the Mac's sheet plans them, written together or not at all (GCodeFileSet).
+        case "saveAll":
+            struct P: Decodable { var mode: String; var postID: String?; var groupByTool: Bool?; var folder: String?; var replacing: Bool? }
+            struct FileRow: Encodable { var fileName: String; var title: String; var posted: Bool; var issues: [IssueRow] }
+            struct Saved: Encodable { var files: [FileRow]; var existing: [String]; var invalidNames: [String]; var unposted: [String]; var written: Bool; var hasErrors: Bool }
+            let p = try params(line, P.self)
+            guard let mode = SaveAllMode(rawValue: p.mode) else { throw UnknownMethod(method: "save mode \(p.mode)") }
+            if let post = p.postID, !s.profiles.contains(where: { $0.id == post }) { throw CoreFailure("Unknown post \"\(post)\".") }
+            let own = s.resolved
+            let installed = p.postID.flatMap { id in s.profiles.first { $0.id == id } }
+            let profile = installed.map { MachineResolver.effectiveProfile($0, machine: own.machine) } ?? own.post
+            let output = s.project.exportProject(for: .all, side: .top)
+            s.calculateStale(output.operations.filter(\.setup.isEnabled).map(\.id))
+            let files = GCodeBatchExport.plan(mode: mode, operations: output.operations, results: s.results, jobName: s.project.document.name,
+                                              profile: profile, groupByTool: p.groupByTool ?? false)
+            let posted = GCodeBatchExport.post(files, project: output, profile: profile, jobName: s.project.document.name,
+                                               expected: .operations(output.operations.filter(\.setup.isEnabled), results: s.results))
+            let set = GCodeFileSet(posted: posted)
+            let hasErrors = posted.contains { $0.result.hasErrors || !$0.result.missingSteps.isEmpty }
+            var written = false
+            var existing: [String] = []
+            if let folder = p.folder {
+                let url = URL(fileURLWithPath: folder, isDirectory: true)
+                existing = set.existing(in: url)
+                if !hasErrors, set.unposted.isEmpty, set.invalidNames.isEmpty, existing.isEmpty || p.replacing == true {
+                    _ = try set.write(to: url, replacing: existing)
+                    written = true
+                }
+            }
+            return try reply(id, Saved(files: posted.map { FileRow(fileName: $0.file.fileName, title: $0.file.title, posted: $0.result.text != nil, issues: $0.result.issues.map(Self.row)) },
+                                       existing: existing, invalidNames: set.invalidNames, unposted: set.unposted, written: written, hasErrors: hasErrors))
+        case "jobSheet":
+            let p = try params(line, PathParam.self)
+            let own = s.resolved
+            let output = s.project.exportProject(for: .all, side: .top)
+            s.calculateStale(output.operations.filter(\.setup.isEnabled).map(\.id))
+            let sheet = JobSheet.make(project: output, results: s.results, profile: own.post, groupByTool: false, rapidRate: s.rapidRate,
+                                      settings: TimeEstimateSettings.load())
+            try Data(JobSheetHTML.render(sheet).utf8).write(to: URL(fileURLWithPath: p.path), options: .atomic)
+            return try reply(id, Nothing())
+        case "help":
+            struct Topic: Encodable { var id: String; var title: String; var body: String; var related: [String] }
+            return try reply(id, HelpTopic.allCases.map { Topic(id: $0.rawValue, title: $0.title, body: $0.body, related: $0.related.map(\.rawValue)) })
         case "posts":
             struct Row: Encodable { var id: String; var name: String; var fileExtension: String; var units: LengthUnit }
             return try reply(id, s.profiles.map { Row(id: $0.id, name: $0.name, fileExtension: GCodeExporter.fileExtension(for: $0), units: $0.units) })
@@ -418,6 +482,79 @@ public final class CoreService {
         default:
             throw UnknownMethod(method: method)
         }
+    }
+}
+
+extension CoreService {
+    /// One command of the Design menu, run as an undoable edit by the same function the Mac's menu calls. Returns the new selection when
+    /// the command makes one, and a note for the user.
+    func runCommand(_ name: String, ids: [UUID], mode: String?, number: Double?, count: Int?, rows: Int?, columns: Int?, x: Double?, y: Double?,
+                    flag: Bool?, center: Vec2?) throws -> (selection: [UUID]?, note: String?) {
+        let s = session
+        let set = Set(ids)
+        var selection: [UUID]?
+        var note: String?
+        func need(_ value: Double?, _ what: String) throws -> Double {
+            guard let value, value.isFinite else { throw CoreFailure("\(what) needs a number.") }
+            return value
+        }
+        switch name {
+        case "align":
+            guard let m = mode.flatMap(AlignMode.init(rawValue:)) else { throw UnknownMethod(method: "align \(mode ?? "")") }
+            s.perform(m.title) { DesignCommands.align(set, mode: m, in: &$0) }
+        case "distribute":
+            s.perform(flag == true ? "Distribute Horizontally" : "Distribute Vertically") { DesignCommands.distribute(set, horizontally: flag == true, in: &$0) }
+        case "group":
+            s.perform("Group") { _ = DesignCommands.group(ids, in: &$0) }
+        case "ungroup":
+            s.perform("Ungroup") { DesignCommands.ungroup(ids, in: &$0) }
+        case "combine":
+            s.perform("Combine Vectors") { p in selection = DesignCommands.combine(ids, in: &p).map { [$0] } }
+        case "breakApart":
+            s.perform("Break Apart") { p in selection = DesignCommands.explode(set, in: &p) }
+        case "join":
+            let tolerance = number ?? DesignCommands.defaultJoinTolerance(s.project.document.units)
+            note = DesignCommands.joinPreview(ids, tolerance: tolerance, in: s.project)?.lines(units: s.project.document.units).joined(separator: "\n")
+            s.perform("Join Open Vectors") { p in selection = DesignCommands.join(ids, tolerance: tolerance, in: &p).map { [$0] } }
+        case "close":
+            s.perform("Close Open Vectors") { DesignCommands.close(set, in: &$0) }
+        case "boolean":
+            guard let m = mode.flatMap(BooleanMode.init(rawValue:)) else { throw UnknownMethod(method: "boolean \(mode ?? "")") }
+            s.perform(m.title) { p in selection = DesignCommands.boolean(m, ids: ids, in: &p).map { [$0] } }
+        case "offset":
+            let d = try need(number, "Offset")
+            s.perform("Offset") { p in selection = DesignCommands.offset(ids, distance: d, sharpCorners: flag == true, in: &p) }
+        case "rotate":
+            let d = try need(number, "Rotate")
+            s.perform("Rotate") { TransformCommands.rotate(set, degrees: d, in: &$0) }
+        case "textToCurves":
+            s.perform("Convert Text to Curves") { VectorCommands.convertTextToCurves(set, in: &$0) }
+        case "rectangularArray":
+            s.perform("Rectangular Array") { p in
+                selection = VectorCommands.rectangularArray(ids, rows: max(1, rows ?? 1), columns: max(1, columns ?? 1), x: x ?? 0, y: y ?? 0,
+                                                            spacing: flag == true ? .gap : .offset, in: &p)
+            }
+        case "circularArray":
+            let c = center ?? s.project.bounds(of: set).center
+            s.perform("Circular Array") { p in
+                selection = VectorCommands.circularArray(ids, count: max(1, count ?? 1), center: c, stepDegrees: number ?? 0, rotateCopies: flag == true, in: &p)
+            }
+        case "fillet":
+            let r = try need(number, "Fillet")
+            s.perform("Fillet Corners") { _ = VectorCommands.treatCorners(.fillet(radius: r), shapes: ids, nodes: [], in: &$0) }
+        case "chamfer":
+            let d = try need(number, "Chamfer")
+            s.perform("Chamfer Corners") { _ = VectorCommands.treatCorners(.chamfer(distance: d), shapes: ids, nodes: [], in: &$0) }
+        case "deleteDuplicates":
+            let scope = VectorCommands.validationScope(ids, in: s.project)
+            let issues = VectorValidator.duplicates(scope, tolerance: VectorCommands.tolerance(s.project.document.units))
+            var fixed = 0
+            s.perform("Delete Duplicate Vectors") { fixed = VectorCommands.repair(issues, in: &$0) }
+            note = "\(fixed) duplicate\(fixed == 1 ? "" : "s") removed."
+        default:
+            throw UnknownMethod(method: "command \(name)")
+        }
+        return (selection, note)
     }
 }
 

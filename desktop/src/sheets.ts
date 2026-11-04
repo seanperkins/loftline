@@ -67,6 +67,118 @@ function issueList(issues: Issue[]) {
   return h("ul", { class: "issue-list" }, issues.map((i) => h("li", { class: i.severity }, h("strong", {}, i.severity), i.line ? ` line ${i.line}: ` : ": ", i.message)));
 }
 
+// MARK: Small forms
+
+export interface Field { key: string; label: string; value: number; unit?: string; integer?: boolean }
+
+/** A form of numbers and, optionally, one switch. Resolves to the values, or null on Cancel. */
+export function askNumbers(title: string, fields: Field[], flag?: { label: string; value: boolean }): Promise<{ values: Record<string, number>; flag: boolean } | null> {
+  return new Promise((resolve) => {
+    const values: Record<string, number> = Object.fromEntries(fields.map((f) => [f.key, f.value]));
+    let on = flag?.value ?? false;
+    const ok = () => { close(); resolve({ values, flag: on }); };
+    present(title, [
+      fields.map((f) => numberRow(f.label, f.value, f.unit ?? "", (v) => { values[f.key] = v; }, f.integer ? { step: "1", min: 1 } : {})),
+      flag ? h("label", { class: "row toggle" }, h("input", { type: "checkbox", checked: on, onchange: (e: Event) => { on = (e.target as HTMLInputElement).checked; } }), flag.label) : null,
+    ], [
+      h("button", { class: "button", onclick: () => { close(); resolve(null); } }, "Cancel"),
+      h("button", { class: "button primary", onclick: () => {
+        // A field still being typed in commits on the way out.
+        (document.activeElement as HTMLElement | null)?.blur();
+        ok();
+      } }, "OK"),
+    ]);
+  });
+}
+
+// MARK: Save All
+
+interface SaveAllFile { fileName: string; title: string; posted: boolean; issues: Issue[] }
+interface SaveAllReply { files: SaveAllFile[]; existing: string[]; invalidNames: string[]; unposted: string[]; written: boolean; hasErrors: boolean }
+
+export async function openSaveAll() {
+  const posts = await call<PostRow[]>("posts");
+  let mode = "oneFile", postID = app.state!.post.id, groupByTool = false;
+  const list = h("div", { class: "export-status tall" });
+  const save = h("button", { class: "button primary", disabled: true, onclick: () => void write() }, "Save…");
+  const describe = (r: SaveAllReply) => {
+    replace(list,
+      h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "File"), h("th", {}, "Holds"), h("th", {}, "State"))),
+        h("tbody", {}, r.files.map((f) => {
+          const errors = f.issues.filter((i) => i.severity === "error").length, warnings = f.issues.filter((i) => i.severity === "warning").length;
+          return h("tr", {}, h("td", {}, f.fileName), h("td", {}, f.title), h("td", { class: !f.posted || errors ? "error-text" : "" }, !f.posted ? "Failed to post" : errors ? `${errors} error${errors === 1 ? "" : "s"}` : warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}` : "OK"));
+        }))),
+      r.hasErrors ? h("p", { class: "error-text" }, "A program has errors or a missing step, so nothing can be saved. Fix it in Check Toolpaths.") : null,
+      r.invalidNames.length ? h("p", { class: "error-text" }, `These names clash: ${r.invalidNames.join(", ")}`) : null);
+    save.disabled = r.hasErrors || r.unposted.length > 0 || r.invalidNames.length > 0 || r.files.length === 0;
+  };
+  const plan = async () => {
+    replace(list, h("p", { class: "muted" }, "Posting…"));
+    save.disabled = true;
+    try {
+      describe(await busy("Calculating…", () => call<SaveAllReply>("saveAll", { mode, postID, groupByTool })));
+      await apply("state");
+    } catch (e) { replace(list, h("p", { class: "error-text" }, e instanceof Error ? e.message : String(e))); }
+  };
+  const write = async () => {
+    const folder = inShell() ? await nativeOpen({ title: "Save All Toolpaths", directory: true }) as string | null : await askPath("Folder");
+    if (!folder) return;
+    let reply = await call<SaveAllReply>("saveAll", { mode, postID, groupByTool, folder });
+    if (!reply.written && reply.existing.length) {
+      const yes = await new Promise<boolean>((resolve) => present("Replace files?", h("p", {}, `${reply.existing.join(", ")} already exist in that folder.`), [
+        h("button", { class: "button", onclick: () => resolve(false) }, "Cancel"), h("button", { class: "button danger", onclick: () => resolve(true) }, "Replace"),
+      ]));
+      close();
+      if (!yes) return;
+      reply = await call<SaveAllReply>("saveAll", { mode, postID, groupByTool, folder, replacing: true });
+    }
+    close();
+    if (!reply.written) openAlert("Save All Toolpaths", "Nothing was written.");
+  };
+  present("Save All Toolpaths", [
+    h("div", { class: "form-grid" },
+      selectRow("Files", mode, [["oneFile", "One file"], ["filePerToolpath", "One file per toolpath"], ["filePerTool", "One file per tool"]], (v) => { mode = v; void plan(); }),
+      selectRow("Post processor", postID, posts.map((p) => [p.id, p.name]), (v) => { postID = v; void plan(); }),
+      h("label", { class: "row toggle" }, h("input", { type: "checkbox", onchange: (e: Event) => { groupByTool = (e.target as HTMLInputElement).checked; void plan(); } }), "Group by tool (fewest tool changes)")),
+    list,
+  ], [h("button", { class: "button", onclick: close }, "Close"), save], true);
+  void plan();
+}
+
+// MARK: Help
+
+interface Topic { id: string; title: string; body: string; related: string[] }
+
+/** The Mac's own help text, from the core. Inline Markdown only: bold, code and paragraphs. */
+function paragraphs(body: string) {
+  return body.split("\n\n").map((block) => {
+    const p = h("p", {});
+    for (const part of block.split(/(\*\*[^*]+\*\*|`[^`]+`)/)) {
+      if (part.startsWith("**")) p.appendChild(h("strong", {}, part.slice(2, -2)));
+      else if (part.startsWith("`")) p.appendChild(h("code", {}, part.slice(1, -1)));
+      else if (part) p.appendChild(document.createTextNode(part));
+    }
+    return p;
+  });
+}
+
+export async function openHelp(topicID?: string) {
+  const topics = await call<Topic[]>("help");
+  let current = topics.find((t) => t.id === topicID) ?? topics[0];
+  const side = h("ul", { class: "tool-list" });
+  const text = h("div", { class: "help-text" });
+  const render = () => {
+    replace(side, topics.map((t) => h("li", { class: t.id === current.id ? "on" : "", onclick: () => { current = t; render(); } }, t.title)));
+    replace(text, h("h3", {}, current.title), paragraphs(current.body),
+      current.related.length ? h("p", { class: "small" }, "See also: ", current.related.map((id) => {
+        const t = topics.find((x) => x.id === id);
+        return t ? h("button", { class: "link-button", onclick: () => { current = t; render(); } }, t.title) : null;
+      })) : null);
+  };
+  render();
+  present("LoftLine Help", h("div", { class: "tools-layout" }, side, text), h("button", { class: "button primary", onclick: close }, "Close"), true);
+}
+
 // MARK: Export
 
 /** Posts through the core, shows what it made and what the validator said, and writes only what the core posted. */

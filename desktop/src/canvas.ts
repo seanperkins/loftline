@@ -278,7 +278,7 @@ export function createCanvas(onTextTool: (at: Vec2) => void): HTMLElement {
     // Origin marker.
     ctx.strokeStyle = "#e0392b"; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(a.x + 34, a.y); ctx.stroke();
-    ctx.fillStyle = "#e0392b"; ctx.font = "11px var(--ui-font)"; ctx.fillText("✕", a.x + 34, a.y + 4);
+    ctx.fillStyle = "#e0392b"; ctx.font = `11px ${UI_FONT}`; ctx.fillText("✕", a.x + 34, a.y + 4);
 
     // Vectors, in their layer's colour.
     const layers = new Map<string, Layer>(d.layers.map((l) => [l.id, l]));
@@ -366,7 +366,7 @@ export function createCanvas(onTextTool: (at: Vec2) => void): HTMLElement {
     ctx.strokeStyle = css("--hairline"); ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(RULER, RULER - 0.5); ctx.lineTo(width, RULER - 0.5); ctx.moveTo(RULER - 0.5, RULER); ctx.lineTo(RULER - 0.5, height); ctx.stroke();
     const step = niceStep();
-    ctx.fillStyle = css("--muted"); ctx.strokeStyle = css("--muted"); ctx.font = "10px var(--ui-font)";
+    ctx.fillStyle = css("--muted"); ctx.strokeStyle = css("--muted"); ctx.font = `10px ${UI_FONT}`;
     ctx.textBaseline = "top";
     const left = toDoc(RULER, 0).x, right = toDoc(width, 0).x;
     ctx.beginPath();
@@ -399,6 +399,9 @@ export function createCanvas(onTextTool: (at: Vec2) => void): HTMLElement {
   });
   return host;
 }
+
+// A canvas font string cannot read a CSS variable.
+const UI_FONT = 'system-ui, "Segoe UI", "Noto Sans", "Liberation Sans", sans-serif';
 
 function formatTick(v: number): string {
   const r = Math.round(v * 1000) / 1000;

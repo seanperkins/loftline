@@ -24,7 +24,14 @@ export function createPreview(): HTMLElement {
   const controls = h("div", { class: "preview-controls" });
   const root = h("div", { class: "preview" }, h("div", { class: "preview-stage" }, view, overlay), controls);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  // No WebGL (a virtual machine, a remote desktop, an old driver) must not take the rest of the app with it.
+  let renderer: THREE.WebGLRenderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  } catch {
+    replace(view, h("p", { class: "no-webgl" }, "The 3D preview needs WebGL, which this computer's graphics driver doesn't offer. Everything else works."));
+    return root;
+  }
   renderer.setClearColor(0x292929);
   view.appendChild(renderer.domElement);
   const scene = new THREE.Scene();
