@@ -1,7 +1,9 @@
 import CADCore
+#if canImport(ImageIO)
 import CoreGraphics
-import Foundation
 import ImageIO
+#endif
+import Foundation
 import Testing
 @testable import CAMCore
 
@@ -73,15 +75,19 @@ func photoVCarveDarkAreasCarveFullWidthLightAreasNothing(zZero: ZZeroMode) throw
     // 4 x 2 RGB: top row red, bottom row white.
     var rgba: [UInt8] = []
     for y in 0..<2 { for _ in 0..<4 { rgba += y == 0 ? [255, 0, 0, 255] : [255, 255, 255, 255] } }
+    let url = dir.appendingPathComponent("t.png")
+#if canImport(ImageIO)
     let provider = try #require(CGDataProvider(data: Data(rgba) as CFData))
     let cg = try #require(CGImage(width: 4, height: 2, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: 16,
                                   space: CGColorSpaceCreateDeviceRGB(),
                                   bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
                                   provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent))
-    let url = dir.appendingPathComponent("t.png")
     let dest = try #require(CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil))
     CGImageDestinationAddImage(dest, cg, nil)
     #expect(CGImageDestinationFinalize(dest))
+#else
+    try #require(PortableImage(width: 4, height: 2, rgba: rgba).png).write(to: url)
+#endif
     let g = try PhotoImageLoader.load(url)
     #expect(g.width == 4 && g.height == 2)
     #expect(g.brightness(u: 0.5, v: 0.95) < 0.6)    // top row is red (darker grey)

@@ -1,4 +1,6 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 import Testing
 @testable import CADCore
@@ -66,9 +68,11 @@ import Testing
     }
 
     @Test func pdfImageSizeOverflowIsRejected() {
+#if canImport(CoreGraphics)
         #expect(PDFImporter.imageByteCount(width: 2_147_483_647, height: 2_147_483_647, components: 4) == nil)
         #expect(PDFImporter.imageByteCount(width: Int.max, height: 2, components: 1) == nil)
         #expect(PDFImporter.imageByteCount(width: 4, height: 3, components: 3) == 36)
+#endif
     }
 
     @Test func colladaNegativeOrHugeOffsetsAreSkipped() throws {
@@ -198,6 +202,7 @@ import Testing
         #expect(r.shapes[0].isClosed)
         #expect(!r.shapes[1].isClosed)
 
+#if canImport(CoreGraphics)
         let out = NSMutableData()
         var box = CGRect(x: 0, y: 0, width: 100, height: 100)
         let ctx = CGContext(consumer: CGDataConsumer(data: out as CFMutableData)!, mediaBox: &box, nil)!
@@ -208,6 +213,7 @@ import Testing
         let p = try PDFImporter().importVectors(from: out as Data, targetUnits: .millimeter)
         #expect(p.shapes.count == 1)
         #expect(p.shapes[0].isClosed)
+#endif
     }
 
     @Test func meshImportersRejectNonFiniteVertices() {

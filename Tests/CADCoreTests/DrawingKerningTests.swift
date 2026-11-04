@@ -6,7 +6,7 @@ import Testing
     func box(_ p: [Path]) -> Rect2 { Rect2(points: p.flatMap { $0.flattened() }) }
 
     @Test func zeroAdjustmentMatchesNormalLayout() throws {
-        for font in ["Helvetica", StrokeFont.name] {
+        for font in [testFont, StrokeFont.name] {
             var spec = TextSpec(string: "AV\nTo", fontName: font, size: 1, alignment: .center, anchor: Vec2(3, 3))
             let plain = try TextOutliner().outlines(for: spec)
             spec.letterAdjustments = [TextSpec.LetterAdjustment(index: 0)]
@@ -18,7 +18,7 @@ import Testing
     }
 
     @Test func moveAndRotateOneLetter() throws {
-        var spec = TextSpec(string: "AB", fontName: "Helvetica", size: 1)
+        var spec = TextSpec(string: "AB", fontName: testFont, size: 1)
         let base = try TextOutliner().outlines(for: spec)
         spec.letterAdjustments = [TextSpec.LetterAdjustment(index: 1, offset: Vec2(0, 2))]
         let moved = try TextOutliner().outlines(for: spec)
@@ -27,12 +27,12 @@ import Testing
         let turned = try TextOutliner().outlines(for: spec)
         #expect(box(turned) != box(base))
         // Old specs without adjustments still decode.
-        let json = try JSONEncoder().encode(TextSpec(string: "A", fontName: "Helvetica", size: 1))
+        let json = try JSONEncoder().encode(TextSpec(string: "A", fontName: testFont, size: 1))
         #expect(!String(decoding: json, as: UTF8.self).contains("letterAdjustments"))
     }
 
     @Test func lettersHitAndDrag() throws {
-        let spec = TextSpec(string: "A B\nC", fontName: "Helvetica", size: 1, anchor: Vec2(10, 10))
+        let spec = TextSpec(string: "A B\nC", fontName: testFont, size: 1, anchor: Vec2(10, 10))
         let letters = try TextKerning.letters(for: spec)
         #expect(letters.count == 4)
         #expect(letters.map(\.line) == [0, 0, 0, 1])
@@ -50,7 +50,7 @@ import Testing
     }
 
     @Test func dragFollowsScaledRotatedText() throws {
-        var spec = TextSpec(string: "AB", fontName: "Helvetica", size: 1)
+        var spec = TextSpec(string: "AB", fontName: testFont, size: 1)
         spec.transform = Transform2D.scale(2, 2).concatenating(.rotation(.pi / 2))
         let before = try TextKerning.letters(for: spec)[1].bounds
         let moved = TextKerning.moving(spec, letters: [1], byDocumentDelta: Vec2(0, 3))

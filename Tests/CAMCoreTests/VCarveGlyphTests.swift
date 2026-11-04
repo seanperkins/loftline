@@ -16,7 +16,13 @@ import Testing
 /// Run for A-Z, a-z, 0-9 and & @ % in five fonts at three sizes.
 
 private let glyphGroups: [[Character]] = ["ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz", "0123456789&@%"].map(Array.init)
+#if canImport(CoreText)
 private let fonts = ["Times New Roman", "Helvetica", "Snell Roundhand", "Avenir Next Condensed", "Impact"]   // serif, sans, script, condensed, display
+private let twoFonts = ["Times New Roman", "Helvetica"]
+#else
+private let fonts = ["Liberation Serif", "Liberation Sans", "Liberation Mono"]
+private let twoFonts = ["Liberation Serif", "Liberation Sans"]
+#endif
 private let sizes = [0.25, 1.0, 2.0]                        // capital height, inches
 private let slope = tan(30.0 * .pi / 180)                   // the 60 degree V-bit of VCarveFixture
 
@@ -320,7 +326,7 @@ let vcarveGlyphCells = sizes.flatMap { size in glyphGroups.indices.map { VCarveG
 /// The fonts ship with macOS; a machine that lacks them would otherwise pass by carving nothing.
 @Test func vcarveGlyphFontsAreInstalled() {
     let present = fonts.filter { glyphOutlines("A", font: $0, size: 1) != nil }
-    #expect(present.count >= 4 && present.contains("Helvetica"), Comment(rawValue: "only \(present) of \(fonts) are installed"))
+    #expect(present.count >= min(4, fonts.count) && present.contains(testFont), Comment(rawValue: "only \(present) of \(fonts) are installed"))
 }
 
 @Test(arguments: fonts, vcarveGlyphCells)
@@ -351,7 +357,7 @@ func vcarveCarvesEveryGlyph(font: String, cell: VCarveGlyphCell) throws {
 /// with one extra feed plunge at its last point (no sideways move, so neither coverage nor connection changes)
 /// is overcut.
 @Test func vcarveGlyphJudgeCatchesAnExtraDeepPlunge() throws {
-    let paths = try #require(glyphOutlines("O", font: "Helvetica", size: 1))
+    let paths = try #require(glyphOutlines("O", font: testFont, size: 1))
     let (tp, context) = try carve(paths)
     #expect(judge(tp, paths: paths, context: context, size: 1).worstOvercut <= 0)
     var bad = tp
@@ -378,7 +384,7 @@ private func permutations<T>(_ items: [T]) -> [[T]] {
 /// the selected shapes, so the order cannot change what is cut; this guards against a region built per
 /// shape, which would carve the counters as filled discs, and against strokes lost in the ordering. That the
 /// order is followed is checked by `vcarveSelectionOrderFollowsTheSelectedLetters`.)
-@Test(arguments: ["Times New Roman", "Helvetica"], ["O", "B", "8"])
+@Test(arguments: twoFonts, ["O", "B", "8"])
 func vcarveKeepsAMultiContourGlyphWholeInEveryOrder(font: String, glyph: String) throws {
     guard let paths = glyphOutlines(glyph, font: font, size: 1) else { return }
     #expect(paths.count >= 2, Comment(rawValue: "\(font) \(glyph) should have a counter"))
@@ -404,7 +410,7 @@ func vcarveKeepsAMultiContourGlyphWholeInEveryOrder(font: String, glyph: String)
 /// other, whichever was selected first.
 @Test(arguments: [[0, 1], [1, 0]])
 func vcarveSelectionOrderFollowsTheSelectedLetters(order: [Int]) throws {
-    guard let o = glyphOutlines("O", font: "Helvetica", size: 1), let b = glyphOutlines("B", font: "Helvetica", size: 1) else { return }
+    guard let o = glyphOutlines("O", font: testFont, size: 1), let b = glyphOutlines("B", font: testFont, size: 1) else { return }
     let letters = [o, b.map { $0.transformed(.translation(Vec2(2.5, 0))) }]
     var doc = Document()
     var ids: [UUID] = []

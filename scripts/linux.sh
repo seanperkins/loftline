@@ -7,10 +7,11 @@
 #        LOFTLINE_LINUX_ARCH=amd64 scripts/linux.sh …   the x86-64 image (emulated on Apple Silicon)
 set -euo pipefail
 cd "${0:A:h}/.."
-image=${LOFTLINE_LINUX_IMAGE:-swift:6.4}
 arch=${LOFTLINE_LINUX_ARCH:-}
-platform=(); scratch=.build-linux
-if [[ -n "$arch" ]]; then platform=(--platform "linux/$arch"); scratch=".build-linux-$arch"; fi
+platform=(); scratch=.build-linux; image=loftline-linux
+if [[ -n "$arch" ]]; then platform=(--platform "linux/$arch"); scratch=".build-linux-$arch"; image="loftline-linux-$arch"; fi
+# Built once, then cached by Docker.
+docker build -q "${platform[@]}" -t "$image" -f docker/linux.Dockerfile docker >/dev/null
 case "${1:-}" in
   build) shift; set -- swift build --scratch-path "$scratch" "$@" ;;
   test) shift; set -- swift test --scratch-path "$scratch" "$@" ;;

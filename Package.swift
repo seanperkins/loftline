@@ -17,6 +17,15 @@ let cadDependencies: [Target.Dependency] = ["CGeom"]
 let cadDependencies: [Target.Dependency] = ["CGeom", "CStb"]
 #endif
 
+// Apple Silicon fuses a multiply and an add in the C++ geometry code into one rounded step (FMA, clang's default contraction).
+// x86-64 doesn't unless told to, and the difference moves a V-carve's medial axis: the sign sample differed by up to 0.007 in.
+// With this, x86-64 posts the same bytes as the Mac. It needs a CPU with FMA (Haswell, 2013, or later), docs/PLATFORMS.md.
+#if arch(x86_64)
+let geometryFlags: [CXXSetting] = [.unsafeFlags(["-mfma", "-ffp-contract=on"])]
+#else
+let geometryFlags: [CXXSetting] = []
+#endif
+
 var targets: [Target] = [
     // Vendored Clipper2 (Boost Software License). Never edit — see THIRD_PARTY.md.
     .target(
@@ -25,7 +34,7 @@ var targets: [Target] = [
         exclude: ["LICENSE"],
         sources: ["src"],
         publicHeadersPath: "include",
-        cxxSettings: [.unsafeFlags(["-w"])]
+        cxxSettings: [.unsafeFlags(["-w"])] + geometryFlags
     ),
     // C-compatible wrapper over Clipper2 + Boost.Polygon Voronoi.
     .target(
@@ -35,7 +44,7 @@ var targets: [Target] = [
         cxxSettings: [
             .headerSearchPath("../../Vendor/Boost/include"),
             .headerSearchPath("../../Vendor/Clipper2/include"),
-        ]
+        ] + geometryFlags
     ),
     .target(name: "CADCore", dependencies: cadDependencies, swiftSettings: swift5),
     .target(name: "CAMCore", dependencies: ["CADCore", "CGeom"], swiftSettings: swift5),
@@ -47,6 +56,7 @@ var targets: [Target] = [
     .testTarget(name: "CADCoreTests", dependencies: ["CADCore"], swiftSettings: swift5),
     .testTarget(name: "CAMCoreTests", dependencies: ["CAMCore", "CADCore"], swiftSettings: swift5),
     .testTarget(name: "PostCoreTests", dependencies: ["PostCore", "CAMCore", "CADCore"], swiftSettings: swift5),
+    .testTarget(name: "LoftLineKitTests", dependencies: ["LoftLineKit", "PostCore", "CAMCore", "CADCore"], swiftSettings: swift5),
 ]
 
 #if os(macOS)

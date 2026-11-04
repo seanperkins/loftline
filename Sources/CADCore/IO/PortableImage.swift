@@ -9,6 +9,10 @@ public struct PortableImage: Sendable {
     /// RGBA, top row first.
     public var rgba: [UInt8]
 
+    public init(width: Int, height: Int, rgba: [UInt8]) {
+        self.width = width; self.height = height; self.rgba = rgba
+    }
+
     public init?(data: Data) {
         var w: Int32 = 0, h: Int32 = 0
         let decoded: UnsafeMutablePointer<UInt8>? = data.withUnsafeBytes { raw in
