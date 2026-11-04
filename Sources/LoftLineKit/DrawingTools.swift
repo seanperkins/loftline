@@ -102,7 +102,7 @@ public struct DrawingOptions: Equatable {
     public var starPoints = 5
     public var starInnerRatio = 0.5
     public var text = "LoftLine"
-    public var fontName = "Helvetica"
+    public var fontName = TextOutliner.defaultFontName
     public var fontSize = 1.0
     public var textAlignment = CADCore.TextAlignment.left
     public var lineSpacing = 1.0

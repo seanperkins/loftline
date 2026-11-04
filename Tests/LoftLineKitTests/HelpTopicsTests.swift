@@ -9,10 +9,12 @@ import Testing
             #expect(!t.title.isEmpty)
             #expect(t.body.count > 80, "\(t) body is too short")
             #expect(!t.related.contains(t), "\(t) links to itself")
+            #if os(macOS)   // Foundation has no Markdown parser off the Mac.
             // Bodies must parse as inline Markdown paragraph by paragraph.
             for block in t.body.components(separatedBy: "\n\n") {
                 #expect((try? AttributedString(markdown: block)) != nil)
             }
+            #endif
         }
         #expect(Set(HelpTopic.allCases.map(\.title)).count == HelpTopic.allCases.count)
     }

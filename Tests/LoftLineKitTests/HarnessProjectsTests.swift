@@ -8,6 +8,27 @@ import Testing
 struct HarnessProjectsTests {
     static let root = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+    /// Structural JSON equality. NSDictionary's differs off the Mac, where a parsed 1 is an Int and a patched 1.0 a Double.
+    static func same(_ a: Any, _ b: Any) -> Bool {
+        if let x = a as? [String: Any], let y = b as? [String: Any] {
+            return x.count == y.count && x.allSatisfy { k, v in y[k].map { same(v, $0) } ?? false }
+        }
+        if let x = a as? [Any], let y = b as? [Any] { return x.count == y.count && zip(x, y).allSatisfy(same) }
+        if let x = a as? String, let y = b as? String { return x == y }
+        if let x = number(a), let y = number(b) { return abs(x - y) <= 1e-12 * max(1, abs(x)) }   // the writer's 17 digits parse a hair differently off the Mac
+        return (a is NSNull) && (b is NSNull)
+    }
+
+    private static func number(_ v: Any) -> Double? {
+        switch v {
+        case let d as Double: return d
+        case let i as Int: return Double(i)
+        case let b as Bool: return b ? 1 : 0
+        case let n as NSNumber: return n.doubleValue
+        default: return nil
+        }
+    }
+
     static var writeSamples: Bool { ProcessInfo.processInfo.environment["LOFTLINE_WRITE_SAMPLES"] == "1" }
 
     /// One step of a path into decoded JSON.
@@ -77,7 +98,7 @@ struct HarnessProjectsTests {
                 try JSONSerialization.data(withJSONObject: project, options: [.prettyPrinted, .sortedKeys]).write(to: url)
             }
             let committed = try Self.load("harness/projects/\(patch.file).loftline")
-            #expect(NSDictionary(dictionary: project).isEqual(to: committed),
+            #expect(Self.same(project, committed),
                     "\(patch.file).loftline is not the sample plus its patch; regenerate with LOFTLINE_WRITE_SAMPLES=1")
         }
     }

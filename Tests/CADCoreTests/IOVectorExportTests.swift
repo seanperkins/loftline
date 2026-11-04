@@ -14,6 +14,10 @@ import Testing
         let (shapes, layers) = design()
         let data = try PDFExporter().export(shapes: shapes, layers: layers, units: .inch)
         #expect(data.starts(with: Data("%PDF".utf8)))
+        #if !canImport(CoreGraphics)
+        // PDF import is Mac-only so far (docs/PLATFORMS.md).
+        #expect(String(decoding: data, as: UTF8.self).contains("/Type /Catalog"))
+        #else
         let back = try PDFImporter().importVectors(from: data, targetUnits: .inch)
         #expect(back.shapes.count == 2)
         #expect(approx(back.shapes[0].bounds(), Rect2(x: 1, y: 1, width: 2, height: 1), 1e-4))
@@ -21,6 +25,7 @@ import Testing
         // .ai is written as PDF and read back through the AI (EPS) importer.
         let ai = try #require(FileFormats.exporter(forExtension: "AI")).export(shapes: shapes, layers: layers, units: .inch)
         #expect(try EPSImporter().importVectors(from: ai, targetUnits: .inch).shapes.count == 2)
+        #endif
     }
 
     @Test func epsRoundTripsInMillimetres() throws {

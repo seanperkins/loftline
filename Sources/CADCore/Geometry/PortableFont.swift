@@ -182,4 +182,23 @@ final class PortableFont: @unchecked Sendable {
         return paths
     }
 }
+
+extension TextOutliner {
+    private static func firstInstalled(_ names: [String]) -> String? { names.first { PortableFont.named($0) != nil } }
+
+    /// The font new text uses here: Helvetica's nearest match that is installed, else the first installed, else the built-in
+    /// stroke font, which needs no font file.
+    public static var defaultFontName: String {
+        firstInstalled(["Liberation Sans", "Arial", "Helvetica", "DejaVu Sans", "Noto Sans"])
+            ?? PortableFont.familyNames().first ?? StrokeFont.name
+    }
+
+    /// CSS generic families, for SVG text.
+    static var genericFontFamilies: [String: String] {
+        let sans = defaultFontName
+        return ["sans-serif": sans, "system-ui": sans, "cursive": sans, "fantasy": sans,
+                "serif": firstInstalled(["Liberation Serif", "Times New Roman", "DejaVu Serif", "Noto Serif"]) ?? sans,
+                "monospace": firstInstalled(["Liberation Mono", "Consolas", "Courier New", "DejaVu Sans Mono"]) ?? sans]
+    }
+}
 #endif

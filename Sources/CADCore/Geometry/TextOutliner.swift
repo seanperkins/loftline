@@ -233,3 +233,14 @@ public struct TextOutliner: Sendable {
     }
 #endif
 }
+
+#if canImport(CoreText)
+extension TextOutliner {
+    /// The font new text uses.
+    public static let defaultFontName = "Helvetica"
+
+    /// CSS generic families, for SVG text.
+    static let genericFontFamilies = ["sans-serif": "Helvetica", "serif": "Times New Roman", "monospace": "Menlo",
+                                      "cursive": "Apple Chancery", "fantasy": "Papyrus", "system-ui": "Helvetica"]
+}
+#endif

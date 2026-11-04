@@ -11,7 +11,7 @@ import Testing
         var doc = Document(job: JobSetup(width: 24, height: 18))
         let l = doc.defaultLayerID
         let plate = AppTestSupport.rect(1, 15, 6, 2, layer: l)
-        let spec = TextSpec(string: "{Name}", fontName: "Helvetica", size: 0.5, alignment: .center, anchor: Vec2(4, 15.75))
+        let spec = TextSpec(string: "{Name}", fontName: testFont, size: 0.5, alignment: .center, anchor: Vec2(4, 15.75))
         let text = try TextOutliner().shape(for: spec, layerID: l)
         doc.add(plate); doc.add(text)
         var p = LoftLineProject(document: doc)

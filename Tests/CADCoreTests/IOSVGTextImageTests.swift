@@ -13,7 +13,7 @@ import Testing
     @Test func textBecomesOutlinesAtTheBaseline() throws {
         // 96 px = 1 in em size, baseline at y = 144 px (0.5 in above the page bottom).
         let r = try SVGImporter().importVectors(
-            from: svg(#"<text x="96" y="144" style="font-family:Helvetica; font-size:96px">HI</text>"#), targetUnits: .inch)
+            from: svg("<text x=\"96\" y=\"144\" style=\"font-family:\(testFont); font-size:96px\">HI</text>"), targetUnits: .inch)
         let s = try #require(r.shapes.first)
         #expect(s.name == "HI")
         #expect(s.isClosed && s.paths.count >= 2)

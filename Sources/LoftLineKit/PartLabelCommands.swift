@@ -22,7 +22,7 @@ public struct PartLabelOptions: Equatable {
     public var maxHeight: Double
     /// Labels smaller than this are skipped (too small to engrave legibly).
     public var minHeight: Double
-    public var fontName = "Helvetica"
+    public var fontName = TextOutliner.defaultFontName
     /// Also create a V-Carve toolpath for the labels.
     public var addToolpath = false
 

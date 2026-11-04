@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationXML)
+import FoundationXML
+#endif
 import Testing
 
 /// The brand kit and the app icon are committed files; a bundle built without the icon would ship the generic one.

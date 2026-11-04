@@ -20,7 +20,7 @@ import Testing
         let dir = AppTestSupport.tempDir()
         try Data("{}".utf8).write(to: dir.appendingPathComponent(SampleProjects.sign.fileName))
         let found = SampleProjects.url(for: SampleProjects.sign, in: [dir] + SampleProjects.searchDirectories())
-        #expect(found?.deletingLastPathComponent().standardizedFileURL == dir.standardizedFileURL)
+        #expect(found?.deletingLastPathComponent().standardizedFileURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == dir.standardizedFileURL.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
         #expect(SampleProjects.url(for: SampleProjects.sign, in: [AppTestSupport.tempDir()]) == nil)
     }
 
