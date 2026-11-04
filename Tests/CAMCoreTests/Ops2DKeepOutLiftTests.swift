@@ -78,3 +78,30 @@ func ops2DKeepOutLiftOverClearsACutZone(mode: ZZeroMode) throws {
     let cuts = F.densePoints(tp.moves).filter { ctx.coords.depth(ofMachineZ: $0.z) > 0.199 }
     #expect(cuts.contains { ctx.coords.materialXY(fromMachine: $0.xy).x < 2.1 })
 }
+
+@Test(arguments: [ZZeroMode.materialTop, .spoilboard])
+func ops2DKeepOutLiftOverAToolpathThatStartsOverTheZone(mode: ZZeroMode) throws {
+    // The toolpath's opening rapid lands over a lift-over clamp, below its top: the router must not leave the tool
+    // there (and then lift straight up inside the clamp); it arrives above the clamp and cuts only outside it.
+    let (ctx, _) = F.document([F.rect(1, 1, 1, 1)], zZero: mode)
+    let c = ctx.coords
+    let clamp = KeepOutZone(name: "Clamp", outline: square(3, 3, 1), height: 0.5, liftOver: true)
+    func at(_ x: Double, _ y: Double, _ z: Double) -> Vec3 { Vec3(c.machineXY(Vec2(x, y)), z: z) }
+    let cut = c.z(depth: 0.1)
+    let tp = Toolpath(name: "T", kind: .profile, tool: F.endMill, moves: [
+        .rapid(to: at(3.5, 3.5, c.safeZ)),
+        .linear(to: at(3.5, 3.5, cut), feed: 20),
+        .linear(to: at(6, 3.5, cut), feed: 60),
+        .rapid(to: at(6, 3.5, c.safeZ)),
+    ])
+    let routed = KeepOutAvoidance.apply([tp], zones: [clamp], coords: c, margin: 0.05, tolerance: 0.0005).toolpaths[0]
+    #expect(KeepOut.violations([routed], zones: [clamp], coords: c, margin: 0.05, tolerance: 0.0005).isEmpty)
+    // No point the tool is sent to is over the clamp (grown by the tool radius) below its top.
+    let grown = GeomKernel.offset([square(3, 3, 1).map { c.machineXY($0) }], by: F.endMill.radius, join: .round,
+                                  arcTolerance: 0.0005)
+    let top = c.z(aboveTop: 0.5)
+    let low = routed.moves.compactMap(\.target).filter { $0.z < top - 1e-9 && Polygon2D.regionContains(grown, $0.xy) }
+    #expect(low.isEmpty, "\(low)")
+    // The cut outside the clamp is still made, at full depth.
+    #expect(routed.moves.compactMap(\.target).contains { $0 == at(6, 3.5, cut) })
+}

@@ -183,6 +183,53 @@ import Testing
         #expect(doc.project.nodePosition(NodeRef(shapeID: s.id, path: 0, node: 1)) == Vec2(3, 0))
     }
 
+    @Test func nodesOfAShapeThatLeavesTheSelectionAreDropped() {
+        // Duplicate (or Tab, or a sheet switch) changes the selection: arrow keys and Delete must not then edit nodes of
+        // a shape that is no longer selected.
+        let (doc, _) = makeDoc()
+        let s = doc.document.shapes[0]
+        doc.setSelection([s.id])
+        doc.activeTool = .nodeEdit
+        doc.nodeSelection = [NodeRef(shapeID: s.id, path: 0, node: 1)]
+        doc.duplicateSelection()
+        #expect(!doc.selection.contains(s.id))
+        #expect(doc.nodeSelection.isEmpty)
+        // Adding to the selection keeps the nodes of shapes still in it.
+        doc.setSelection([s.id])
+        doc.nodeSelection = [NodeRef(shapeID: s.id, path: 0, node: 1)]
+        doc.setSelection([s.id, doc.document.shapes[1].id])
+        #expect(doc.nodeSelection == [NodeRef(shapeID: s.id, path: 0, node: 1)])
+        // A sheet or side switch clears the selection, and the nodes with it.
+        doc.clearSelection()
+        #expect(doc.nodeSelection.isEmpty)
+    }
+
+    @Test func theCanvasRunsOneSessionAtATime() {
+        // Tab editing, an envelope and kerning each take the canvas's clicks; two at once stacked their banners and left
+        // tab editing unresponsive.
+        let (doc, _) = makeDoc()
+        let opID = UUID()
+        doc.setSelection(doc.document.shapes.map(\.id))
+        doc.beginEnvelopeEdit()
+        #expect(doc.envelopeEdit != nil)
+        doc.tabEditingOperationID = opID
+        #expect(doc.envelopeEdit == nil)
+        doc.beginEnvelopeEdit()
+        #expect(doc.tabEditingOperationID == nil && doc.envelopeEdit != nil)
+        // Another tool ends the envelope rather than leave it taking clicks.
+        doc.activeTool = .rectangle
+        #expect(doc.envelopeEdit == nil)
+    }
+
+    @Test func deletingTheEnvelopesShapesEndsIt() {
+        let (doc, _) = makeDoc()
+        doc.setSelection([doc.document.shapes[0].id])
+        doc.beginEnvelopeEdit()
+        #expect(doc.envelopeEdit != nil)
+        doc.deleteSelection()
+        #expect(doc.envelopeEdit == nil)
+    }
+
     @Test func leavingNodeToolClearsNodeSelection() {
         let (doc, _) = makeDoc()
         let s = doc.document.shapes[0]

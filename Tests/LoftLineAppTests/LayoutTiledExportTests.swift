@@ -59,7 +59,7 @@ import Testing
         let whole = GCodeExporter.export(project: p,
                                          toolpaths: GCodeExporter.toolpaths(scope: .all, operations: p.operations,
                                                                             results: d.results, groupByTool: false),
-                                         profile: BuiltInPosts.avidMach4Inch, jobName: "Bench")
+                                         profile: BuiltInPosts.avidMach4Inch, jobName: "Bench", expected: .notChecked(because: "test"))
         #expect(whole.issues.contains { $0.severity == .error && $0.message.contains("Clamp") })
         let files = TiledExport.files(project: p, results: d.results, profile: BuiltInPosts.avidMach4Inch,
                                       groupByTool: false, settings: TilingSettings(tileWidth: 60, tileHeight: 96))

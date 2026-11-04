@@ -15,17 +15,20 @@ public enum ChainOrdering {
         var cur = start
         while !remaining.isEmpty {
             var best: (i: Int, d: Double, reverse: Bool)?
+            // An exact tie (a regular hole grid) goes to the earlier chain, so the order is the same on every run:
+            // a Set iterates in the process's hash order.
+            func better(_ i: Int, _ d: Double) -> Bool { best == nil || d < best!.d || (d == best!.d && i < best!.i) }
             for i in remaining {
                 if let pre = predecessors?[i], !pre.isSubset(of: done) { continue }
                 let c = chains[i]
                 if c.isClosed {
                     let d = Polygon2D.distance(from: cur, toLoop: c.points)
-                    if best == nil || d < best!.d { best = (i, d, false) }
+                    if better(i, d) { best = (i, d, false) }
                 } else {
                     let ds = c.start.distance(to: cur)
                     let de = allowReverse ? c.end.distance(to: cur) : .infinity
                     let d = min(ds, de)
-                    if best == nil || d < best!.d { best = (i, d, de < ds) }
+                    if better(i, d) { best = (i, d, de < ds) }
                 }
             }
             // A precedence cycle should never happen; fall back to any remaining chain.

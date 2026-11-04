@@ -164,7 +164,20 @@ public enum KeepOutAvoidance {
             out = []; cur = nil; prev = nil
             for mv in moves {
                 guard let target = mv.target else { out.append(mv); continue }
-                guard let from = prev else { out.append(mv); cur = target; prev = target; continue }
+                guard let from = prev else {
+                    // Where the tool comes from is not known here; an opening move that lands over a zone below its top
+                    // is raised to the clearance height, so the tool never starts inside the zone (and then lifts
+                    // straight up through it). The moves after it travel on from up there.
+                    if target.z < topZ - 1e-9, Polygon2D.regionContains(region, target.xy) {
+                        let up = Vec3(target.xy, z: max(target.z, clearZ))
+                        out.append(.rapid(to: up)); cur = up
+                        raisedRapids += 1
+                    } else {
+                        out.append(mv); cur = target
+                    }
+                    prev = target
+                    continue
+                }
                 defer { prev = target }
                 if mv.isRapid {
                     rapid(from: from, to: target)

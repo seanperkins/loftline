@@ -20,6 +20,16 @@ import Testing
         ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? []).sorted()
     }
 
+    /// The text area keeps what is typed while it reads as the same template: the model stores trimmed lines, so a
+    /// trailing space ("G0 " on the way to "G0 Z5") or a Return at the end of a line must not be written back over it.
+    @Test func aTextAreaKeepsTypingThatNormalisesToTheSameTemplate() {
+        #expect(PostEditorModel.showsSameTemplate("G0 ", as: "G0"))
+        #expect(PostEditorModel.showsSameTemplate("G90\n", as: "G90"))
+        #expect(PostEditorModel.showsSameTemplate("G90\n\n  G17", as: "G90\nG17"))
+        #expect(!PostEditorModel.showsSameTemplate("G0Z5", as: "G0 Z5"))
+        #expect(!PostEditorModel.showsSameTemplate("G90", as: "G91"))   // another post selected
+    }
+
     /// Text pasted from Windows (CRLF) or old Mac (CR) files splits into lines like LF text, so no template line keeps a
     /// line break (which the post would refuse).
     @Test func textAreaLinesSplitOnEveryLineBreak() {

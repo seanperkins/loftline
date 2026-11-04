@@ -31,8 +31,13 @@ BUILD_VERSION="${LOFTLINE_VERSION:-dev-$(git describe --always 2>/dev/null || ec
 source scripts/swiftpm-env.sh
 swift build "${SWIFTPM_FLAGS[@]}" -c $CONFIG --product LoftLine
 BIN="$(swift build "${SWIFTPM_FLAGS[@]}" -c $CONFIG --show-bin-path)/LoftLine"
-APP=dist/LoftLine.app
-rm -rf $APP
+# Assembled and signed in a staging folder, then swapped in: a step that fails leaves the last good dist/LoftLine.app
+# as it was, not a half-built, unsigned one.
+FINAL=dist/LoftLine.app
+STAGE=dist/.staging
+APP=$STAGE/LoftLine.app
+rm -rf $STAGE
+trap 'rm -rf $STAGE' EXIT
 mkdir -p $APP/Contents/MacOS $APP/Contents/Resources
 cp "$BIN" $APP/Contents/MacOS/LoftLine
 cp Resources/AppIcon.icns $APP/Contents/Resources/AppIcon.icns
@@ -120,4 +125,6 @@ if [[ "$IDENTITY" != "-" && -f Resources/LoftLine.entitlements ]]; then
   app_entitlements=(--entitlements Resources/LoftLine.entitlements)
 fi
 sign $APP "${app_entitlements[@]}"
-echo "Built $APP ($SHORT_VERSION, $CHANNEL channel)"
+rm -rf $FINAL
+mv $APP $FINAL
+echo "Built $FINAL ($SHORT_VERSION, $CHANNEL channel)"

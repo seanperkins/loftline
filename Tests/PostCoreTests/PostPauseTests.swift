@@ -329,3 +329,23 @@ import Testing
         #expect(ToolpathOrdering.groupedByTool(threeToolpaths(pauseOn: 2)).map(\.name) == ["A", "B", "C"])
     }
 }
+
+/// Group by tool never posts a rest pass before the operation it rests after, even when their footprints are apart
+/// (the overlap rule would not stop the move) (docs/implicit-state-machines.md #8).
+@Test func groupByToolKeepsTheRestPassAfterItsSource() {
+    let mc = MachineCoordinates(job: PostFixtures.job())
+    func cut(_ name: String, _ tool: Tool, at x: Double, op: UUID = UUID()) -> Toolpath {
+        Toolpath(name: name, operationID: op, kind: .relief3D, tool: tool, moves: [
+            .rapid(to: Vec3(x, 1, mc.safeZ)), .linear(to: Vec3(x, 1, mc.z(depth: 0.1)), feed: 30),
+            .linear(to: Vec3(x + 0.5, 1, mc.z(depth: 0.1)), feed: 100), .rapid(to: Vec3(x + 0.5, 1, mc.safeZ)),
+        ])
+    }
+    let small = ToolLibrary.seeded.tools[4], large = ToolLibrary.seeded.tools[3]
+    let sourceID = UUID()
+    let y = cut("Y", small, at: 1), source = cut("Source", large, at: 4, op: sourceID)
+    var rest = cut("Rest", small, at: 8)
+    // Without the dependency the rest pass joins Y's group, ahead of its source.
+    #expect(ToolpathOrdering.groupedByTool([y, source, rest]).map(\.name) == ["Y", "Rest", "Source"])
+    rest.metadata["restAfter"] = sourceID.uuidString
+    #expect(ToolpathOrdering.groupedByTool([y, source, rest]).map(\.name) == ["Y", "Source", "Rest"])
+}

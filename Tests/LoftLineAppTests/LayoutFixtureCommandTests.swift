@@ -65,7 +65,7 @@ import Testing
         let doc = LoftLineDocument(project: p, toolLibrary: AppTestSupport.library())
         doc.calculateNow(doc.project.operations.map(\.id))
         let ex = GCodeExporter.export(project: doc.project, toolpaths: doc.results[p.operations[0].id]!.toolpaths,
-                                      profile: doc.postProfile, jobName: "t")
+                                      profile: doc.postProfile, jobName: "t", expected: .notChecked(because: "test"))
         #expect(ex.issues.contains { $0.severity == .error && $0.message.contains("keep-out zone") })
         #expect(doc.results[p.operations[1].id]?.error?.contains("never machined") == true)
     }

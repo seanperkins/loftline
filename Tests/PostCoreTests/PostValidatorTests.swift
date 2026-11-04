@@ -523,3 +523,61 @@ func toolpathCheckRejectsARapidPastTheHoleBottom(mode: ZZeroMode) {
         #expect(!has(validate(program("G0 X1 Y1\nG1 G28")), "G28/G30 and a motion code on one block"))
     }
 }
+
+@Test func toolpathValidationRefusesInlayPartsAndReliefSidesWhateverTheirKind() {
+    // A merge turns an inlay or relief piece's kind into .merge; the marker, not the kind, says which
+    // part or side it cuts, so a merged pocket and plug (or top and bottom) in one program are refused.
+    let v = GCodeValidator(profile: BuiltInPosts.avidMach4Inch, job: PostFixtures.job(), units: .inch)
+    func tp(_ kind: OperationKind, _ key: String, _ value: String) -> Toolpath {
+        var t = PostFixtures.toolpaths()[0]
+        t.id = UUID(); t.kind = kind; t.metadata[key] = value
+        return t
+    }
+    let parts = v.validate(toolpaths: [tp(.merge, "part", "female"), tp(.merge, "part", "male")])
+    #expect(parts.contains { $0.message.contains("pocket (female) and plug (male)") })
+    let sides = v.validate(toolpaths: [tp(.merge, "side", "top"), tp(.relief3D, "side", "bottom")])
+    #expect(sides.contains { $0.message.contains("top and bottom sides are in the same program") })
+    #expect(!v.validate(toolpaths: [tp(.merge, "part", "male"), tp(.inlay, "part", "male")])
+        .contains { $0.message.contains("pocket (female) and plug (male)") })
+}
+
+// MARK: Units and distance mode written by a post's templates (docs/implicit-state-machines.md #7)
+
+private func posted(_ edit: (inout PostProfile) -> Void, base: PostProfile = BuiltInPosts.avidMach4Inch) throws -> (PostProfile, String) {
+    var p = base
+    edit(&p)
+    return (p, try TemplatePostProcessor(profile: p).post(PostFixtures.postJob()))
+}
+
+private func validated(_ p: PostProfile, _ text: String) -> [GCodeIssue] {
+    GCodeValidator(profile: p, job: PostFixtures.job(), units: .inch).validate(gcode: text)
+}
+
+@Test func aTemplateThatSwitchesUnitsIsAnError() throws {
+    // A post-file or project copy is never checked by the editor: a G21 in an inch post's tool change makes every
+    // later coordinate millimetres.
+    let (p, text) = try posted { $0.toolChange.append("G21") }
+    #expect(text.contains("G21"))
+    #expect(has(validated(p, text), "switches the program from in to mm mid-program"))
+}
+
+@Test func aTemplateThatMovesInIncrementalIsAnError() throws {
+    let (p, text) = try posted { $0.preamble.append("G91") }
+    #expect(has(validated(p, text), "Motion in incremental distance mode (G91)"))
+}
+
+@Test func aFooterG91G28IsNotIncrementalMotion() throws {
+    let (p, text) = try posted { $0.footer = ["G0 Z{HOME_Z}", "M5", "G91 G28 Z0", "G90", "M30"] }
+    #expect(text.contains("G91 G28 Z0"))
+    #expect(!validated(p, text).contains { $0.message.contains("incremental distance mode") })
+}
+
+@Test func noBuiltInPostWritesAUnitsOrDistanceModeChange() throws {
+    for post in BuiltInPosts.all {
+        let text = try TemplatePostProcessor(profile: post).post(PostFixtures.postJob())
+        let issues = validated(post, text)
+        #expect(!issues.contains { $0.message.contains("mid-program") || $0.message.contains("differ from the profile")
+                    || $0.message.contains("incremental distance mode") },
+                Comment(rawValue: post.id))
+    }
+}

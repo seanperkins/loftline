@@ -8,6 +8,9 @@ struct ContentView: View {
     @ObservedObject var document: LoftLineDocument
     @EnvironmentObject var toolLibrary: ToolLibraryModel
     @ObservedObject private var catalog = PostProfileCatalog.shared
+    /// Watched here, on every document window, so each window's stored per-toolpath times follow a settings change made
+    /// in any window (they were refreshed only while a window showed the 3D view).
+    @ObservedObject private var timeStore = TimeEstimateStore.shared
     @Environment(\.undoManager) private var undoManager
     @Environment(\.openWindow) private var openWindow
     @Environment(\.documentConfiguration) private var documentConfiguration
@@ -32,16 +35,12 @@ struct ContentView: View {
         .navigationTitle(document.document.name)
         .focusedSceneObject(document)
         .onAppear {
-            document.undoManager = undoManager
-            RecoveryCoordinator.shared.register(document)
-            #if DEBUG
-            UIHarness.shared.noteDocument(document)
-            #endif
+            document.attachWindow(undoManager: undoManager, fileURL: documentConfiguration?.fileURL)
+            document.showJobNotesOnOpenIfNeeded()
         }
         .onDisappear { RecoveryCoordinator.shared.unregister(document) }
         .onChange(of: undoManager) { _, um in document.undoManager = um }
-        .onAppear { document.fileURL = documentConfiguration?.fileURL }
-        .onAppear { document.showJobNotesOnOpenIfNeeded() }
+        .onChange(of: timeStore.settings) { _, _ in document.refreshTimeEstimates() }
         .onChange(of: documentConfiguration?.fileURL) { _, url in
             document.fileURL = url
             document.scheduleFileThumbnail()

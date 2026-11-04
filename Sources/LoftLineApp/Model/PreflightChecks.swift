@@ -20,6 +20,16 @@ enum PreflightChecks {
             + duplicateToolNumbers(tools)
             + toolNameMismatches(tools)
             + modelsDeeperThanStock(project.document)
+            + [mixedSheets(project.document)].compactMap { $0 }
+    }
+
+    /// Nest sheets (extra sheets of parts parked beside the material) and material sheets (a job of several boards) are
+    /// two kinds of sheet that do not know about each other: nesting places parts by the first sheet's size.
+    static func mixedSheets(_ doc: Document) -> GCodeIssue? {
+        guard doc.isMultiSheet, doc.layers.contains(where: { $0.sheet != nil }) else { return nil }
+        return GCodeIssue(severity: .warning, message: "Nest sheets and material sheets are both used: nesting places parts by "
+                            + "the first sheet's size and does not know the other material sheets. Check every part's "
+                            + "position before cutting.")
     }
 
     // MARK: Operation warnings
@@ -37,22 +47,36 @@ enum PreflightChecks {
 
     // MARK: Loose parts
 
-    /// Profile toolpaths that cut closed vectors through the full thickness with tabs off. The last
-    /// pass frees the part while the cutter is still in it; the usual result is a thrown part and a
-    /// broken bit, unless something else holds it.
+    /// Profile toolpaths that cut closed vectors through the full thickness with no tab holding them:
+    /// tabs off, or manual placement with no tab on that vector (cleared, or the vector added after the
+    /// tabs were placed; the generator gives such a vector none). The last pass frees the part while
+    /// the cutter is still in it; the usual result is a thrown part and a broken bit, unless something
+    /// else holds it.
     static func looseParts(_ operations: [AnyOperation], document doc: Document) -> [GCodeIssue] {
         let thickness = doc.job.thickness
         let tol = doc.units == .inch ? 0.0005 : 0.01
         var out: [GCodeIssue] = []
         for (name, p) in operations.flatMap(profiles) {
-            guard !p.params.tabs.isEnabled, p.params.depth.cutDepth >= thickness - tol else { continue }
-            let closed = doc.shapes(ids: p.setup.shapeIDs).filter { $0.paths.contains(where: \.isClosed) }
+            let tabs = p.params.tabs
+            guard p.params.depth.cutDepth >= thickness - tol else { continue }
+            let tabbed: Set<UUID>
+            if !tabs.isEnabled {
+                tabbed = []
+            } else if let anchors = tabs.manualTabs {
+                tabbed = Set(anchors.map(\.shapeID))
+            } else {
+                continue
+            }
+            let closed = doc.shapes(ids: p.setup.shapeIDs).filter { $0.paths.contains(where: \.isClosed) && !tabbed.contains($0.id) }
             guard !closed.isEmpty else { continue }
             let n = closed.count
             let what = n == 1 ? "1 closed vector" : "\(n) closed vectors"
-            out.append(GCodeIssue(severity: .warning, message:
-                "\(name) cuts \(what) through the full \(RulerTicks.label(thickness)) \(doc.units.abbreviation) with tabs off: "
-                + "the part comes loose while the cutter is still in it. Turn on Tabs, or make sure the part is held another way."))
+            let size = "\(RulerTicks.label(thickness)) \(doc.units.abbreviation)"
+            out.append(GCodeIssue(severity: .warning, message: tabs.isEnabled
+                ? "\(name) cuts \(what) through the full \(size) with no tabs placed on \(n == 1 ? "it" : "them"): "
+                    + "the part comes loose while the cutter is still in it. Place a tab on \(n == 1 ? "it" : "each"), or make sure the part is held another way."
+                : "\(name) cuts \(what) through the full \(size) with tabs off: "
+                    + "the part comes loose while the cutter is still in it. Turn on Tabs, or make sure the part is held another way."))
         }
         return out
     }

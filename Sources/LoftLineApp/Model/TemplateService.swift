@@ -36,8 +36,9 @@ enum TemplateService {
             remap[t.id] = fresh.id
             carry.append(fresh)
         }
-        for (op, matched) in resolved {
+        for (op, matched, split) in resolved {
             var o = f == 1 ? op : op.scaled(by: f)
+            o = withSplit(split.map { f == 1 ? $0 : $0.scaled(by: f) }, for: o, in: &project)
             var setup = o.setup
             var name = setup.name
             var n = 2
@@ -52,6 +53,28 @@ enum TemplateService {
         }
         project.tools.append(contentsOf: carry)
         return outcome
+    }
+
+    /// A relief from a template brings its split, converted to the project's units. A model without one takes it; one
+    /// with the same split (to rounding) is left alone; one with a different split keeps its own, and the added relief
+    /// waits for the user to confirm it (`splitNeedsReview`), so no existing cut changes.
+    static func withSplit(_ split: ReliefSplit?, for op: AnyOperation, in project: inout LoftLineProject) -> AnyOperation {
+        guard let split, case .relief3D(var r) = op,
+              let i = project.document.models.firstIndex(where: { $0.id == r.params.modelID }) else { return op }
+        guard let have = project.document.models[i].reliefSplit else {
+            project.document.models[i].reliefSplit = split
+            return op
+        }
+        func same(_ a: Double?, _ b: Double?) -> Bool {
+            switch (a, b) {
+            case (nil, nil): return true
+            case let (x?, y?): return abs(x - y) <= 1e-9 * max(1, abs(x))
+            default: return false
+            }
+        }
+        if have.flip == split.flip, same(have.splitDepth, split.splitDepth), same(have.web, split.web) { return op }
+        if r.params.twoSided != nil { r.params.twoSided?.splitNeedsReview = true }
+        return .relief3D(r)
     }
 
     static func summary(_ o: Outcome) -> String {

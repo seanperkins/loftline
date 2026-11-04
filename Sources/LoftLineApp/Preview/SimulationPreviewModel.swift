@@ -114,8 +114,8 @@ final class SimulationPreviewModel: ObservableObject {
             guard tool != oldValue else { return }
             if oldValue == .measure { clearMeasurement() }
             if oldValue == .draw { cancelDrawing() }
-            // Drawing needs the existing vectors on screen (and for snapping).
-            if tool == .draw || tool == .select { showVectors = true }
+            // Drawing and selecting show the vectors (`vectorsShown`) without changing the saved preference.
+            applyOverlay()
         }
     }
     var isMeasuring: Bool {
@@ -189,12 +189,32 @@ final class SimulationPreviewModel: ObservableObject {
     @Published var showRapidLines = storedFlag(showRapidsKey, default: true) {
         didSet { UserDefaults.standard.set(showRapidLines, forKey: Self.showRapidsKey); applyOverlay() }
     }
-    /// Design vectors drawn on the material top.
-    @Published var showVectors = storedFlag(showVectorsKey, default: false) {
-        didSet { UserDefaults.standard.set(showVectors, forKey: Self.showVectorsKey); applyOverlay() }
+    /// Design vectors drawn on the material top: the saved preference itself, with no copy here, so every window
+    /// reads the same value (a window's view refreshes its overlay when another changes it, `preferenceChanged`).
+    var showVectors: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.showVectorsKey) }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: Self.showVectorsKey)
+            applyOverlay()
+        }
+    }
+    /// Vectors are on screen when the preference says so, and always while drawing or selecting in 3D.
+    var vectorsShown: Bool { showVectors || tool == .draw || tool == .select }
+
+    /// The preference changed (in this window or another): redraw the overlay.
+    func preferenceChanged() {
+        objectWillChange.send()
+        applyOverlay()
     }
     private var lines = ToolpathLines3D()
     private var vectors: [[Vec2]] = []
+
+    /// With no toolpaths the 3D toolbar is disabled: a tool chosen there (Measure, Draw, Select) ends rather than stay
+    /// on with no way to switch it off.
+    func toolpathsChanged(isEmpty: Bool) {
+        if isEmpty { tool = .none }
+    }
 
     /// Design vectors (material frame polylines; closed ones repeat their first point).
     func setVectors(_ v: [[Vec2]]) {
@@ -205,7 +225,7 @@ final class SimulationPreviewModel: ObservableObject {
 
     private func applyOverlay() {
         stockScene.showOverlay(toolpaths: showToolpathLines ? lines : nil, showRapids: showRapidLines,
-                               vectors: showVectors ? vectors : [], selected: showVectors ? selectedVectors : [])
+                               vectors: vectorsShown ? vectors : [], selected: vectorsShown ? selectedVectors : [])
     }
 
     /// A click on the stock while measuring (material frame, z = -depth).

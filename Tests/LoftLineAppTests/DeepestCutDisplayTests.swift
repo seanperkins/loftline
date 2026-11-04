@@ -42,15 +42,15 @@ import Testing
         #expect(sheet.deepestCut == "Z 0 in (at the material bottom)")
         // The same number the Export sheet reads back out of the posted program.
         let tps = GCodeExporter.toolpaths(scope: .all, operations: spoil.project.operations, results: spoil.results, groupByTool: false)
-        let r = GCodeExporter.export(project: spoil.project, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+        let r = GCodeExporter.export(project: spoil.project, toolpaths: tps, profile: BuiltInPosts.avidMach4Inch, jobName: "T", expected: .notChecked(because: "test"))
         #expect(try #require(r.deepestCut).text(units: .inch) == sheet.deepestCut)
     }
 
     @Test func everySaveAllFileCarriesItsOwnDeepestCut() throws {
         let doc = calculatedDoc()
         let files = GCodeBatchExport.plan(mode: .filePerToolpath, operations: doc.project.operations, results: doc.results,
-                                          jobName: "T", profile: BuiltInPosts.avidMach4Inch)
-        let posted = GCodeBatchExport.post(files, project: doc.project, profile: BuiltInPosts.avidMach4Inch, jobName: "T")
+                                          jobName: "T", profile: BuiltInPosts.avidMach4Inch, groupByTool: false)
+        let posted = GCodeBatchExport.post(files, project: doc.project, profile: BuiltInPosts.avidMach4Inch, jobName: "T", expected: .notChecked(because: "test"))
         #expect(posted.count == 2)
         let texts = try posted.map { try #require($0.result.deepestCut).text(units: .inch) }
         #expect(texts == ["Z -0.25 in (0.5 in above the material bottom)", "Z -0.75 in (at the material bottom)"])

@@ -20,11 +20,24 @@ struct GCodeExportResult {
     var deepestCut: DeepestCut? = nil
     /// The post's line endings (#99 item 4). `text` is always LF: the validator, the stop check and the preview read it.
     var lineEnding: PostProfile.LineEnding? = nil
+    /// Enabled operations with no toolpaths in this program (also first in `issues`). The CLI refuses a program with any,
+    /// whatever `--force` says.
+    var missingSteps: [GCodeIssue] = []
 
     /// What a program file holds: `text` with the post's line endings. Every write to disk uses this.
     var fileText: String? { text.map { lineEnding?.apply($0) ?? $0 } }
 
     var hasErrors: Bool { issues.contains { $0.severity == .error } }
+}
+
+/// What a program is expected to contain, which every export states (docs/implicit-state-machines.md #28): a new export
+/// path cannot compile without deciding, so the missing-step check cannot be forgotten.
+enum ExpectedSteps {
+    /// Each enabled operation here must have toolpaths; one without is an error (`GCodeExportResult.missingSteps`). A rest
+    /// pass among them whose source has no finishing result refuses the program (`RestDependency`).
+    case operations([AnyOperation], results: [UUID: ToolpathResult])
+    /// No step can be missing (one operation's own program); `because` says why, at the call site.
+    case notChecked(because: String)
 }
 
 /// Collects toolpaths, runs the post processor and the validator. Pure (no UI).
@@ -169,8 +182,34 @@ enum GCodeExporter {
 
     /// `sheetToolpaths`: with a probing post, every toolpath of the posted sheet (`sheetToolpathsIfProbing`), which the
     /// touch-off spot is checked against; nil with a probing post refuses, so a caller that forgets it fails closed.
-    static func export(project: LoftLineProject, toolpaths: [Toolpath], profile: PostProfile,
-                       jobName: String, sheetToolpaths: SheetToolpaths? = nil) -> GCodeExportResult {
+    static func export(project: LoftLineProject, toolpaths: [Toolpath], profile: PostProfile, jobName: String,
+                       expected: ExpectedSteps, sheetToolpaths: SheetToolpaths? = nil) -> GCodeExportResult {
+        guard case .operations(let operations, let results) = expected else {
+            return program(project: project, toolpaths: toolpaths, profile: profile, jobName: jobName, sheetToolpaths: sheetToolpaths)
+        }
+        let missing = missingOperationIssues(operations, results: results)
+        var result: GCodeExportResult
+        // A rest pass in this program whose source has not finished the surface would cut into bare stock.
+        let inProgram = Set(toolpaths.compactMap(\.operationID))
+        let parts = operations.flatMap { op -> [(AnyOperation, UUID)] in
+            if case .merge(let m) = op { return m.params.children.map { ($0, op.id) } }
+            return [(op, op.id)]
+        }
+        if let problem = parts.lazy.filter({ inProgram.contains($0.0.id) || inProgram.contains($0.1) })
+            .compactMap({ RestDependency.problem($0.0, results: results) }).first {
+            result = refused(problem, toolpathCount: toolpaths.count)
+        } else {
+            result = program(project: project, toolpaths: toolpaths, profile: profile, jobName: jobName,
+                             sheetToolpaths: sheetToolpaths)
+        }
+        result.issues.insert(contentsOf: missing, at: 0)
+        result.missingSteps = missing
+        return result
+    }
+
+    /// Posts and validates `toolpaths` as one program (`export` adds the expected-steps checks).
+    private static func program(project: LoftLineProject, toolpaths: [Toolpath], profile: PostProfile,
+                                jobName: String, sheetToolpaths: SheetToolpaths?) -> GCodeExportResult {
         let doc = project.document
         guard !toolpaths.isEmpty else {
             return GCodeExportResult(text: nil, issues: [], errorMessage: "There are no calculated toolpaths to export.",

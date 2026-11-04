@@ -8,24 +8,24 @@ import Foundation
 /// stops at `split` and the bottom side `web` short of it.
 enum ReliefTwoSided {
     /// Split depth (first-side frame) for the settings and the primary model.
-    static func splitDepth(_ s: TwoSidedSettings, model: PlacedModel) -> Double {
+    static func splitDepth(_ s: ReliefSplit, model: PlacedModel) -> Double {
         s.splitDepth ?? (model.zTop + model.depth) / 2
     }
 
     /// Depth limit of this side's surface, in this side's frame.
-    static func clampDepth(_ s: TwoSidedSettings, split: Double, thickness: Double) -> Double {
-        s.side == .top ? split : thickness - split - max(0, s.web)
+    static func clampDepth(_ s: ReliefSplit, side: TwoSidedSettings.Side, split: Double, thickness: Double) -> Double {
+        side == .top ? split : thickness - split - max(0, s.web)
     }
 
     /// Mirrors a first-side material point into the flipped board's frame.
-    static func mirror(_ p: Vec2, flip: TwoSidedSettings.Flip, job: JobSetup) -> Vec2 {
+    static func mirror(_ p: Vec2, flip: FlipAxis, job: JobSetup) -> Vec2 {
         flip == .leftRight ? Vec2(job.width - p.x, p.y) : Vec2(p.x, job.height - p.y)
     }
 
     /// The model as seen from the bottom of the flipped board: mesh mirrored in XY and Z, placed
     /// so the same material maps to the mirrored position, with its top/bottom depths measured
     /// from the old bottom face.
-    static func flipped(_ m: PlacedModel, flip: TwoSidedSettings.Flip, job: JobSetup) -> PlacedModel {
+    static func flipped(_ m: PlacedModel, flip: FlipAxis, job: JobSetup) -> PlacedModel {
         var out = m
         out.mesh.vertices = m.mesh.vertices.map { v in
             flip == .leftRight ? Vec3(-v.x, v.y, -v.z) : Vec3(v.x, -v.y, -v.z)

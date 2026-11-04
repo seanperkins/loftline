@@ -17,7 +17,7 @@
     "layers" : [
       {
         "colorHex" : "#000000",
-        "id" : "693959D3-2F8B-4F4B-AD9B-6BD8078CADEF",
+        "id" : "83637EA3-BBC3-434C-9BAD-4BB17D8D634A",
         "isLocked" : false,
         "isVisible" : true,
         "name" : "Layer 1"
@@ -29,9 +29,9 @@
     "name" : "Untitled",
     "shapes" : [
       {
-        "id" : "49ACB1B9-FFDA-4DA5-B417-1EE30043CEE0",
+        "id" : "229CCB88-7A17-4C47-BD14-27F4AF78CEE8",
         "isLocked" : false,
-        "layerID" : "693959D3-2F8B-4F4B-AD9B-6BD8078CADEF",
+        "layerID" : "83637EA3-BBC3-434C-9BAD-4BB17D8D634A",
         "name" : "Plaque",
         "origin" : {
           "drawn" : {
@@ -137,7 +137,7 @@
     ],
     "units" : "inch"
   },
-  "formatVersion" : 2,
+  "formatVersion" : 3,
   "machineInferredFor" : "avid-pro6096-mach4-inch",
   "machineSnapshot" : {
     "id" : "avid-pro6096",
@@ -176,7 +176,7 @@
             "stepover" : 0.7
           },
           "setup" : {
-            "id" : "AB50D62F-6CC2-4032-ACA9-039CFF28ACCF",
+            "id" : "1631BD23-6B22-456C-B01B-7D15E30D4587",
             "isEnabled" : true,
             "name" : "Facing 1",
             "shapeIDs" : [
@@ -195,7 +195,7 @@
             "depth" : {
               "cutDepth" : 0.75,
               "finalPassDepth" : 0,
-              "followsThickness" : true,
+              "overcut" : 0,
               "startDepth" : 0.03125
             },
             "direction" : "climb",
@@ -221,11 +221,11 @@
             }
           },
           "setup" : {
-            "id" : "C8E67E91-F1F0-4C8A-8193-0A6AA40EE1B1",
+            "id" : "C3BCE36B-A61D-46B6-ACE2-8C5AB7169C31",
             "isEnabled" : true,
             "name" : "Profile 1",
             "shapeIDs" : [
-              "49ACB1B9-FFDA-4DA5-B417-1EE30043CEE0"
+              "229CCB88-7A17-4C47-BD14-27F4AF78CEE8"
             ],
             "toolID" : "00000000-0000-4000-8000-000000000001"
           }

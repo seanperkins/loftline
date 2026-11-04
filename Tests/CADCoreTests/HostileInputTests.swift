@@ -52,6 +52,19 @@ import Testing
         _ = try? SVGImporter().importVectors(from: Data(svg.utf8), targetUnits: .inch)
     }
 
+    @Test(.timeLimit(.minutes(1))) func dxfSelfReferencingInsertIsBounded() throws {
+        // A block that inserts itself four times: the depth cap alone still leaves 4^16 entities to expand. Its own
+        // entity is one the importer skips, so the test times the expansion, not joining the lines it would make.
+        func pairs(_ p: [(Int, String)]) -> String { p.map { "\($0.0)\n\($0.1)\n" }.joined() }
+        let line = pairs([(0, "POINT"), (8, "0"), (10, "0"), (20, "0"), (30, "0")])
+        let insert = pairs([(0, "INSERT"), (8, "0"), (2, "A"), (10, "0"), (20, "0"), (30, "0")])
+        let dxf = pairs([(0, "SECTION"), (2, "BLOCKS"), (0, "BLOCK"), (8, "0"), (2, "A"), (70, "0"), (10, "0"), (20, "0"), (30, "0")])
+            + line + String(repeating: insert, count: 4) + pairs([(0, "ENDBLK"), (0, "ENDSEC")])
+            + pairs([(0, "SECTION"), (2, "ENTITIES")]) + insert + pairs([(0, "ENDSEC"), (0, "EOF")])
+        let r = try DXFImporter().importVectors(from: Data(dxf.utf8), targetUnits: .inch)
+        #expect(r.warnings.contains { $0.contains("more than \(DXFImporter.maxExpandedEntities) entities") })
+    }
+
     @Test func pdfImageSizeOverflowIsRejected() {
         #expect(PDFImporter.imageByteCount(width: 2_147_483_647, height: 2_147_483_647, components: 4) == nil)
         #expect(PDFImporter.imageByteCount(width: Int.max, height: 2, components: 1) == nil)
@@ -223,6 +236,12 @@ import Testing
         }
         #expect(try ExpressionEvaluator.evaluate(String(repeating: "(", count: 40) + "2" + String(repeating: ")", count: 40)) == 2)
         #expect(try ExpressionEvaluator.evaluate("--3") == 3)
+        // "^" is right-associative, so a chain recurses as deep as it is long: a stored expression must not get round
+        // the cap that way.
+        #expect(throws: ExpressionEvaluator.ExpressionError.self) {
+            try ExpressionEvaluator.evaluate(String(repeating: "1^", count: 100) + "1")
+        }
+        #expect(try ExpressionEvaluator.evaluate("2^3^2") == 512)
     }
 
     @Test func documentWithoutLayersIsRepairedOnLoad() throws {

@@ -72,6 +72,9 @@ public struct CAMContext: Sendable {
     public var tools: ToolLibrary
     /// Chordal tolerance for flattening curves (document units).
     public var tolerance: Double
+    /// The project's operations in program order, for an operation that depends on another (a rest pass). Empty when
+    /// generating outside a project.
+    public var operations: [AnyOperation] = []
 
     public init(document: Document, tools: ToolLibrary, tolerance: Double? = nil) {
         self.document = document

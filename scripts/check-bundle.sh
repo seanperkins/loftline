@@ -52,7 +52,8 @@ signs=("${(@f)$(< "$work/codesign.log")}")
 (( ${#signs} == 2 )) || fail "expected two codesign calls (extension, app), got ${#signs}"
 [[ "$signs[1]" == *LoftLineThumbnail.appex ]] || fail "the extension must be signed first: $signs[1]"
 [[ "$signs[1]" == *"--entitlements Extensions/QuickLookThumbnail/LoftLineThumbnail.entitlements"* ]] || fail "the extension needs its entitlements: $signs[1]"
-[[ "$signs[2]" == *"$APP" ]] || fail "the app must be signed second: $signs[2]"
+# bundle.sh signs the app in its staging folder, then moves it to $APP.
+[[ "$signs[2]" == *"/LoftLine.app" ]] || fail "the app must be signed second: $signs[2]"
 for call in $signs; do
   [[ "$call" == *"--options runtime"* && "$call" == *"--timestamp"* ]] || fail "hardened runtime and a timestamp are required: $call"
   [[ "$call" == *"--sign $identity"* ]] || fail "the identity is not used: $call"

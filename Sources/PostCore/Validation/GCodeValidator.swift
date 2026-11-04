@@ -99,13 +99,14 @@ public struct GCodeValidator: Sendable {
             }
         }
         check.finish()
-        let parts = Set(toolpaths.filter { $0.kind == .inlay }.compactMap { $0.metadata["part"] })
+        // The markers, not the kind: a merge turns an inlay or relief piece's kind into .merge but keeps its marker.
+        let parts = Set(toolpaths.compactMap { $0.metadata["part"] })
         if parts.contains("female") && parts.contains("male") {
             check.issues.add("inlay-mixed-parts", .error, line: nil,
                              "Inlay pocket (female) and plug (male) are in the same program. The plug is cut in place "
                                  + "over the pocket, so cut each part on its own board and export them separately.")
         }
-        let reliefSides = Set(toolpaths.filter { $0.kind == .relief3D }.compactMap { $0.metadata["side"] })
+        let reliefSides = Set(toolpaths.compactMap { $0.metadata["side"] })
         if reliefSides.count > 1 {
             check.issues.add("relief-mixed-sides", .error, line: nil,
                              "Two-sided 3D relief: the top and bottom sides are in the same program. The bottom side "
@@ -207,6 +208,14 @@ public struct GCodeValidator: Sendable {
                     if u != profile.units {
                         carried.add("units-mismatch", .warning, line: b.line,
                                     "Program units \(u.abbreviation) differ from the profile's \(profile.units.abbreviation)")
+                    }
+                    // A program is written in one unit: a units word that changes the units already in force (a G21 in
+                    // an inch post's tool change template) makes every later coordinate mean something else.
+                    if let was = gUnits, u != was {
+                        carried.add("units-change", .error, line: b.line,
+                                    "G\(NumberFormat.compact(word, maxDecimals: 1)) switches the program from \(was.abbreviation) to "
+                                        + "\(u.abbreviation) mid-program: every later coordinate would be read in \(u.abbreviation). "
+                                        + "Remove it from the post's templates.")
                     }
                     if u != (gUnits ?? profile.units) {
                         // Restart the checker in the new units, keeping what it found so far.
@@ -320,6 +329,13 @@ public struct GCodeValidator: Sendable {
             }
             if !nonMotion, bx != nil || by != nil || bz != nil {
                 if let m = reference ? 0 : motion {
+                    // The program's coordinates are absolute; a template's G91 makes the controller add them up instead.
+                    // A G28/G30 is the footer's own move home ("G91 G28 Z0"), not the program's coordinates.
+                    if !absolute, !reference {
+                        carried.add("incremental-motion", .error, line: b.line,
+                                    "Motion in incremental distance mode (G91): the program's coordinates are absolute, so the "
+                                        + "machine would add them up. Remove the G91 from the post, or follow it with G90.")
+                    }
                     if !sawAbsolute, absolute {
                         sawAbsolute = true   // report once
                         carried.add("no-absolute", .warning, line: b.line,

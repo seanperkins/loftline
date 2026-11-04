@@ -67,12 +67,14 @@ embed its ids, so they go stale whenever the sample is regenerated).
      note under the result (and on the job sheet) says how far below the original top the new surface
      is and not to re-zero Z afterwards. Air-cut `samples/faced-board.tap` before cutting real stock.
    - **3D:** import `relief.stl`. The "Place 3D Model" dialog creates Roughing and Finishing toolpaths.
-     In the inspector, try Offset roughing, the Offset/Spiral finishing patterns, "Rest after" a
-     larger ball nose, "Combine with" a second model, and "Two-Sided" (one toolpath per side).
+     In the inspector, try Offset roughing, the Offset/Spiral finishing patterns, "Rest after" an
+     earlier finish with a larger ball nose (switch that finish off: the rest pass refuses), "Combine with" a second
+     model, and "Two-Sided" (one toolpath per side; flip, split depth and web are shared by both sides).
      On a Fluting or Profile toolpath, "Project onto 3D" drops it onto the model's surface.
-   - **Follow the thickness.** A new Profile shows "Follow the material thickness" on under Cut depth.
-     Change the thickness in Job Setup (Design → Job Setup…) from 0.75 to 0.5 in: the profile's cut
-     depth becomes 0.5 in; a pocket's depth and a profile with the toggle off do not move.
+   - **Cut through.** A new Profile shows "Cut through the material" on, with "Past the bottom" 0 and Cut depth
+     shown, not editable. Change the thickness in Job Setup (Design → Job Setup…) from 0.75 to 0.5 in, then to
+     0.25 in: the profile's cut depth follows each time; a pocket's depth and a profile with the toggle off do not
+     move.
    - **Tooltips.** Hover any setting in a toolpath form: every field, toggle and picker shows a one-line
      explanation (not just its label). In the Tool Database's feeds calculator, choose a material in the
      Material pop-up: the target chip load fills in for that tool's diameter and Apply sets the feed.
@@ -163,7 +165,7 @@ minute or two. Use `samples/sign.loftline` (or a new document) unless a step say
 7. **Job setup.** Job Setup… (⇧⌘J): Plunge Z, datum offset, two-sided job (Design → Show Bottom Side),
    and Design → Sheets for a multi-sheet job. Design → Document Variables… and type `=thickness/2` in a
    depth field.
-8. **3D.** With `relief.stl` placed: Offset roughing, Offset/Spiral finishing, Rest after a larger tool,
+8. **3D.** With `relief.stl` placed: Offset roughing, Offset/Spiral finishing, Rest after an earlier finish,
    Combine with a second model, Two-Sided, and "Project onto 3D" on a Fluting toolpath.
 9. **Preview.** In the 3D preview (⌥⌘3): scope picker, material palette, ruler, PNG snapshot,
    stopwatch calibration, camera presets, toolpath lines/rapids/vectors, and the pencil and arrow tools

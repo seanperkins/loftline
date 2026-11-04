@@ -5,10 +5,9 @@ import PostCore
 
 /// "Save All Toolpaths": how the enabled, calculated toolpaths are split into files.
 enum SaveAllMode: String, CaseIterable, Identifiable {
-    /// One program, toolpaths grouped so each tool is loaded once.
-    case oneFileGroupedByTool
-    /// One program in toolpath-list order (a tool change wherever the tool differs).
-    case oneFileInOrder
+    /// One program, in the order the preview, the tool-change summary and the job sheet show: the shared group-by-tool
+    /// preference (`GCodeExporter.groupByToolKey`) decides it, not the mode.
+    case oneFile
     /// One program per toolpath (operation).
     case filePerToolpath
     /// One program per tool run, numbered in run order (no tool changes inside a file). A tool
@@ -19,14 +18,13 @@ enum SaveAllMode: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .oneFileGroupedByTool: return "One file, grouped by tool"
-        case .oneFileInOrder: return "One file, in toolpath order"
+        case .oneFile: return "One file"
         case .filePerToolpath: return "One file per toolpath"
         case .filePerTool: return "One file per tool"
         }
     }
 
-    var isSingleFile: Bool { self == .oneFileGroupedByTool || self == .oneFileInOrder }
+    var isSingleFile: Bool { self == .oneFile }
 }
 
 /// A planned output file.
@@ -39,14 +37,15 @@ struct PlannedGCodeFile: Equatable {
 enum GCodeBatchExport {
     /// Splits the enabled operations' calculated toolpaths into files. Operations without
     /// toolpaths are skipped.
+    /// `groupByTool`: the shared preference, which orders the one-file program.
     static func plan(mode: SaveAllMode, operations: [AnyOperation], results: [UUID: ToolpathResult],
-                     jobName: String, profile: PostProfile) -> [PlannedGCodeFile] {
+                     jobName: String, profile: PostProfile, groupByTool: Bool) -> [PlannedGCodeFile] {
         let enabled = operations.filter(\.setup.isEnabled)
         var files: [PlannedGCodeFile] = []
         switch mode {
-        case .oneFileGroupedByTool, .oneFileInOrder:
+        case .oneFile:
             let tps = GCodeExporter.toolpaths(scope: .all, operations: operations, results: results,
-                                              groupByTool: mode == .oneFileGroupedByTool)
+                                              groupByTool: groupByTool)
             if !tps.isEmpty {
                 files.append(PlannedGCodeFile(
                     fileName: GCodeExporter.suggestedFileName(jobName: jobName, operationName: nil, profile: profile),
@@ -98,8 +97,10 @@ enum GCodeBatchExport {
 
     /// Posts every planned file (validator included). `GCodeFileSet(posted:)` writes the result.
     static func post(_ files: [PlannedGCodeFile], project: LoftLineProject, profile: PostProfile,
-                     jobName: String, sheetToolpaths: SheetToolpaths? = nil) -> [(file: PlannedGCodeFile, result: GCodeExportResult)] {
+                     jobName: String, expected: ExpectedSteps,
+                     sheetToolpaths: SheetToolpaths? = nil) -> [(file: PlannedGCodeFile, result: GCodeExportResult)] {
         files.map { ($0, GCodeExporter.export(project: project, toolpaths: $0.toolpaths, profile: profile, jobName: jobName,
+                                               expected: expected,
                                                sheetToolpaths: sheetToolpaths)) }
     }
 }

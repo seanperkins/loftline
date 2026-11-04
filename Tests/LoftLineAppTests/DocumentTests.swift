@@ -199,14 +199,14 @@ import Testing
 
     @Test func emptyExportExplainsWhy() {
         let r = GCodeExporter.export(project: AppTestSupport.project(), toolpaths: [], profile: BuiltInPosts.avidMach4Inch,
-                                     jobName: "x")
+                                     jobName: "x", expected: .notChecked(because: "test"))
         #expect(r.text == nil && r.errorMessage != nil)
     }
 
     @Test func exportProducesAValidatedProgram() throws {
         let tp = toolpath(ToolLibrary.seeded.tools[0], name: "a")
         let r = GCodeExporter.export(project: AppTestSupport.project(), toolpaths: [tp],
-                                     profile: BuiltInPosts.avidMach4Inch, jobName: "Sign")
+                                     profile: BuiltInPosts.avidMach4Inch, jobName: "Sign", expected: .notChecked(because: "test"))
         #expect(r.errorMessage == nil, Comment(rawValue: r.errorMessage ?? ""))
         let text = try #require(r.text)
         #expect(text.contains("G20") && text.contains("T1 M6") && text.hasSuffix("M30\n"))

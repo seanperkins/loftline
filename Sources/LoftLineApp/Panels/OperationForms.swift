@@ -16,21 +16,27 @@ struct DepthForm: View {
 
     var body: some View {
         LengthField("Start depth", value: $depth.startDepth, units: units, help: "Depth below the material top where cutting starts")
+        // A through cut's depth is the thickness plus its overcut, worked out by the project; shown, not typed.
         LengthField("Cut depth", value: $depth.cutDepth, units: units, help: "Final depth below the material top")
+            .disabled(materialThickness != nil && depth.overcut != nil)
         FluteLengthNote(tool: tool, cutDepth: depth.cutDepth, startDepth: depth.startDepth, units: units)
         if let thickness = materialThickness {
-            Toggle("Follow the material thickness", isOn: Binding(get: { depth.followsThickness == true }, set: { on in
-                depth.followsThickness = on ? true : nil
-                if on, depth.cutDepth < thickness { depth.cutDepth = thickness }
+            Toggle("Cut through the material", isOn: Binding(get: { depth.overcut != nil }, set: { on in
+                if on {
+                    let over = max(0, depth.cutDepth - thickness)
+                    depth.overcut = over
+                    depth.cutDepth = thickness + over
+                } else {
+                    depth.overcut = nil
+                }
             }))
-            .fieldHelp("Follow the material thickness")
-            if depth.followsThickness == true {
-                let past = depth.cutDepth - thickness
-                let tol = units == .inch ? 0.0005 : 0.01
-                Text(past > tol
-                     ? "Stays \(RulerTicks.label((past * 10000).rounded() / 10000)) \(units.abbreviation) past the material bottom when Job Setup changes the thickness."
-                     : "Stays at the material bottom when Job Setup changes the thickness.")
-                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            .fieldHelp("Cut through the material")
+            if let over = depth.overcut {
+                LengthField("Past the bottom", value: Binding(get: { over }, set: { v in
+                    depth.overcut = max(0, v)
+                    depth.cutDepth = thickness + max(0, v)
+                }), units: units)
+                .fieldHelp("Past the bottom")
             }
         }
         PassEditor(depth: $depth, units: units, showFinalPass: showFinalPass, toolStepdown: tool?.stepdown)
@@ -521,33 +527,50 @@ struct Relief3DForm: View {
     var library: ToolLibrary
     var models: [PlacedModel]
     var selection: [UUID]
+    /// The model's two-sided split, shared by both sides' toolpaths (edits go to the document).
+    var split: Binding<ReliefSplit?> = .constant(nil)
+    /// Confirms the split after an older file's sides disagreed (`TwoSidedSettings.splitNeedsReview`).
+    var onUseSplit: () -> Void = {}
+    /// Earlier 3D finishes this toolpath can rest after (id, name), in program order.
+    var restCandidates: [(id: UUID, name: String)] = []
 
-    private func twoSidedBinding<T>(_ kp: WritableKeyPath<TwoSidedSettings, T>, default value: T) -> Binding<T> {
-        Binding(get: { params.twoSided?[keyPath: kp] ?? value }, set: { params.twoSided?[keyPath: kp] = $0 })
+    private func splitBinding<T>(_ kp: WritableKeyPath<ReliefSplit, T>, default value: T) -> Binding<T> {
+        Binding(get: { split.wrappedValue?[keyPath: kp] ?? value },
+                set: { var s = split.wrappedValue ?? ReliefSplit(web: units == .inch ? 0.04 : 1); s[keyPath: kp] = $0; split.wrappedValue = s })
     }
 
     @ViewBuilder private var twoSidedSection: some View {
         InspectorSection(title: "Two-Sided") {
             Toggle("Machine from both sides", isOn: Binding(get: { params.twoSided != nil }, set: { on in
-                params.twoSided = on ? TwoSidedSettings(web: units == .inch ? 0.04 : 1) : nil
+                params.twoSided = on ? TwoSidedSettings() : nil
+                if on, split.wrappedValue == nil { split.wrappedValue = ReliefSplit(web: units == .inch ? 0.04 : 1) }
             }))
                 .fieldHelp("Machine from both sides")
             if params.twoSided != nil {
-                Picker("This toolpath cuts", selection: twoSidedBinding(\.side, default: .top)) {
+                Picker("This toolpath cuts", selection: Binding(get: { params.twoSided?.side ?? .top },
+                                                                set: { params.twoSided?.side = $0 })) {
                     Text("Top side").tag(TwoSidedSettings.Side.top)
                     Text("Bottom side").tag(TwoSidedSettings.Side.bottom)
                 }
                 .pickerStyle(.segmented)
                     .fieldHelp("This toolpath cuts")
-                Picker("Flip board", selection: twoSidedBinding(\.flip, default: .leftRight)) {
-                    Text("Left to right").tag(TwoSidedSettings.Flip.leftRight)
-                    Text("Top to bottom").tag(TwoSidedSettings.Flip.topBottom)
+                if params.twoSided?.splitNeedsReview == true {
+                    Label("The saved file had different split settings on the two sides. These are the top side's: "
+                          + "check them, then use them for both sides.", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
+                    Button("Use These Settings", action: onUseSplit)
+                }
+                Picker("Flip board", selection: splitBinding(\.flip, default: .leftRight)) {
+                    Text("Left to right").tag(FlipAxis.leftRight)
+                    Text("Top to bottom").tag(FlipAxis.topBottom)
                 }
                     .fieldHelp("Flip board")
-                OptionalLengthField(label: "Split depth", value: twoSidedBinding(\.splitDepth, default: nil), units: units,
+                OptionalLengthField(label: "Split depth", value: splitBinding(\.splitDepth, default: nil), units: units,
                                     defaultValue: units == .inch ? 0.25 : 6)
-                LengthField("Web", value: twoSidedBinding(\.web, default: 0), units: units,
+                LengthField("Web", value: splitBinding(\.web, default: 0), units: units,
                             help: "Material left at the split plane so the part stays in the board")
+                Text("Flip, split depth and web belong to the model: both sides' toolpaths use them.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 Text("Make one toolpath per side (duplicate this one and switch the side). After the top side, turn the board over as chosen, keep it against the same corner (the stock must be exactly the job size) and zero Z on the new top.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
@@ -616,10 +639,20 @@ struct Relief3DForm: View {
                 if (params.finishing.strategy ?? .raster) == .raster {
                     NumberField("Raster angle", value: $params.finishing.angle, unit: "°")
                 }
-                OptionalToolPicker(title: "Rest after", toolID: $params.finishing.restToolID, library: library,
-                                   kinds: [.ballNose, .endMill, .vBit, .engraving])
-                if params.finishing.restToolID != nil {
-                    Text("Only the areas the larger tool could not reach are machined (run after its finishing toolpath).")
+                Picker("Rest after", selection: Binding(get: { () -> UUID? in
+                    if case .operation(let id)? = params.finishing.rest { return id }
+                    return nil
+                }, set: { id in params.finishing.rest = id.map { .operation($0) } })) {
+                    Text("None (whole area)").tag(UUID?.none)
+                    ForEach(restCandidates, id: \.id) { c in Text(c.name).tag(UUID?.some(c.id)) }
+                }
+                .fieldHelp("Rest after")
+                if case .unresolved? = params.finishing.rest {
+                    Label("Choose the toolpath this rests after: the saved file named only its tool.",
+                          systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption).foregroundStyle(Color.warningText).fixedSize(horizontal: false, vertical: true)
+                } else if params.finishing.rest != nil {
+                    Text("Only the areas that toolpath's larger tool could not reach are machined.")
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }

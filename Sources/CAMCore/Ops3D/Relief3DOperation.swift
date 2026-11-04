@@ -28,15 +28,21 @@ public struct Relief3DOperation: ToolpathOperation {
         let job = context.document.job
         // Two-sided: the depth this side's surface is clamped at (this side's frame).
         var sideLimit: Double?
+        let split = model.reliefSplit
         if let two = params.twoSided {
-            let split = ReliefTwoSided.splitDepth(two, model: model)
-            guard split > model.zTop + 1e-9, split < model.depth - 1e-9 else {
+            guard two.splitNeedsReview != true else {
+                throw CAMError.invalidParameter("Two-sided settings differed between the sides in the saved file: check "
+                                                + "flip, split depth and web, then press Use These Settings")
+            }
+            guard let split else { throw CAMError.invalidParameter("Two-sided: the model has no split settings") }
+            let splitDepth = ReliefTwoSided.splitDepth(split, model: model)
+            guard splitDepth > model.zTop + 1e-9, splitDepth < model.depth - 1e-9 else {
                 throw CAMError.invalidParameter("The two-sided split depth must lie between the model's top and bottom")
             }
-            let limit = ReliefTwoSided.clampDepth(two, split: split, thickness: job.thickness)
+            let limit = ReliefTwoSided.clampDepth(split, side: two.side, split: splitDepth, thickness: job.thickness)
             guard limit > 1e-9 else { throw CAMError.invalidParameter("The two-sided web leaves nothing to cut") }
             sideLimit = limit
-            if two.side == .bottom { models = models.map { ReliefTwoSided.flipped($0, flip: two.flip, job: job) } }
+            if two.side == .bottom { models = models.map { ReliefTwoSided.flipped($0, flip: split.flip, job: job) } }
         }
         guard params.roughing.isEnabled || params.finishing.isEnabled else {
             throw CAMError.invalidParameter("Enable roughing and/or finishing")
@@ -49,8 +55,8 @@ public struct Relief3DOperation: ToolpathOperation {
 
         let boundaryShapes = context.document.shapes(ids: params.boundaryShapeIDs)
         var region = ReliefRegion.polygons(of: boundaryShapes, tolerance: context.tolerance)
-        if let two = params.twoSided, two.side == .bottom {
-            region = region.map { $0.map { ReliefTwoSided.mirror($0, flip: two.flip, job: job) } }
+        if let two = params.twoSided, two.side == .bottom, let split {
+            region = region.map { $0.map { ReliefTwoSided.mirror($0, flip: split.flip, job: job) } }
         }
         if region.isEmpty {
             region = GeomKernel.boolean(.union, subject: models.map { ReliefRegion.rectangle($0.footprint) }, clip: [],
@@ -59,7 +65,8 @@ public struct Relief3DOperation: ToolpathOperation {
         let regionBounds = Rect2(points: region.flatMap { $0 })
         guard !regionBounds.isEmpty, regionBounds.width > 0 || regionBounds.height > 0 else { throw CAMError.noGeometry }
 
-        let restTool: Tool? = try params.finishing.isEnabled ? params.finishing.restToolID.map { try context.tool($0) } : nil
+        let restSource = params.finishing.isEnabled ? try restSource(in: context) : nil
+        let restTool: Tool? = try restSource.map { try context.tool($0.setup.toolID) }
         let reach = max(finishTool.radius, roughTool.radius + max(0, params.roughing.allowance), restTool?.radius ?? 0)
         let area = regionBounds.insetBy(-(reach + 2 * params.resolution))
         var metadata: [String: String] = [:]
@@ -124,6 +131,8 @@ public struct Relief3DOperation: ToolpathOperation {
             if !moves.isEmpty {
                 var meta = metadata
                 meta["pass"] = "finishing"
+                // Group by tool never moves it ahead of the toolpath it rests after (`ToolpathOrdering.canMove`).
+                if let source = restSource { meta["restAfter"] = source.setup.id.uuidString }
                 result.append(Toolpath(name: "\(setup.name) (Finishing)", operationID: setup.id, kind: .relief3D,
                                        tool: finishTool, moves: moves, metadata: meta))
             }
@@ -138,5 +147,36 @@ public struct Relief3DOperation: ToolpathOperation {
         let budget = Double(ReliefHeightmap.maxCells) / 2
         let needed = (area.width * area.height / budget).squareRoot()
         return max(r, needed)
+    }
+}
+
+extension Relief3DOperation {
+    /// The earlier finish this rest pass follows (nil without rest machining). Throws, so a rest pass whose source is
+    /// unknown, gone, off, later in the program, not a 3D finish, or on another model or side never falls back to
+    /// machining the whole area with the small tool.
+    func restSource(in context: CAMContext) throws -> Relief3DOperation? {
+        guard let rest = params.finishing.rest else { return nil }
+        guard case .operation(let id) = rest else {
+            throw CAMError.invalidParameter("Rest after: choose the toolpath this rests after")
+        }
+        let flat = context.operations.flatMap { op -> [AnyOperation] in
+            if case .merge(let m) = op { return m.params.children }
+            return [op]
+        }
+        guard let i = flat.firstIndex(where: { $0.id == id }) else {
+            throw CAMError.invalidParameter("Rest after: the toolpath it rests after was deleted")
+        }
+        let name = flat[i].setup.name
+        guard case .relief3D(let source) = flat[i], source.params.finishing.isEnabled else {
+            throw CAMError.invalidParameter("Rest after \"\(name)\": that toolpath is not a 3D finish")
+        }
+        guard source.setup.isEnabled else { throw CAMError.invalidParameter("Rest after \"\(name)\": that toolpath is off") }
+        if let me = flat.firstIndex(where: { $0.id == setup.id }), me < i {
+            throw CAMError.invalidParameter("Rest after \"\(name)\": that toolpath is after this one")
+        }
+        guard source.params.modelID == params.modelID, source.params.twoSided?.side == params.twoSided?.side else {
+            throw CAMError.invalidParameter("Rest after \"\(name)\": that toolpath cuts another model or side")
+        }
+        return source
     }
 }

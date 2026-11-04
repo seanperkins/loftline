@@ -61,9 +61,9 @@ import Testing
         let (doc, ids) = makeDoc()
         setCoolant(doc, ids[0], .mist)
         let profile = BuiltInPosts.avidMach4Inch
-        for mode in [SaveAllMode.filePerToolpath, .filePerTool, .oneFileInOrder] {
+        for mode in [SaveAllMode.filePerToolpath, .filePerTool, .oneFile] {
             let files = GCodeBatchExport.plan(mode: mode, operations: doc.project.operations, results: doc.results,
-                                              jobName: "Job", profile: profile)
+                                              jobName: "Job", profile: profile, groupByTool: false)
             let first = files.flatMap(\.toolpaths).first { $0.operationID == ids[0] }
             #expect(first?.coolant == .mist, "\(mode)")
         }

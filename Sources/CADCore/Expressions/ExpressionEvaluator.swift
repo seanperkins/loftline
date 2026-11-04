@@ -118,7 +118,13 @@ public enum ExpressionEvaluator {
         mutating func power() throws -> Double {
             let b = try primary()
             skipSpace()
-            if peek == "^" { i += 1; return pow(b, try unary()) }
+            // Right-associative, so a chain recurses as deep as it is long: count each "^" against the cap.
+            if peek == "^" {
+                i += 1
+                try descend()
+                defer { depth -= 1 }
+                return pow(b, try unary())
+            }
             return b
         }
 

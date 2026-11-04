@@ -52,6 +52,23 @@ import Testing
     #expect(constrained.map(\.start) == [Vec2(1, 0), Vec2(10, 0), Vec2(6, 0)])
 }
 
+@Test func ops2DNearestNeighbourBreaksTiesByInputOrder() {
+    // Four squares exactly 1 from the start (a hole grid has such ties): the first in the input goes first, every
+    // run. Iterating a Set picked among them in the process's hash order, so output could differ between runs.
+    func square(_ x: Double, _ y: Double) -> Chain2D {
+        Chain2D(points: [Vec2(x, y), Vec2(x + 1, y), Vec2(x + 1, y + 1), Vec2(x, y + 1)], isClosed: true)
+    }
+    let right = square(1, -0.5), left = square(-2, -0.5), up = square(-0.5, 1), down = square(-0.5, -2)
+    for chains in [[right, left, up, down], [down, up, left, right], [up, right, down, left], [left, down, right, up]] {
+        // The first loop is rotated to start nearest the start (a vertex may be inserted), so compare where it is.
+        let first = ChainOrdering.nearestNeighbour(chains, from: .zero)[0]
+        func box(_ c: Chain2D) -> [Double] {
+            [c.points.map(\.x).min()!, c.points.map(\.y).min()!, c.points.map(\.x).max()!, c.points.map(\.y).max()!]
+        }
+        #expect(box(first) == box(chains[0]))
+    }
+}
+
 @Test func ops2DPassDepthsAndPeckDepths() {
     #expect(DrillOperation.peckDepths(start: 0, end: 0.5, peck: 0.2) == [0.2, 0.4, 0.5])
     #expect(DrillOperation.peckDepths(start: 0, end: 0.4, peck: 0.2) == [0.2, 0.4])

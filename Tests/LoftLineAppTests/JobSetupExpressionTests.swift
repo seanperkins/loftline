@@ -10,7 +10,8 @@ import Testing
     /// What a Job Setup field does on commit: parse with the form's variables, note the expression, write.
     static func type(_ text: String, into form: JobSetupForm, document: LoftLineDocument, current: Double) throws -> Double {
         let style = ExpressionNumberStyle(variables: form.variableTable(in: document.document), units: form.units,
-                                          recorder: document.expressionRecorder)
+                                          recorder: document.expressionRecorder,
+                                          target: .job(sheetID: document.document.currentSheetID))
         let v = try style.parseStrategy.parse(text)
         return document.expressionRecorder.valueToWrite(v, current: current)
     }
@@ -194,7 +195,8 @@ import Testing
         pr.params.depth.cutDepth = 0.375
         doc.updateOperation(.profile(pr))
         guard case .pocket(var po) = doc.operation(pocket.id) else { throw TestError.notAProfile }
-        let style = ExpressionNumberStyle(variables: doc.document.variableTable, units: .inch, recorder: doc.expressionRecorder)
+        let style = ExpressionNumberStyle(variables: doc.document.variableTable, units: .inch, recorder: doc.expressionRecorder,
+                                          target: .operation(pocket.id))
         po.params.depth.cutDepth = doc.expressionRecorder.valueToWrite(try style.parseStrategy.parse("=thickness - 0.1"), current: po.params.depth.cutDepth)
         doc.updateOperation(.pocket(po))
         #expect(doc.document.linkedValues.count == 1 && abs(depth(pocket.id) - 0.65) < 1e-12)

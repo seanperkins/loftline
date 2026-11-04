@@ -252,6 +252,8 @@ extension CanvasNSView {
         let step = doc.document.gridSpacing * (event.modifierFlags.contains(.shift) ? 10 : 1)
         let nodeMode = doc.activeTool == .nodeEdit && !doc.nodeSelection.isEmpty
         func nudge(_ d: Vec2) {
+            // The envelope's box is fixed when the edit starts, so a nudge would make Apply bend other than the preview.
+            guard doc.envelopeEdit == nil else { NSSound.beep(); return }
             if nodeMode { doc.moveSelectedNodes(by: d) } else { doc.translateSelection(by: d, actionName: "Nudge") }
         }
         switch event.keyCode {

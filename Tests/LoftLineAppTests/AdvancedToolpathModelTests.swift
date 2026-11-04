@@ -138,28 +138,42 @@ private enum Job {
 }
 
 @Suite struct SaveAllToolpathsTests {
-    @Test func singleFileModesProduceOneProgram() {
+    @Test func singleFileModeProducesOneProgram() {
         let p = Job.project()
         let r = Job.results(p)
-        for mode in [SaveAllMode.oneFileGroupedByTool, .oneFileInOrder] {
-            let files = GCodeBatchExport.plan(mode: mode, operations: p.operations, results: r, jobName: "Sign",
-                                              profile: Job.post)
+        for grouped in [true, false] {
+            let files = GCodeBatchExport.plan(mode: .oneFile, operations: p.operations, results: r, jobName: "Sign",
+                                              profile: Job.post, groupByTool: grouped)
             #expect(files.count == 1)
             #expect(files[0].fileName == "Sign.tap")
         }
     }
 
+    @Test func oneFileFollowsThePreference() {
+        // One file is written in the order the preview, the tool-change summary and the job sheet show: the shared
+        // group-by-tool preference (docs/implicit-state-machines.md #16).
+        let p = Job.project()
+        let r = Job.results(p)
+        for grouped in [true, false] {
+            let file = GCodeBatchExport.plan(mode: .oneFile, operations: p.operations, results: r, jobName: "Sign",
+                                             profile: Job.post, groupByTool: grouped)[0]
+            let shown = GCodeExporter.toolpaths(scope: .all, operations: p.operations, results: r, groupByTool: grouped)
+            #expect(file.toolpaths.map(\.id) == shown.map(\.id))
+        }
+        #expect(SaveAllMode.allCases == [.oneFile, .filePerToolpath, .filePerTool])
+    }
+
     @Test func filePerToolpathNamesEachAfterItsToolpath() {
         let p = Job.project()
         let files = GCodeBatchExport.plan(mode: .filePerToolpath, operations: p.operations, results: Job.results(p),
-                                          jobName: "Sign", profile: Job.post)
+                                          jobName: "Sign", profile: Job.post, groupByTool: false)
         #expect(files.map(\.fileName) == ["Sign_Profile_1.tap", "Sign_V-Carve_1.tap", "Sign_Pocket_1.tap"])
     }
 
     @Test func filePerToolHasNoToolChangesInside() throws {
         let p = Job.project()
         let files = GCodeBatchExport.plan(mode: .filePerTool, operations: p.operations, results: Job.results(p),
-                                          jobName: "Sign", profile: Job.post)
+                                          jobName: "Sign", profile: Job.post, groupByTool: false)
         // The pocket (T1) overlaps the V-carve (T6), so it keeps its own, later, T1 file.
         #expect(files.count == 3)
         #expect(files.map { $0.toolpaths.map(\.name) } == [["Profile 1"], ["V-Carve 1"], ["Pocket 1"]])
@@ -167,7 +181,7 @@ private enum Job {
         #expect(files[1].fileName.hasPrefix("02_Sign_T6_"))
         #expect(files[2].fileName.hasPrefix("03_Sign_T1_"))
         for f in files { #expect(Set(f.toolpaths.map(\.tool.id)).count == 1) }
-        let posted = GCodeBatchExport.post(files, project: p, profile: Job.post, jobName: "Sign")
+        let posted = GCodeBatchExport.post(files, project: p, profile: Job.post, jobName: "Sign", expected: .notChecked(because: "test"))
         let dir = AppTestSupport.tempDir()
         let urls = try GCodeFileSet(posted: posted).write(to: dir)
         #expect(urls.count == 3)
@@ -183,7 +197,7 @@ private enum Job {
             p.operations.append(OperationFactory.make(kind: kind, project: p, library: .seeded, shapeIDs: ids)!)
         }
         let files = GCodeBatchExport.plan(mode: .filePerTool, operations: p.operations, results: Job.results(p),
-                                          jobName: "Sign", profile: Job.post)
+                                          jobName: "Sign", profile: Job.post, groupByTool: false)
         #expect(files.map { $0.toolpaths.map(\.name) } == [["Pocket 1"], ["V-Carve 1"], ["Profile 1"]])
         #expect(files.map(\.title).first?.hasPrefix("1. ") == true)
     }
@@ -194,7 +208,7 @@ private enum Job {
         p.operations[0].editableSetup.isEnabled = false
         r[p.operations[2].id] = nil
         let files = GCodeBatchExport.plan(mode: .filePerToolpath, operations: p.operations, results: r,
-                                          jobName: "Sign", profile: Job.post)
+                                          jobName: "Sign", profile: Job.post, groupByTool: false)
         #expect(files.map(\.title) == ["V-Carve 1"])
     }
 

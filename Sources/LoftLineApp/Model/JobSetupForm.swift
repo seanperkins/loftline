@@ -20,6 +20,9 @@ struct JobSetupForm: Equatable {
     /// The machine the form is on: the project's own copy while it is valid (even when that machine is not installed
     /// here), else the installed one, else nil. The bed-fit check and the post grouping read this, not the catalog.
     var machine: MachineDefinition?
+    /// The project's chosen machine when it is neither installed nor carried (`machine` is then the stand-in).
+    var missingMachine: MissingMachine?
+    struct MissingMachine: Equatable { var id: String; var standIn: String? }
     /// The job and grid as the document had them, in its units. A field the user has not touched
     /// is always converted from here in one step, so switching units back and forth leaves it
     /// exactly what a single conversion gives, which is what the saved project's own conversion
@@ -40,6 +43,12 @@ struct JobSetupForm: Equatable {
         // a different installed one (Apply would write that swap).
         machine = ProjectPost.resolve(project, profiles: profiles, machines: machines).machine
         machineID = machine?.id
+        // A chosen machine that is not here (not installed, no copy): the selection stays the project's own id, so
+        // what the picker shows is what Apply keeps; the stand-in only judges the fit.
+        if let id = project.machineID, id != machine?.id, ProjectPost.machineCopy(of: project) == nil {
+            missingMachine = MissingMachine(id: id, standIn: machine?.name)
+            machineID = id
+        }
         postID = project.postProfileID ?? PostProfileStore.defaultID(for: project.document.units)
     }
 
@@ -50,13 +59,18 @@ struct JobSetupForm: Equatable {
     /// here, so the selection still shows.
     func machineChoices(installed: [MachineDefinition]) -> [(id: String, title: String)] {
         var out = installed.map { (id: $0.id, title: $0.name) }
-        if let m = machine, !installed.contains(where: { $0.id == m.id }) { out.append((m.id, "\(m.name) (not installed here)")) }
+        if let missing = missingMachine {
+            out.append((missing.id, "\(missing.id) (not installed, using \(missing.standIn ?? "the post's limits"))"))
+        } else if let m = machine, !installed.contains(where: { $0.id == m.id }) {
+            out.append((m.id, "\(m.name) (not installed here)"))
+        }
         return out
     }
 
     /// Chooses `machine`, switching to one of its posts if the current post does not drive it.
     mutating func selectMachine(_ machine: MachineDefinition, profiles: [PostProfile]) {
         machineID = machine.id
+        missingMachine = nil
         self.machine = machine
         let current = postID ?? PostProfileStore.defaultID(for: units)
         postID = MachineResolver.post(afterSelecting: machine, current: current, units: units, profiles: profiles)
@@ -105,19 +119,15 @@ struct JobSetupForm: Equatable {
 
     func apply(to project: LoftLineProject) -> LoftLineProject {
         var p = project.converted(to: units)
-        // Job Setup edits the current sheet's stock; the other sheets keep theirs, and so do
-        // the operations that cut them.
-        let oldThickness = p.document.job.thickness
-        let sheet = p.document.currentSheetID
-        let onThisSheet = Set(p.operations.filter { p.sheetID(of: $0) == sheet }.map(\.id))
+        // Job Setup edits the current sheet's stock; the other sheets keep theirs. Through cuts follow their own
+        // sheet's thickness (`resolvingThroughDepths`, below and in every `perform`).
         p.document.job = job
-        p.operations = DepthFollow.adjusted(p.operations, thicknessFrom: oldThickness, to: job.thickness) { onThisSheet.contains($0.id) }
         p.document.gridSpacing = gridSpacing
         p.document.name = name
         if isMultiSheet, !sheetName.isEmpty { p.document.activeSheetName = sheetName }
         if let machineID { p.machineID = machineID }
         if let postID { p.postProfileID = postID }
         p.ensureBottomLayer()
-        return p
+        return p.resolvingThroughDepths(from: project)
     }
 }

@@ -19,6 +19,7 @@ extension LoftLineDocument {
             return
         }
         envelopeEdit = nil
+        tabEditingOperationID = nil
         activeTool = .select
         setSelection([t])
         kerningShapeID = t

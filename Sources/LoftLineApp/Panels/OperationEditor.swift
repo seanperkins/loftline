@@ -28,6 +28,12 @@ struct OperationEditor: View {
     private var library: ToolLibrary { document.mergedLibrary }
 
     var body: some View {
+        // An expression typed in this editor links only to this toolpath's fields.
+        Group { editorContent }
+            .environment(\.expressionTarget, .operation(draft.id))
+    }
+
+    @ViewBuilder private var editorContent: some View {
         InspectorSection(title: draft.kind.displayName + " Toolpath", helpTopic: HelpTopic.forOperation(draft.kind)) {
             TextField("Name", text: setupBinding(\.name))
             Toggle("Include in export", isOn: setupBinding(\.isEnabled))
@@ -136,7 +142,7 @@ struct OperationEditor: View {
         case .profile(let o):
             ProfileForm(params: paramsBinding(o.params) { .profile(ProfileOperation(setup: draft.setup, params: $0)) }, units: units,
                         shapes: document.document.shapes(ids: draft.setup.shapeIDs), isEditingTabs: editingTabsBinding,
-                        materialThickness: document.document.job.thickness, tool: primaryTool)
+                        materialThickness: Self.throughThickness(of: draft, in: document.project), tool: primaryTool)
         case .pocket(let o):
             PocketForm(params: paramsBinding(o.params) { .pocket(PocketOperation(setup: draft.setup, params: $0)) },
                        units: units, library: library, finishToolID: draft.setup.toolID, tool: primaryTool)
@@ -184,7 +190,11 @@ struct OperationEditor: View {
         case .relief3D(let o):
             Relief3DForm(params: paramsBinding(o.params) { .relief3D(Relief3DOperation(setup: draft.setup, params: $0)) },
                          units: units, library: library, models: document.document.models,
-                         selection: document.selectedShapes.map(\.id))
+                         selection: document.selectedShapes.map(\.id),
+                         split: Binding(get: { document.document.model(id: o.params.modelID)?.reliefSplit },
+                                        set: { document.setReliefSplit($0, model: o.params.modelID) }),
+                         onUseSplit: { document.useReliefSplit(model: o.params.modelID) },
+                         restCandidates: Self.restCandidates(before: draft.id, model: o.params.modelID, in: document.project))
         }
     }
 
@@ -313,5 +323,29 @@ struct OptionalToolPicker: View {
             Text("None").tag(UUID?.none)
             ForEach(library.tools.filter { kinds.contains($0.kind) }) { t in Text(ToolSearch.pickerLabel(t)).tag(Optional(t.id)) }
         }
+    }
+}
+
+extension OperationEditor {
+    /// The 3D finishes of `model` that come before `id` in the program, as rest sources.
+    static func restCandidates(before id: UUID, model: UUID, in project: LoftLineProject) -> [(id: UUID, name: String)] {
+        var out: [(UUID, String)] = []
+        for op in project.operations {
+            let ops: [AnyOperation]
+            if case .merge(let m) = op { ops = m.params.children } else { ops = [op] }
+            for o in ops {
+                if o.id == id { return out }
+                if case .relief3D(let r) = o, r.params.finishing.isEnabled, r.params.modelID == model { out.append((o.id, o.setup.name)) }
+            }
+        }
+        return out
+    }
+}
+
+extension OperationEditor {
+    /// The thickness a through cut of `op` is measured from: its own sheet's, as `resolvingThroughDepths` uses (not the
+    /// sheet being shown). nil when its vectors span sheets, where no through cut is offered.
+    static func throughThickness(of op: AnyOperation, in project: LoftLineProject) -> Double? {
+        project.sheetID(of: op).flatMap { project.document.job(ofSheet: $0)?.thickness }
     }
 }

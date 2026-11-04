@@ -54,6 +54,26 @@ import Testing
         #expect(p.operations[0].setup.shapeIDs.count == 2)
     }
 
+    @Test func aCopyGetsItsOwnNestedGroups() throws {
+        // A part grouped twice (an inner group inside an outer one): each copy gets new ids for both levels, so
+        // ungrouping a copy's outer group leaves it in its own inner group, not one shared with the original.
+        var (p, ids) = Self.project()
+        let outer = UUID(), inner = UUID()
+        for i in p.document.shapes.indices where [ids[0], ids[3]].contains(p.document.shapes[i].id) {
+            p.document.shapes[i].groupID = outer
+            p.document.shapes[i].innerGroupIDs = [inner]
+        }
+        var o = Self.fastOptions
+        o.quantity = 2
+        let report = NestingCommands.nest([ids[0]], options: o, in: &p)
+        #expect(report.placed == 2)
+        let copies = p.document.shapes.filter { !ids.contains($0.id) }
+        #expect(copies.count == 2)
+        let copyInner = Set(copies.compactMap { $0.innerGroupIDs?.first })
+        #expect(copyInner.count == 1 && !copyInner.contains(inner))
+        #expect(Set(copies.compactMap(\.groupID)).count == 1 && copies.allSatisfy { $0.groupID != outer })
+    }
+
     @Test func avoidsVectorsThatAreNotNested() {
         var (p, ids) = Self.project()
         // A fixed obstacle covering the left half of the material.

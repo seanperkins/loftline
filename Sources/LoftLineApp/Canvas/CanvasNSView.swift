@@ -56,7 +56,10 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
     /// Snap targets, rebuilt when the design or the excluded shapes change.
     var snapCache: (revision: Int, excluded: Set<UUID>, engine: SnapEngine)?
     var hoverDoc: Vec2?
+    /// Space held: drags pan. Cleared when the window stops being key, since the key-up then goes to another app
+    /// (Cmd-Tab with Space down would otherwise leave the canvas only panning).
     var spaceHeld = false
+    private var resignKeyObserver: NSObjectProtocol?
     /// Drawing-tool extras (typed entry, measure, guides) — see CanvasDrawingTools.swift.
     var drawingState = CanvasDrawingState()
     private var didInitialFit = false
@@ -71,6 +74,20 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
     override var isFlipped: Bool { false }
     override var acceptsFirstResponder: Bool { true }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let o = resignKeyObserver { NotificationCenter.default.removeObserver(o) }
+        resignKeyObserver = window.map { w in
+            NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification, object: w, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.spaceHeld else { return }
+                    self.spaceHeld = false
+                    NSCursor.arrow.set()
+                }
+            }
+        }
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

@@ -160,14 +160,15 @@ struct ExportGCodeSheet: View {
     private func post() {
         let tps = GCodeExporter.toolpaths(scope: scope, operations: document.outputProject.operations,
                                           results: document.results, groupByTool: groupByTool)
-        let missing = GCodeExporter.missingOperationIssues(targetOperations().compactMap { document.operation($0) },
-                                                           results: document.results)
         let sheet = GCodeExporter.sheetToolpathsIfProbing(project: document.project, results: document.results, scope: scope,
                                                           profile: profile)
         var r = GCodeExporter.export(project: document.outputProject(for: scope), toolpaths: tps, profile: profile,
-                                     jobName: document.document.name, sheetToolpaths: sheet)
+                                     jobName: document.document.name,
+                                     expected: .operations(targetOperations().compactMap { document.operation($0) },
+                                                           results: document.results),
+                                     sheetToolpaths: sheet)
         // The project's own post's notices apply only while the program is posted with that post.
-        r.issues.insert(contentsOf: document.postProfileIssues(includingPost: profileID == initialProfileID) + missing, at: 0)
+        r.issues.insert(contentsOf: document.postProfileIssues(includingPost: profileID == initialProfileID), at: 0)
         result = r
         postedFrom = currentInputs
     }

@@ -12,7 +12,9 @@ struct SaveAllToolpathsSheet: View {
     @ObservedObject var catalog = PostProfileCatalog.shared
     @ObservedObject var machines = MachineCatalog.shared
     @Environment(\.dismiss) private var dismiss
-    @State private var mode: SaveAllMode = .oneFileInOrder
+    @State private var mode: SaveAllMode = .oneFile
+    /// The shared preference the preview and job sheet follow: one file is written in the order they show.
+    @AppStorage(GCodeExporter.groupByToolKey) private var groupByTool = false
     @State private var profileID = ""
     /// The id shown on open; the project keeps its own reference unless the user picks another.
     @State private var initialProfileID = ""
@@ -28,7 +30,9 @@ struct SaveAllToolpathsSheet: View {
     @State private var failure: String?
 
     /// What the files posted now are made from: the document's inputs and the post processor.
-    private var currentInputs: LoftLineDocument.PostedInputs { document.postedInputs.stamped(profile: profile) }
+    private var currentInputs: LoftLineDocument.PostedInputs {
+        document.postedInputs.stamped(profile: profile, groupedByTool: groupByTool)
+    }
 
     /// The chosen post with the job's machine limits applied.
     private var profile: PostProfile { document.effectiveProfile(id: profileID) }
@@ -45,6 +49,9 @@ struct SaveAllToolpathsSheet: View {
                     ForEach(SaveAllMode.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.radioGroup)
+                if mode == .oneFile {
+                    Toggle("Group by tool (fewest tool changes)", isOn: $groupByTool)
+                }
                 LabeledContent("Machine", value: document.machine?.name ?? "Custom (post limits)")
                 PostProfilePicker(title: "Post processor", selection: $profileID, machine: document.machine,
                                   carried: document.carriedPostNotInstalled)
@@ -62,7 +69,7 @@ struct SaveAllToolpathsSheet: View {
             }
             SheetErrorRow(message: failure)
             HStack {
-                Button("Check Toolpaths…") { document.sheet = .validation }
+                Button("Check Toolpaths…") { document.replaceSheet(.validation) }
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button(mode.isSingleFile ? "Save…" : "Choose Folder…") {
@@ -143,13 +150,14 @@ struct SaveAllToolpathsSheet: View {
 
     private func post() {
         let files = GCodeBatchExport.plan(mode: mode, operations: document.outputProject.operations,
-                                          results: document.results, jobName: document.document.name, profile: profile)
+                                          results: document.results, jobName: document.document.name, profile: profile,
+                                          groupByTool: groupByTool)
         let sheet = GCodeExporter.sheetToolpathsIfProbing(project: document.project, results: document.results, scope: .all,
                                                           profile: profile)
         posted = GCodeBatchExport.post(files, project: document.outputProject, profile: profile, jobName: document.document.name,
+                                       expected: .operations(document.outputProject.operations, results: document.results),
                                        sheetToolpaths: sheet)
         let missing = document.postProfileIssues(includingPost: profileID == initialProfileID)
-            + GCodeExporter.missingOperationIssues(document.outputProject.operations, results: document.results)
         if !missing.isEmpty {
             posted = posted.map { item in
                 var r = item.result

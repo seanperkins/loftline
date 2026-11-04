@@ -3,19 +3,20 @@ import CAMCore
 import Foundation
 
 /// Expressions typed into numeric fields, waiting to be tied to the parameter they changed.
-/// The field's parse strategy notes each expression that uses a variable; the next project
-/// change finds the parameter(s) that took that value and links them (`VariableLinks.reconcile`).
+/// The field's parse strategy notes each expression that uses a variable, with the form it was typed in (its
+/// `target`: one toolpath, or one sheet's job); the next project change links the one parameter of that target that
+/// took the value (`VariableLinks.reconcile`). A field outside such a form notes nothing.
 final class ExpressionRecorder {
     /// An expression and the value it gave, in `units` (nil for a unitless field), so the value
     /// can be matched after a unit change (Job Setup lets the units change after the typing).
-    struct Entry: Equatable { var text: String; var value: Double; var units: LengthUnit? }
+    struct Entry: Equatable { var text: String; var value: Double; var units: LengthUnit?; var target: VariableLink.Target }
     private(set) var pending: [Entry] = []
     /// The last noted value, until the field writes it (see `nudge`).
     private var unwritten: Double?
 
-    func note(_ text: String, value: Double, units: LengthUnit?) {
-        guard VariableLink.usesVariables(text, units: units) else { return }
-        pending.append(Entry(text: text.trimmingCharacters(in: .whitespaces), value: value, units: units))
+    func note(_ text: String, value: Double, units: LengthUnit?, target: VariableLink.Target?) {
+        guard let target, VariableLink.usesVariables(text, units: units) else { return }
+        pending.append(Entry(text: text.trimmingCharacters(in: .whitespaces), value: value, units: units, target: target))
         if pending.count > 32 { pending.removeFirst() }
         unwritten = value
     }
@@ -63,15 +64,15 @@ enum VariableLinks {
             case .operation(let id): return !opIDs.contains(id)
             }
         }
+        // One link per field, the last: links that disagree about one field (a crafted or damaged file) would flip it
+        // on every pass and never settle.
+        var seenFields = Set<String>()
+        links = links.reversed().filter { seenFields.insert("\($0.target)|\($0.path)").inserted }.reversed()
         // Job fields linked in a cycle (`=thickness/2` typed into Thickness; Safe Z from the
         // thickness and the thickness from Safe Z) would move every time the links are re-evaluated;
         // such links are never made and never kept.
         links = withoutCycles(links, in: p)
-        var targets = Set(links.map(\.target))
-        if !pending.isEmpty {
-            targets.formUnion(p.document.allSheets.map { VariableLink.Target.job(sheetID: $0.id) })
-            targets.formUnion(p.operations.map { VariableLink.Target.operation($0.id) })
-        }
+        let targets = Set(links.map(\.target)).union(pending.map(\.target))
         for t in targets {
             guard let newTree = tree(of: t, in: p) else { continue }
             let oldTree = tree(of: t, in: old)
@@ -84,18 +85,21 @@ enum VariableLinks {
                 // fields from the saved values in one step, so nothing here drifts by an ulp.
                 return number(at: l.path, in: o) != number(at: l.path, in: newTree)
             }
-            guard !pending.isEmpty else { continue }
+            let typed = pending.filter { $0.target == t }
+            guard !typed.isEmpty else { continue }
             var newLeaves: [[String]: Double] = [:]
             leaves(newTree, prefix: [], into: &newLeaves)
-            for (path, v) in newLeaves.sorted(by: { $0.key.lexicographicallyPrecedes($1.key) }) {
-                if let o = oldTree, number(at: path, in: o) == v { continue }
+            let changed = newLeaves.filter { path, v in oldTree.map { number(at: path, in: $0) != v } ?? true }
+            // In typing order: of two fields that would feed each other, the first one typed keeps its link.
+            for e in typed {
                 // A value typed in other units than the project now has (the form's units were
                 // switched after the typing) is matched after the same conversion.
-                func matches(_ e: ExpressionRecorder.Entry) -> Bool {
-                    let value = e.units.map { $0 != p.document.units ? e.value * $0.factor(to: p.document.units) : e.value } ?? e.value
-                    return abs(value - v) <= 1e-9 * max(1, abs(value))
-                }
-                guard let e = pending.last(where: matches) else { continue }
+                let value = e.units.map { $0 != p.document.units ? e.value * $0.factor(to: p.document.units) : e.value } ?? e.value
+                let candidates = changed.filter { abs(value - $0.value) <= 1e-9 * max(1, abs(value)) }
+                // Exactly one field of the form took the value: that is the field it was typed into. Two (or none) say
+                // nothing certain, so nothing is linked and the value stands.
+                guard candidates.count == 1, let (path, v) = candidates.first,
+                      !links.contains(where: { $0.target == t && $0.path == path && $0.expression == e.text }) else { continue }
                 let link = VariableLink(target: t, path: path, expression: e.text)
                 // The link must give back the value the field shows: a bare literal typed before
                 // a unit switch ("=width/2 - 1" in inches) means something else in millimetres,
@@ -110,12 +114,16 @@ enum VariableLinks {
         return apply(&p)
     }
 
-    /// Re-evaluates every link and writes the results (three passes, so a linked material
-    /// thickness feeds toolpath links that use `thickness`). Returns links that failed.
+    /// Re-evaluates every link and writes the results, pass after pass until nothing changes, so a chain of links (a
+    /// linked thickness feeding a linked width feeding a toolpath) settles in one edit whatever order the links are
+    /// stored in. Cycles are never kept (`withoutCycles`), so `count + 1` passes suffice, capped at `maxPasses` so a
+    /// crafted file cannot make one edit run for minutes. Returns links that failed.
+    static let maxPasses = 32
+
     @discardableResult
     static func apply(_ p: inout LoftLineProject) -> [VariableLink] {
         var failed: [VariableLink] = []
-        for _ in 0..<3 {
+        for _ in 0..<min(p.document.linkedValues.count + 1, maxPasses) {
             failed = []
             var changed = false
             for l in p.document.linkedValues {

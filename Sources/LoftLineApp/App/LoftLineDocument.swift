@@ -104,13 +104,25 @@ final class LoftLineDocument: ReferenceFileDocument {
     @Published private(set) var designRevision = 0
 
     // Editing state (not saved).
-    @Published var selection: Set<UUID> = []
+    @Published var selection: Set<UUID> = [] {
+        // Nodes are edited only on selected shapes (the canvas shows no others), so a shape leaving the selection takes
+        // its selected nodes with it: arrow keys and Delete would otherwise edit a shape that is not selected.
+        didSet {
+            guard !nodeSelection.isEmpty else { return }
+            let kept = nodeSelection.filter { selection.contains($0.shapeID) }
+            if kept != nodeSelection { nodeSelection = kept }
+        }
+    }
     /// Selection order (first = primary, e.g. the shape others are subtracted from).
     private(set) var selectionOrder: [UUID] = []
     @Published var selectedOperationID: UUID?
     @Published var hiddenToolpaths: Set<UUID> = []
-    /// Profile operation whose tabs the canvas is editing (click to add, drag to move).
-    @Published var tabEditingOperationID: UUID?
+    /// Profile operation whose tabs the canvas is editing (click to add, drag to move). The canvas runs one session at a
+    /// time (tab editing, envelope, kerning): starting tab editing ends the others, and `beginEnvelopeEdit` and
+    /// `beginKerning` end it.
+    @Published var tabEditingOperationID: UUID? {
+        didSet { if tabEditingOperationID != nil { envelopeEdit = nil; kerningShapeID = nil } }
+    }
     /// Envelope distortion with draggable corners in progress on the canvas.
     @Published var envelopeEdit: EnvelopeEdit?
     /// Live text whose letters are being dragged on the canvas (interactive kerning).
@@ -133,7 +145,11 @@ final class LoftLineDocument: ReferenceFileDocument {
     private var generationCounter = 0
     private var resultGeneration: [UUID: Int] = [:]
     @Published var activeTool: CanvasTool = .select {
-        didSet { if activeTool != .nodeEdit { nodeSelection = [] } }
+        didSet {
+            if activeTool != .nodeEdit { nodeSelection = [] }
+            // Envelope and kerning run on the select tool; another tool ends them rather than leave them taking clicks.
+            if activeTool != .select { envelopeEdit = nil; kerningShapeID = nil }
+        }
     }
     /// Selected anchors while the node-edit tool is active.
     @Published var nodeSelection: Set<NodeRef> = []
@@ -145,10 +161,30 @@ final class LoftLineDocument: ReferenceFileDocument {
     @Published var centerMode: CenterMode = .design2D
     /// Side shown and edited in a two-sided job.
     @Published var activeSide: JobSide = .top
-    @Published var sheet: DocumentSheet?
+    /// The sheet shown on the document window. Opening one while another is open beeps and changes nothing: a menu
+    /// shortcut must not throw away the open sheet's draft. Closing (nil) always works; a sheet that opens another on
+    /// purpose uses `replaceSheet`.
+    var sheet: DocumentSheet? {
+        get { presentedSheet }
+        set {
+            if newValue == nil || presentedSheet == nil || newValue == presentedSheet {
+                presentedSheet = newValue
+            } else {
+                NSSound.beep()
+            }
+        }
+    }
+    @Published private(set) var presentedSheet: DocumentSheet?
     /// Shown by ContentView on the document window. Never set it while a sheet is up: SwiftUI drops an
     /// alert under a sheet. A sheet shows its own failure (`SheetErrorRow`) or reports with `report(_:)`.
-    @Published var alert: AlertMessage?
+    /// A report held while it showed (`report`) appears once it is dismissed.
+    @Published var alert: AlertMessage? {
+        didSet {
+            guard alert == nil, oldValue != nil, deferredAlert != nil else { return }
+            // On the next turn of the run loop: SwiftUI drops an alert presented while the last one is closing.
+            DispatchQueue.main.async { [weak self] in self?.showDeferredAlert() }
+        }
+    }
     @Published var canvasRequest = CanvasRequest(kind: .fit, serial: 0)
     /// Cursor position in document units (for the status bar).
     @Published var cursorPosition: Vec2?
@@ -387,6 +423,8 @@ final class LoftLineDocument: ReferenceFileDocument {
         // switches the post, a unit conversion and a template all end up with the right copy without knowing about it.
         p = ProjectPost.syncing(p, profiles: postCatalog.profiles, machines: machineCatalog.machines)
         p = ToolSync.carrying(p, library: toolLibrary.library)
+        // Last, so every thickness writer above (Job Setup, a variable link, a gadget) moves the through cuts.
+        p = p.resolvingThroughDepths(from: project)
         guard p != project else { return }
         replaceProject(p, actionName: actionName)
     }
@@ -441,6 +479,7 @@ final class LoftLineDocument: ReferenceFileDocument {
         let opIDs = Set(project.operations.map(\.id))
         if let sel = selectedOperationID, !opIDs.contains(sel) { selectedOperationID = nil }
         if let t = tabEditingOperationID, operation(t)?.profileTabs == nil { tabEditingOperationID = nil }
+        if let e = envelopeEdit, !e.shapeIDs.allSatisfy(ids.contains) { envelopeEdit = nil }
         results = results.filter { opIDs.contains($0.key) }
     }
 
@@ -688,6 +727,7 @@ final class LoftLineDocument: ReferenceFileDocument {
             p.upsertOperation(op)
             VariableLinks.reconcile(&p, old: project, pending: expressionRecorder.take())
             p = ToolSync.carrying(p, library: toolLibrary.library)
+            p = p.resolvingThroughDepths(from: project)   // as `perform` does: an overcut edited live moves the cut depth
             guard p != project else { return }
             if Self.toolContentChanged(from: project.tools, to: p.tools) { designRevision += 1 }
             project = p  // the open undo step already restores the state before the first edit
@@ -815,6 +855,26 @@ final class LoftLineDocument: ReferenceFileDocument {
         guard let r = results[id], let op = operation(id) else { return true }
         // The pause is applied when the program is posted, so editing it leaves the result valid.
         return r.operation.withoutPostSettings != op.withoutPostSettings || r.designRevision != designRevision
+            || restSourceChanged(op, since: r)
+    }
+
+    /// A rest pass whose source is now gone, off, after it, or changed since it was calculated: its rest region (or
+    /// whether it may run at all) is no longer known, so it is calculated again, which refuses what generation refuses.
+    private func restSourceChanged(_ op: AnyOperation, since r: ToolpathResult) -> Bool {
+        guard case .relief3D(let rel) = op, rel.params.finishing.isEnabled, case .operation(let id)? = rel.params.finishing.rest
+        else { return false }
+        let ordered = Self.flattened(project.operations)
+        guard let s = ordered.firstIndex(where: { $0.id == id }), let me = ordered.firstIndex(where: { $0.id == op.id })
+        else { return true }
+        return !ordered[s].setup.isEnabled || s > me || r.restSource != ordered[s].withoutPostSettings
+    }
+
+    /// `operations` in program order with merged parts in place.
+    static func flattened(_ operations: [AnyOperation]) -> [AnyOperation] {
+        operations.flatMap { op -> [AnyOperation] in
+            if case .merge(let m) = op { return m.params.children }
+            return [op]
+        }
     }
 
     /// Generates toolpaths off the main thread; results arrive asynchronously. A request for an
@@ -1009,7 +1069,7 @@ final class LoftLineDocument: ReferenceFileDocument {
     /// it), because an alert cannot show over a sheet. Every message for the user goes through here: a command
     /// that can run while a sheet is up (a menu item, a dialog's own action) never sets `alert` itself.
     func report(_ message: AlertMessage) {
-        if sheet == nil && !platformSheetOpen { alert = message } else { hold(message) }
+        if sheet == nil && !platformSheetOpen && alert == nil { alert = message } else { hold(message) }
     }
 
     /// Keeps a report for `sheetDismissed()`. Reports held together are joined, each under its own
@@ -1028,13 +1088,37 @@ final class LoftLineDocument: ReferenceFileDocument {
     /// (an applied sheet consumed them in its edit; the Job Setup sheet also drops them when it
     /// opens), so they cannot latch onto whatever parameter next takes their value. Then the next
     /// queued placement, then any deferred import report.
+    /// Swaps the open sheet on purpose (a sheet's own button that opens another, such as Save All's Check Toolpaths).
+    func replaceSheet(_ s: DocumentSheet) { presentedSheet = s }
+
+    /// A window attaches to this document in one step: its undo manager and file URL, then crash recovery, which may
+    /// write a copy from the next tick on. Three separate `onAppear`s left room for an edit before the undo manager
+    /// was set (not undoable) or a recovery copy before the URL was known.
+    @MainActor
+    func attachWindow(undoManager: UndoManager?, fileURL: URL?, recovery: RecoveryCoordinator = .shared) {
+        self.undoManager = undoManager
+        self.fileURL = fileURL
+        recovery.register(self)
+        #if DEBUG
+        UIHarness.shared.noteDocument(self)
+        #endif
+    }
+
+    /// The held report, unless something is showing by now (a sheet, or an alert reported meanwhile): then it stays
+    /// held for the next dismissal.
+    private func showDeferredAlert() {
+        guard alert == nil, sheet == nil, !platformSheetOpen, let a = deferredAlert else { return }
+        deferredAlert = nil
+        alert = a
+    }
+
     func sheetDismissed() {
         _ = expressionRecorder.take()
         if !pendingPlacements.isEmpty {
             showNextPlacement()
         } else if !pendingScales.isEmpty {
             showNextScaleRequest()
-        } else if sheet == nil, !platformSheetOpen, let a = deferredAlert {
+        } else if alert == nil, sheet == nil, !platformSheetOpen, let a = deferredAlert {
             // Only when no sheet of either kind is up: closing one of two leaves the report waiting for the other.
             deferredAlert = nil
             alert = a

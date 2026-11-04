@@ -37,7 +37,9 @@ struct ValidationReport {
                     issues.append(GCodeIssue(severity: .warning, message: "Not exported — \(e)"))
                 } else {
                     let ex = GCodeExporter.export(project: project, toolpaths: GCodeExporter.operationToolpaths(op, results: results),
-                                                        profile: profile, jobName: jobName, sheetToolpaths: sheetToolpaths)
+                                                        profile: profile, jobName: jobName,
+                                                        expected: .notChecked(because: "one operation's own program"),
+                                                        sheetToolpaths: sheetToolpaths)
                     if let e = ex.errorMessage { issues.append(GCodeIssue(severity: .error, message: e)) }
                     issues += ex.issues
                 }
@@ -51,6 +53,7 @@ struct ValidationReport {
                                           groupByTool: groupByTool)
         if !all.isEmpty {
             let ex = GCodeExporter.export(project: project, toolpaths: all, profile: profile, jobName: jobName,
+                                          expected: .operations(project.operations, results: results),
                                           sheetToolpaths: sheetToolpaths)
             var extra = ex.issues.filter { !seen.contains($0.message) }
             if let e = ex.errorMessage { extra.insert(GCodeIssue(severity: .error, message: e), at: 0) }

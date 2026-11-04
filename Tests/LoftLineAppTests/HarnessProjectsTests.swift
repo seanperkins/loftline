@@ -47,8 +47,11 @@ struct HarnessProjectsTests {
         return [
             ("sign-loose", { edit(&$0, tabs(of: 3), to: false) }),
             ("sign-overcut", {
+                // A through cut 0.02 past the bottom: the project derives the cut depth from the overcut.
                 edit(&$0, [.key("operations"), .index(3), .key("profile"), .key("_0"), .key("params"), .key("depth"),
                            .key("cutDepth")], to: 0.77)
+                edit(&$0, [.key("operations"), .index(3), .key("profile"), .key("_0"), .key("params"), .key("depth"),
+                           .key("overcut")], to: 0.02)
             }),
             ("sign-pause", {
                 edit(&$0, [.key("operations"), .index(0), .key("pocket"), .key("_0"), .key("setup"), .key("pauseAfter")],

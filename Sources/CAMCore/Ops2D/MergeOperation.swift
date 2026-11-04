@@ -29,8 +29,13 @@ public struct MergeOperation: ToolpathOperation {
             // Pieces join only when the material cleared above them is the same: a joined toolpath
             // carries one cleared depth, and a tiled export may later keep only some of its moves,
             // so a value true of the whole but of no one piece would misjudge the tiles.
+            // An inlay part or relief side marker survives the merge: the validator refuses a pocket and its plug (or a
+            // relief's top and bottom) in one program by reading it. Pieces with different markers stay apart; an
+            // unmarked piece joins a marked one, which keeps the marker.
             if var last = out.last, last.tool.id == tp.tool.id, last.spindleRPM == tp.spindleRPM,
-               abs((last.clearedDepth ?? 0) - (tp.clearedDepth ?? 0)) < 1e-9 {
+               abs((last.clearedDepth ?? 0) - (tp.clearedDepth ?? 0)) < 1e-9,
+               Self.markers.allSatisfy({ k in last.metadata[k] == nil || tp.metadata[k] == nil || last.metadata[k] == tp.metadata[k] }) {
+                for k in Self.markers where last.metadata[k] == nil { last.metadata[k] = tp.metadata[k] }
                 last.moves += tp.moves
                 // A profile inside the merge keeps the "cut last" ordering protection.
                 if tp.kind == .profile { last.kind = .profile }
@@ -44,6 +49,7 @@ public struct MergeOperation: ToolpathOperation {
                 t.name = setup.name
                 t.operationID = setup.id
                 t.metadata = tp.metadata["warning"].map { ["warning": "\(tp.name): \($0)"] } ?? [:]
+                for k in Self.markers { t.metadata[k] = tp.metadata[k] }
                 if t.kind != .profile { t.kind = .merge }
                 out.append(t)
             }
@@ -52,12 +58,28 @@ public struct MergeOperation: ToolpathOperation {
         return out
     }
 
+    /// Metadata that says which part of a job a piece cuts (inlay pocket or plug, relief top or bottom side).
+    static let markers = ["part", "side"]
+
     static func describe(_ e: CAMError) -> String {
         switch e {
         case .notImplemented(let s), .invalidGeometry(let s), .invalidParameter(let s): return s
         case .missingTool: return "missing tool"
         case .missingModel: return "missing 3D model"
         case .noGeometry: return "no vectors selected"
+        }
+    }
+
+    /// The parts as standalone operations (Split, and a template, which stores a merge as its parts): each takes the
+    /// merge's on/off and coolant, and the last takes its pause, since inside the merge only the whole has those.
+    public var standaloneParts: [AnyOperation] {
+        let children = params.children
+        return children.indices.map { i in
+            var s = children[i].setup
+            s.isEnabled = setup.isEnabled
+            s.coolant = setup.coolant
+            s.pauseAfter = i == children.count - 1 ? setup.pauseAfter : nil
+            return children[i].with(setup: s)
         }
     }
 

@@ -110,12 +110,15 @@ enum ImportService {
         }
         // Keep importer layers; fall back to a layer named after the file.
         var layerMap: [UUID: UUID] = [:]
+        // Layers of the current sheet only: a same-named layer of another sheet would put the vectors out of sight.
         for l in result.layers {
-            if let existing = project.document.layers.first(where: { $0.name == l.name }) {
-                layerMap[l.id] = existing.id
+            if let existing = project.layerOnCurrentSheet(named: l.name) {
+                layerMap[l.id] = existing
             } else {
-                project.document.layers.append(l)
-                layerMap[l.id] = l.id
+                var added = l
+                added.sheetID = project.document.currentSheetID == MaterialSheet.primaryID ? nil : project.document.currentSheetID
+                project.document.layers.append(added)
+                layerMap[l.id] = added.id
             }
         }
         var fallback: UUID?
@@ -140,8 +143,7 @@ enum ImportService {
 
     /// The layer tracing images go on (created on first use).
     static func bitmapLayer(in project: inout LoftLineProject) -> UUID {
-        if let l = project.document.layers.first(where: { $0.name == bitmapLayerName }) { return l.id }
-        return project.addLayer(named: bitmapLayerName)
+        project.layerOnCurrentSheet(named: bitmapLayerName) ?? project.addLayer(named: bitmapLayerName)
     }
 
     /// JPG/PNG/BMP/TIF/GIF/WebP → a faded tracing image centred on the material.

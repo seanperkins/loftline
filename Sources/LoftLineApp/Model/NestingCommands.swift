@@ -130,10 +130,15 @@ enum NestingCommands {
                 for s in originals {
                     var c = s.transformed(t)
                     c.id = UUID()
-                    if let g = s.groupID {
-                        if groupMap[g] == nil { groupMap[g] = UUID() }
-                        c.groupID = groupMap[g]
+                    // Every grouping level gets a new id, shared by this copy's shapes only.
+                    func remap(_ g: UUID) -> UUID {
+                        if let n = groupMap[g] { return n }
+                        let n = UUID()
+                        groupMap[g] = n
+                        return n
                     }
+                    c.groupID = s.groupID.map(remap)
+                    c.innerGroupIDs = s.innerGroupIDs?.map(remap)
                     if let l = layer {
                         c.layerID = l
                     } else if project.document.layer(id: c.layerID)?.sheet != nil {

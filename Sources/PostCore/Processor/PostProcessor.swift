@@ -76,6 +76,7 @@ public enum ToolpathOrdering {
     /// Combined export: reduces tool changes by letting a toolpath join an earlier group that
     /// uses the same tool, but only when the move is safe. A toolpath never moves ahead of:
     ///  * an earlier toolpath of its own operation (clearance before primary, flat before V);
+    ///  * the finish a rest pass rests after (`metadata["restAfter"]`);
     ///  * an earlier toolpath whose XY footprint (padded by both tool radii) overlaps its own
     ///    (rest machining, carving after pocketing, etc.);
     ///  * a toolpath followed by an operator pause, or any toolpath that would jump over one;
@@ -110,8 +111,11 @@ public enum ToolpathOrdering {
         if tp.pauseAfter != nil || others.contains(where: { $0.pauseAfter != nil }) { return false }
         let r = tp.tool.diameter / 2
         let box = tp.xyBounds.insetBy(-r)
+        // A rest pass runs after the finish it rests after, whatever the footprints.
+        let restAfter = tp.metadata["restAfter"]
         for o in others {
             if let op = tp.operationID, op == o.operationID { return false }
+            if let source = restAfter, source == o.operationID?.uuidString { return false }
             if box.isEmpty || o.xyBounds.isEmpty { continue }
             if box.intersects(o.xyBounds.insetBy(-o.tool.diameter / 2)) { return false }
         }

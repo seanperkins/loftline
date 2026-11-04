@@ -46,10 +46,25 @@ public struct PlacedModel: Codable, Hashable, Identifiable, Sendable {
     /// Depth below material top of the model's lowest point (model top sits at material top - zTop).
     public var depth: Double
     public var zTop: Double
+    /// Two-sided relief: the split both sides of this model are machined to, shared by the top and bottom toolpaths.
+    public var reliefSplit: ReliefSplit?
 
     public init(id: UUID = UUID(), name: String, mesh: Mesh3D, offset: Vec2 = .zero,
                 scale: Double = 1, depth: Double = 0.5, zTop: Double = 0) {
         self.id = id; self.name = name; self.mesh = mesh; self.offset = offset; self.scale = scale
         self.depth = depth; self.zTop = zTop
+    }
+}
+
+/// How a model is machined from both sides: the board is turned over about `flip`, the top side is cut down to
+/// `splitDepth` (below the first side's material top; nil = halfway between the model's top and bottom) and the bottom
+/// side up to `web` short of it, so the part stays attached to the board.
+public struct ReliefSplit: Codable, Hashable, Sendable {
+    public var flip: FlipAxis
+    public var splitDepth: Double?
+    public var web: Double
+
+    public init(flip: FlipAxis = .leftRight, splitDepth: Double? = nil, web: Double = 0.04) {
+        self.flip = flip; self.splitDepth = splitDepth; self.web = web
     }
 }

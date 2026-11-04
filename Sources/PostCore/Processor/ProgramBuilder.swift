@@ -21,7 +21,8 @@ struct ProgramBuilder {
         self.job = job
         let f = job.units.factor(to: profile.units)
         setup = job.job.scaled(by: f)
-        toolpaths = job.toolpaths.map { $0.scaled(from: job.units, to: profile.units) }
+        // Pauses as the program writes them (`ProgramPauses`): the loop and the header below read only these.
+        toolpaths = ProgramPauses.effective(job.toolpaths.map { $0.scaled(from: job.units, to: profile.units) })
         coords = MachineCoordinates(job: setup)
         let c = coords
         approachZ = max(c.safeZ, job.approachHeight.map { c.z(aboveTop: $0 * f) } ?? c.safeZ)
@@ -83,7 +84,7 @@ struct ProgramBuilder {
             w.comment("Toolpath: \(tp.name) [\(tp.kind.displayName)]")
             writeMoves(tp.moves, into: &w)
             // A stop belongs between toolpaths: the program's own end already stops the machine.
-            if let pause = tp.pauseAfter, index + 1 < active.count {
+            if let pause = tp.pauseAfter {   // `ProgramPauses.effective`: a toolpath that cuts follows
                 let next = active[index + 1]
                 coolantOff(&coolantOn, into: &w)
                 writePause(pause, after: tp, into: &w)
@@ -164,8 +165,7 @@ struct ProgramBuilder {
         for tp in toolpaths {
             w.comment("  \(tp.name) [\(tp.kind.displayName), T\(tp.tool.number), S\(NumberFormat.fixed(tp.spindleRPM, decimals: 0))]")
         }
-        // The last toolpath is skipped: the program's own end stops the machine (see `build`).
-        let stops = toolpaths.dropLast().compactMap { tp in tp.pauseAfter.map { (tp, $0) } }
+        let stops = toolpaths.compactMap { tp in tp.pauseAfter.map { (tp, $0) } }
         if !stops.isEmpty {
             w.comment("Pauses - the machine waits for Cycle Start:")
             for (tp, pause) in stops {

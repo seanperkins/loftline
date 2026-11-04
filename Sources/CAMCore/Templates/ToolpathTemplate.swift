@@ -42,15 +42,19 @@ public struct VectorSelector: Codable, Hashable, Sendable {
 /// parameters and tools, and picks its vectors again with a `VectorSelector`.
 public struct ToolpathTemplate: Codable, Hashable, Sendable {
     public static let fileExtension = "loftlinetoolpaths"
-    public static let currentFormatVersion = 1
+    /// 2: a rest pass names the toolpath it follows and a two-sided relief carries its model's split (`Entry.reliefSplit`).
+    /// A version 1 reader refuses version 2 (`decode`); this one upgrades version 1.
+    public static let currentFormatVersion = 2
 
     public struct Entry: Codable, Hashable, Sendable {
         /// The operation with its vector references removed.
         public var operation: AnyOperation
         public var selector: VectorSelector
+        /// A relief's model's two-sided split, in the template's units, for the model the relief is applied to.
+        public var reliefSplit: ReliefSplit?
 
-        public init(operation: AnyOperation, selector: VectorSelector) {
-            self.operation = operation; self.selector = selector
+        public init(operation: AnyOperation, selector: VectorSelector, reliefSplit: ReliefSplit? = nil) {
+            self.operation = operation; self.selector = selector; self.reliefSplit = reliefSplit
         }
     }
 
@@ -74,13 +78,29 @@ public struct ToolpathTemplate: Codable, Hashable, Sendable {
         var tools: [Tool] = []
         // A merged toolpath is stored as its children (each needs its own vectors).
         let ops = project.operations.filter { operationIDs?.contains($0.id) ?? true }.flatMap { op -> [AnyOperation] in
-            if case .merge(let m) = op { return m.params.children }
+            if case .merge(let m) = op { return m.standaloneParts }
             return [op]
         }
+        let included = Set(ops.map(\.id))
+        let all = ReliefUpgrade.flat(project.operations)
         for op in ops {
             let selector = VectorSelector.describing(doc.shapes(ids: op.setup.shapeIDs), in: doc)
-            entries.append(Entry(operation: op.detachedFromDesign(), selector: selector))
-            for id in op.toolIDs where !tools.contains(where: { $0.id == id }) {
+            var stored = op.detachedFromDesign()
+            var split: ReliefSplit?
+            var restTool: UUID?
+            if case .relief3D(var r) = stored {
+                split = doc.model(id: r.params.modelID)?.reliefSplit
+                // A rest pass whose source is not in the template cannot name it: it keeps the source's tool, to be
+                // resolved (or chosen) where the template is applied.
+                if case .operation(let src)? = r.params.finishing.rest, !included.contains(src),
+                   let source = all.first(where: { $0.id == src }) {
+                    restTool = source.setup.toolID
+                    r.params.finishing.rest = .unresolved(toolID: source.setup.toolID)
+                    stored = .relief3D(r)
+                }
+            }
+            entries.append(Entry(operation: stored, selector: selector, reliefSplit: split))
+            for id in op.toolIDs + [restTool].compactMap({ $0 }) where !tools.contains(where: { $0.id == id }) {
                 if let t = lib.tool(id: id) { tools.append(t) }
             }
         }
@@ -90,28 +110,38 @@ public struct ToolpathTemplate: Codable, Hashable, Sendable {
     /// Operations for `document`: fresh ids, vectors chosen by each selector (in document order).
     /// 3D reliefs take the document's first model (and are left out when it has none). Lengths
     /// are still in `units`; the caller converts them.
-    public func resolve(in document: Document) -> [(operation: AnyOperation, matched: Int)] {
-        var out: [(AnyOperation, Int)] = []
+    /// A relief comes with its entry's split (in the template's units) for the model it was applied to; a rest pass
+    /// names its source's fresh id.
+    public func resolve(in document: Document) -> [(operation: AnyOperation, matched: Int, split: ReliefSplit?)] {
+        var out: [(AnyOperation, Int, ReliefSplit?)] = []
+        // The first entry with an id is the one a rest pass names; a repeated id (a file from before #123) is not a
+        // reason to crash, and each repeat gets its own fresh id.
+        let fresh = Dictionary(entries.map { ($0.operation.id, UUID()) }, uniquingKeysWith: { first, _ in first })
+        var used = Set<UUID>()
         for e in entries {
             var op = e.operation.detachedFromDesign()
             var setup = op.setup
-            setup.id = UUID()
+            let id = fresh[e.operation.id] ?? UUID()
+            setup.id = used.insert(id).inserted ? id : UUID()
             if case .relief3D(var r) = op {
                 guard let model = document.models.first else { continue }
                 r.params.modelID = model.id
+                if case .operation(let src)? = r.params.finishing.rest, let id = fresh[src] {
+                    r.params.finishing.rest = .operation(id)
+                }
                 r.setup = setup
-                out.append((.relief3D(r), 1))
+                out.append((.relief3D(r), 1, e.reliefSplit))
                 continue
             }
             // A facing of the whole material takes no vectors: whatever its (empty) selector would match must not decide
             // which sheet and side it belongs to, and it is never "unmatched".
             if case .facing(let f) = op, f.params.area == .material {
-                out.append((op.with(setup: setup), 1))
+                out.append((op.with(setup: setup), 1, nil))
                 continue
             }
             setup.shapeIDs = document.shapes.filter { e.selector.matches($0, in: document) }.map(\.id)
             op = op.with(setup: setup)
-            out.append((op, setup.shapeIDs.count))
+            out.append((op, setup.shapeIDs.count, nil))
         }
         return out
     }
@@ -123,11 +153,28 @@ public struct ToolpathTemplate: Codable, Hashable, Sendable {
     }
 
     public static func decode(from data: Data) throws -> ToolpathTemplate {
-        let t = try JSONDecoder().decode(ToolpathTemplate.self, from: data)
+        var t = try JSONDecoder().decode(ToolpathTemplate.self, from: data)
         guard t.formatVersion <= currentFormatVersion else {
             throw CAMError.invalidParameter("This toolpath template was saved by a newer version of LoftLine")
         }
+        if t.formatVersion < 2 { t.upgradeFromVersion1() }
         return t
+    }
+
+    /// Version 1 stored a rest tool and each relief's own split: rest passes resolve within the template, by the
+    /// nearest earlier finish with that tool, and each relief's split moves to its entry.
+    mutating func upgradeFromVersion1() {
+        let ordered = entries.map(\.operation)
+        for i in entries.indices {
+            var op = ReliefUpgrade.resolvingRest(entries[i].operation, among: ordered)
+            if case .relief3D(var r) = op, let legacy = r.params.twoSided?.legacySplit {
+                entries[i].reliefSplit = entries[i].reliefSplit ?? legacy
+                r.params.twoSided?.legacySplit = nil
+                op = .relief3D(r)
+            }
+            entries[i].operation = op
+        }
+        formatVersion = Self.currentFormatVersion
     }
 }
 
@@ -164,7 +211,7 @@ extension AnyOperation {
         case .inlay(let o): ids += o.params.clearanceToolIDs.filter { !ids.contains($0) }
         case .relief3D(let o):
             if let c = o.params.roughing.toolID { ids.append(c) }
-            if let r = o.params.finishing.restToolID, !ids.contains(r) { ids.append(r) }
+
         case .merge(let o):
             for c in o.params.children { ids += c.toolIDs.filter { !ids.contains($0) } }
         default: break
