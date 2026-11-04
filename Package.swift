@@ -5,6 +5,7 @@ let swift5: [SwiftSetting] = [.swiftLanguageMode(.v5)]
 
 var products: [Product] = [
     .executable(name: "loftline-cli", targets: ["loftline-cli"]),
+    .executable(name: "loftline-core", targets: ["loftline-core"]),
     .library(name: "CADCore", targets: ["CADCore"]),
     .library(name: "CAMCore", targets: ["CAMCore"]),
     .library(name: "PostCore", targets: ["PostCore"]),
@@ -54,6 +55,8 @@ var targets: [Target] = [
     // Update checking without AppKit: version comparison, the signed feed, signature verification, remembered state.
     .target(name: "UpdateCore", swiftSettings: swift5),
     .executableTarget(name: "loftline-cli", dependencies: ["LoftLineKit"], swiftSettings: swift5),
+    // The desktop app's engine (desktop/): JSON over standard input and output.
+    .executableTarget(name: "loftline-core", dependencies: ["LoftLineKit"], swiftSettings: swift5),
     .testTarget(name: "UpdateCoreTests", dependencies: ["UpdateCore"], swiftSettings: swift5),
     .testTarget(name: "CGeomTests", dependencies: ["CGeom"], swiftSettings: swift5),
     .testTarget(name: "CADCoreTests", dependencies: ["CADCore"], swiftSettings: swift5),
