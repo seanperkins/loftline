@@ -68,6 +68,30 @@ public final class CoreService {
         var machine: String?
         var statuses: [OperationStatus]
         var issues: [IssueRow]
+        var job: JobTotals
+    }
+
+    /// The sidebar's totals, the same numbers as the Mac's: the job summary times the program as the 3D preview does.
+    struct JobTotals: Encodable {
+        var hasEstimate: Bool
+        var totalSeconds: Double
+        var duration: String
+        var toolLoads: Int
+        var toolChanges: Int
+        var sequence: [String]
+    }
+
+    private let jobMemo = JobSummary.Memo()
+
+    private func jobTotals() -> JobTotals {
+        let s = session
+        let groupByTool = UserDefaults.standard.bool(forKey: GCodeExporter.groupByToolKey)
+        let summary = jobMemo.summary(operations: s.project.operations, results: s.results, groupByTool: groupByTool,
+                                      settings: TimeEstimateSettings.load(), rapidRate: s.rapidRate, units: s.project.document.units)
+        return JobTotals(hasEstimate: summary.hasEstimate, totalSeconds: summary.totalSeconds,
+                         duration: ToolpathCalculator.formatDuration(summary.totalSeconds),
+                         toolLoads: summary.sequence.count, toolChanges: summary.toolChanges,
+                         sequence: summary.sequence.map { "T\($0.number) · \($0.name)" })
     }
 
     struct PostSummary: Encodable {
@@ -103,7 +127,8 @@ public final class CoreService {
                      post: PostSummary(id: resolved.post.id, name: resolved.post.name,
                                        fileExtension: GCodeExporter.fileExtension(for: resolved.post)),
                      machine: resolved.machine?.name, statuses: statuses(),
-                     issues: (ProjectPost.issues(for: s.project, profiles: s.profiles, machines: s.machines) + extraIssues).map(Self.row))
+                     issues: (ProjectPost.issues(for: s.project, profiles: s.profiles, machines: s.machines) + extraIssues).map(Self.row),
+                     job: jobTotals())
     }
 
     private static func row(_ issue: GCodeIssue) -> IssueRow {
@@ -437,7 +462,7 @@ final class CoreSimulation {
         let cell = Heightfield.automaticCellSize(width: doc.job.width, height: doc.job.height, targetCells: 400_000, minimum: minCell)
         let time = TimeEstimateSettings.load()
         player = SimulationPlayer(job: doc.job, toolpaths: toolpaths, rapidRate: session.rapidRate, cellSize: cell,
-                                  toolChangeSeconds: time.toolChangeSeconds)
+                                  toolChangeSeconds: time.toolChangeSeconds, motion: time.motion(units: doc.units))
         thickness = doc.job.thickness
         unitsPerInch = LengthUnit.inch.factor(to: doc.units)
         appearance = material.flatMap { StockAppearance.Material(rawValue: $0) }.map(StockAppearance.preset) ?? .default

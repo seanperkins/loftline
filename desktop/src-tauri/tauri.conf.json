@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "LoftLine",
+  "version": "0.3.0",
+  "identifier": "app.loftline.desktop",
+  "build": { "frontendDist": "../dist", "devUrl": "http://localhost:5173", "beforeBuildCommand": "npm run build", "beforeDevCommand": "npm run dev" },
+  "app": {
+    "windows": [{ "title": "LoftLine", "width": 1400, "height": 900, "minWidth": 960, "minHeight": 600 }],
+    "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src ipc: http://ipc.localhost" }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage", "nsis", "msi"],
+    "externalBin": ["binaries/loftline-core"],
+    "icon": ["icons/icon.png"],
+    "fileAssociations": [{ "ext": ["loftline"], "name": "LoftLine Project", "role": "Editor", "mimeType": "application/x-loftline" }]
+  }
+}
