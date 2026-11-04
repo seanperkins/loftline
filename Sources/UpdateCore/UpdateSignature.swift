@@ -1,6 +1,8 @@
+#if canImport(CryptoKit)
 import CryptoKit
-import Foundation
 import Security
+#endif
+import Foundation
 
 /// Checks that an archive is the one the release was signed for: its SHA-256 and an RSA-4096 / PKCS#1 v1.5 signature made
 /// with `openssl dgst -sha256 -sign key -binary < archive`. `verify` takes the hex digest of the bytes that were signed.
@@ -9,7 +11,11 @@ public enum UpdateSignature {
     public static func sha256Hex(of file: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: file)
         defer { try? handle.close() }
+        #if canImport(CryptoKit)
         var hasher = SHA256()
+        #else
+        var hasher = PortableSHA256()
+        #endif
         while let chunk = try handle.read(upToCount: 1 << 20), !chunk.isEmpty {
             hasher.update(data: chunk)
         }
@@ -20,6 +26,7 @@ public enum UpdateSignature {
     /// `publicKeyPEM`, a PKCS#1 `RSA PUBLIC KEY`. Any malformed input is false.
     public static func verify(digestHex: String, signature: Data, publicKeyPEM: String) -> Bool {
         guard let digest = digest(fromHex: digestHex), let der = pkcs1DER(fromPEM: publicKeyPEM) else { return false }
+        #if canImport(CryptoKit)
         let attributes: [CFString: Any] = [
             kSecAttrKeyType: kSecAttrKeyTypeRSA,
             kSecAttrKeyClass: kSecAttrKeyClassPublic,
@@ -27,6 +34,10 @@ public enum UpdateSignature {
         ]
         guard let key = SecKeyCreateWithData(der as CFData, attributes as CFDictionary, nil) else { return false }
         return SecKeyVerifySignature(key, .rsaSignatureDigestPKCS1v15SHA256, digest as CFData, signature as CFData, nil)
+        #else
+        guard let key = PortableRSA.parsePublicKey(der: [UInt8](der)) else { return false }
+        return PortableRSA.verify(digest: [UInt8](digest), signature: [UInt8](signature), modulus: key.modulus, exponent: key.exponent)
+        #endif
     }
 
     /// 32 bytes from exactly 64 lowercase hex characters.
