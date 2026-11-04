@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The app says why a tool below 1 RPM cannot post (#99 item 10): before export in the tool warning, and in the export's error.
 @Suite struct SpindleZeroExportTests {

@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Design > Layout > Clamps and Fixture Holes…
 struct FixturesSheet: View {

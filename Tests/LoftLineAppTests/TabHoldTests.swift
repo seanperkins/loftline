@@ -2,6 +2,7 @@ import CADCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Tab height is measured up from the bottom of the cut, so a cut that passes below the material
 /// bottom leaves a thinner tab than the number in the field. The note says what a tab really holds.

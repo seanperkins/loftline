@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The 3D preview's playback bar wraps onto more lines in a narrow pane. A time label whose width changed as the clock
 /// ran ("9s / 15m 37s" to "1m 00s / 15m 37s") re-wrapped the bar mid-playback, the 3D view above it shrank, and the

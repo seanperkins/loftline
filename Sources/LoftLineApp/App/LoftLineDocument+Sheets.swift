@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import Foundation
 import SwiftUI
+import LoftLineKit
 
 /// Multi-sheet jobs: switching, adding and deleting material sheets.
 extension LoftLineDocument {

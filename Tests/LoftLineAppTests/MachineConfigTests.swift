@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct MachineConfigTests {
     let small = MachineDefinition(id: "tiny", name: "Tiny", units: .millimeter,

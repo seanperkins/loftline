@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import Foundation
+import LoftLineKit
 
 /// Undoable drawing actions on the focused document (node-edit extras etc.).
 extension LoftLineDocument {

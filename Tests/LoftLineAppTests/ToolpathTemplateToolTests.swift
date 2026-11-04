@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Applying a template carries the template's own tool: a template is a project, and its copy wins like any other.
 @Suite struct ToolpathTemplateToolTests {

@@ -1,5 +1,6 @@
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Which Arrange commands make sense for how many selected shapes, so menu items are disabled
 /// rather than silently doing nothing.

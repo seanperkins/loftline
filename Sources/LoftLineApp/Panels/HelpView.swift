@@ -1,4 +1,5 @@
 import SwiftUI
+import LoftLineKit
 
 /// Which help topic the Help window shows; shared so "?" buttons can jump to a topic.
 final class HelpNavigator: ObservableObject {

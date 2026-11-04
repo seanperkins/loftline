@@ -1,8 +1,6 @@
 import CADCore
 import SwiftUI
-
-/// Number style used by all length/feed fields.
-let decimalFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0...4)).grouping(.never)
+import LoftLineKit
 
 /// Set by inspector sections: outside a `Form`, a `LabeledContent` row puts its field right after the
 /// label, so the fields of different rows start at different x positions. Filling the row right-aligns
@@ -117,29 +115,6 @@ extension View {
     /// The one-line tooltip for a labeled setting (`FieldHelp`), for toggles and pickers, whose
     /// labels do not go through `NumberField`.
     func fieldHelp(_ label: String) -> some View { help(FieldHelp.text(for: label) ?? label) }
-}
-
-extension LengthUnit {
-    var displayName: String { self == .inch ? "Inches" : "Millimeters" }
-    var feedUnit: String { self == .inch ? "in/min" : "mm/min" }
-}
-
-extension XYOrigin {
-    var displayName: String {
-        switch self {
-        case .lowerLeft: return "Lower left"
-        case .lowerRight: return "Lower right"
-        case .upperLeft: return "Upper left"
-        case .upperRight: return "Upper right"
-        case .center: return "Center"
-        }
-    }
-}
-
-extension ZZeroMode {
-    var displayName: String { self == .materialTop ? "Material surface" : "Machine bed (spoilboard)" }
-    /// For tight spaces such as the status bar.
-    var shortName: String { self == .materialTop ? "Material" : "Bed" }
 }
 
 /// Open or closed state of collapsible inspector sections, remembered per section title.

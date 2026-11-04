@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// A project whose chosen machine is not installed here and not carried in the file
 /// (docs/implicit-state-machines.md #18): the substitute is reported, and Job Setup neither hides nor saves it.

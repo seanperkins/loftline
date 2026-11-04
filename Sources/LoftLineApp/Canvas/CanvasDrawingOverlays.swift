@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 /// Overlays for the drawing tools: validator markers.
 extension CanvasNSView {

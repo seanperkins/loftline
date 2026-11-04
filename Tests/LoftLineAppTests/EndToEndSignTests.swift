@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Headless end-to-end run of the app pipeline on a sign:
 /// SVG import → Profile / Pocket / V-Carve / Drill → calculate → post (Avid Mach4 inch) → validate.

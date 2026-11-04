@@ -1,3 +1,4 @@
+import LoftLineKit
 import CADCore
 
 /// `Shape` means the CAD vector shape throughout the app (SwiftUI also exports a `Shape`
@@ -7,3 +8,6 @@ typealias Shape = CADCore.Shape
 typealias Path = CADCore.Path
 /// And `Document` (the macOS 27 SDK adds a SwiftUI.Document protocol).
 typealias Document = CADCore.Document
+
+/// `Measurement` is the app's (LoftLineKit), not Foundation's.
+typealias Measurement = LoftLineKit.Measurement

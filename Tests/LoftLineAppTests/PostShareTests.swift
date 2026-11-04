@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Sharing a post: one empty-pause rule on every read path, new saves that never overwrite or leave a partial file, importing a
 /// post file as a draft, and adding the post a project carries.

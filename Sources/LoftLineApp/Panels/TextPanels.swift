@@ -2,6 +2,7 @@ import AppKit
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Fit text to a box: scales and centres the selected text in another selected vector's
 /// bounding box (or the material).

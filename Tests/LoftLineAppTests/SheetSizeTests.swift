@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Sheets hang from the document window, whose minimum is 1000 x 640 pt (`LoftLineApp`). A sheet taller than
 /// that overhangs the window, and one with a scrolling form hides its last settings below the fold.

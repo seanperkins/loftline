@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct LayoutNestingCommandTests {
     /// 30x20 material; three 8x6 plates (one with a hole) stacked off the material.

@@ -2,6 +2,7 @@ import CADCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// SwiftUI drops an alert set while a sheet is up, so every message for the user goes through `LoftLineDocument.report`,
 /// which shows it at once or after the sheet closes (issue #64; the pattern of issue #22).

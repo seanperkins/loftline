@@ -5,6 +5,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite @MainActor struct IOClipartTests {
     static let twoSquares = """

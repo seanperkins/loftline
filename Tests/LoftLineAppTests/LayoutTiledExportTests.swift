@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct LayoutTiledExportTests {
     /// 110 x 24 in board (wider than the Avid's 60 in X travel): a pocket across the X = 55

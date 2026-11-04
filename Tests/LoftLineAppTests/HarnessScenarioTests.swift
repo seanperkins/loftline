@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 #if DEBUG
 @Suite struct HarnessScenarioTests {

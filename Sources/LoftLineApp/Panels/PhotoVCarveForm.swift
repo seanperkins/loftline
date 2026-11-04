@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Photo V-Carve settings: the picture, where it sits on the material and the groove pattern.
 struct PhotoVCarveForm: View {

@@ -1,5 +1,6 @@
 import CADCore
 import SwiftUI
+import LoftLineKit
 
 // Tool database addition (toolpaths-2d): bull-nose, tapered ball-nose and form-tool outlines.
 

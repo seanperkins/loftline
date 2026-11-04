@@ -2,6 +2,7 @@ import AppKit
 import CADCore
 import PostCore
 import SwiftUI
+import LoftLineKit
 
 /// LoftLine ▸ Settings… (⌘,): defaults for new documents, machines, canvas colours.
 struct PreferencesView: View {

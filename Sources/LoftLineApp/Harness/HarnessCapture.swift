@@ -2,6 +2,7 @@
 import AppKit
 import ApplicationServices
 import SceneKit
+import LoftLineKit
 
 /// Screenshots and text dumps of the app's own windows, taken from inside the process: no Screen
 /// Recording or Accessibility permission, and the window does not have to be on screen or in front.

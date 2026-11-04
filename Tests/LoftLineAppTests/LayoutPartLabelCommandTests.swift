@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct LayoutPartLabelCommandTests {
     /// Two plates (the first with a hole on its left) and a tiny tab.

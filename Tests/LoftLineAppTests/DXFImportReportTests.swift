@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct DXFImportReportTests {
     /// File > Import builds its alert from `ImportOutcome.warnings`, so the gap note reaches the user,

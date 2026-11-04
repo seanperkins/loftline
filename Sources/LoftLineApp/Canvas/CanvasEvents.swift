@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 /// Mouse and keyboard handling for the canvas. Node-tool and pen-tool details live in
 /// CanvasNodeEvents.swift; Edit-menu actions in CanvasEditMenu.swift.

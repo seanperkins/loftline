@@ -5,6 +5,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Offscreen renders of the editing overlays (handles, nodes, pen, inspectors) to catch drawing
 /// crashes. Set LOFTLINE_RENDER_DIR to keep the PNGs.

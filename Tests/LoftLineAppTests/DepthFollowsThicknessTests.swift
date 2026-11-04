@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// A through cut stores its overcut past the material bottom; every change of the thickness, by Job Setup, a variable
 /// link or a live edit, moves its cut depth (docs/implicit-state-machines.md #3).

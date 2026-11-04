@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Inspector while the node-edit tool is active: numeric node position and node commands.
 struct NodeInspector: View {

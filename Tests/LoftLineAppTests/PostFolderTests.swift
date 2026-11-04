@@ -2,6 +2,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The posts folder: what loads, what is listed as not loaded and why, and how files are named, saved and removed.
 @Suite struct PostFolderTests {

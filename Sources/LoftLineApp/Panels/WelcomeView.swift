@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import LoftLineKit
 
 /// First-run Welcome window: new/open, the sample sign, and the quick-start steps.
 struct WelcomeView: View {

@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct IOJobPlungeDatumTests {
     func rapidZs(_ kind: OperationKind, gap: Double?, offset: Vec2? = nil) throws -> (zs: [Double], tps: [Toolpath], LoftLineProject) {

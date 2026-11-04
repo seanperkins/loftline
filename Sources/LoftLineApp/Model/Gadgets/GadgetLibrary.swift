@@ -1,5 +1,6 @@
 import CADCore
 import Foundation
+import LoftLineKit
 
 /// Gadgets offered in the Gadgets menu: the built-in examples plus every `.js` file in
 /// `~/Library/Application Support/LoftLine/Gadgets/`.

@@ -4,6 +4,7 @@ import AppKit
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 struct ToolpathOverlayStyle {
     var cutLineWidth: CGFloat = 1.5

@@ -5,6 +5,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Renders the canvas and the main window offscreen to catch drawing crashes and blank output.
 /// Set LOFTLINE_RENDER_DIR to keep the PNGs for inspection.

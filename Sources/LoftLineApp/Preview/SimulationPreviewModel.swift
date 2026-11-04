@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import Foundation
 import SwiftUI
+import LoftLineKit
 
 /// One rendered simulation state.
 struct SimulationFrame: Sendable {

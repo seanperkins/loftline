@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The deepest cut is shown wherever a program is handed over: the Export sheet (DeepestCutTests),
 /// Save All Toolpaths and the job sheet.

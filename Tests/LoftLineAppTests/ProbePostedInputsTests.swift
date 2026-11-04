@@ -2,6 +2,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The export sheets re-post when the post in force changes. A probe edit in Preferences changes only the probe on
 /// the effective post, so the probe must take part in that comparison, or a program with the old plate thickness

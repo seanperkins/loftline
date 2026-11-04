@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Machine and post processor are chosen in Job Setup (not the toolbar).
 @Suite struct JobSetupMachineTests {

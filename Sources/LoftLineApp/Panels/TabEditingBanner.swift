@@ -1,4 +1,5 @@
 import SwiftUI
+import LoftLineKit
 
 /// Floating hint over the canvas while the tab editor is active.
 struct TabEditingBanner: View {

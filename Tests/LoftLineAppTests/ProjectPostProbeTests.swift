@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Probe settings describe this shop's machine today (its park position, its plate), so they always come from the
 /// installed machine, never from a project's copy.

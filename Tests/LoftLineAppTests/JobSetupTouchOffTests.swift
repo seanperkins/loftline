@@ -2,6 +2,7 @@ import CADCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The touch-off spot: where the touch plate goes on the material, in the material frame and the document's units.
 @Suite struct JobSetupTouchOffTests {

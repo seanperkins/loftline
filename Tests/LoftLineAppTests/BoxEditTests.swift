@@ -1,6 +1,7 @@
 import CADCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// What typing a new X, Y, width or height in the inspector does to the selection's bounding box.
 @Suite struct BoxEditTests {

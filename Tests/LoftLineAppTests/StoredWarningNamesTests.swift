@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// A rename in the Tool Database is written into calculated toolpaths in place and is not a recalculation, so a
 /// note stored at calculation time must not carry the tool's name (issue #60).

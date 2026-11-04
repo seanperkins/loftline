@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 /// Interactive kerning on the canvas: click a letter of the kerned text and drag it (Shift drags
 /// the rest of its line too); arrow keys nudge the last clicked letter; Return/Esc finish.

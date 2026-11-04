@@ -8,7 +8,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "LoftLine", targets: ["LoftLineApp"]),
-        .executable(name: "loftline-cli", targets: ["LoftLineApp"]),
+        .executable(name: "loftline-cli", targets: ["loftline-cli"]),
         .library(name: "CADCore", targets: ["CADCore"]),
         .library(name: "CAMCore", targets: ["CAMCore"]),
         .library(name: "PostCore", targets: ["PostCore"]),
@@ -38,9 +38,12 @@ let package = Package(
         .target(name: "PostCore", dependencies: ["CADCore", "CAMCore"], swiftSettings: swift5),
         // Update checking without AppKit: version comparison, the signed feed, signature verification, remembered state.
         .target(name: "UpdateCore", swiftSettings: swift5),
+        // Everything the app and the command line share that needs no window system.
+        .target(name: "LoftLineKit", dependencies: ["CADCore", "CAMCore", "PostCore"], swiftSettings: swift5),
+        .executableTarget(name: "loftline-cli", dependencies: ["LoftLineKit"], swiftSettings: swift5),
         .executableTarget(
             name: "LoftLineApp",
-            dependencies: ["CADCore", "CAMCore", "PostCore", "UpdateCore"],
+            dependencies: ["CADCore", "CAMCore", "LoftLineKit", "PostCore", "UpdateCore"],
             swiftSettings: swift5
         ),
         .testTarget(name: "CGeomTests", dependencies: ["CGeom"], swiftSettings: swift5),
@@ -48,7 +51,7 @@ let package = Package(
         .testTarget(name: "CAMCoreTests", dependencies: ["CAMCore", "CADCore"], swiftSettings: swift5),
         .testTarget(name: "PostCoreTests", dependencies: ["PostCore", "CAMCore", "CADCore"], swiftSettings: swift5),
         .testTarget(name: "UpdateCoreTests", dependencies: ["UpdateCore"], swiftSettings: swift5),
-        .testTarget(name: "LoftLineAppTests", dependencies: ["LoftLineApp", "PostCore", "CAMCore", "CADCore", "UpdateCore"],
+        .testTarget(name: "LoftLineAppTests", dependencies: ["LoftLineApp", "LoftLineKit", "PostCore", "CAMCore", "CADCore", "UpdateCore"],
                     swiftSettings: swift5),
     ],
     cxxLanguageStandard: .cxx17

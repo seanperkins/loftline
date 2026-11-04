@@ -2,6 +2,7 @@ import CADCore
 import CAMCore
 import PostCore
 import SwiftUI
+import LoftLineKit
 
 /// Toolpaths > Check Toolpaths…: validator warnings and errors for every toolpath and for the
 /// combined program, with a shortcut to select the offending toolpath.

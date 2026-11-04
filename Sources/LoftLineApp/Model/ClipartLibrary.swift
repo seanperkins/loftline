@@ -2,6 +2,7 @@ import AppKit
 import CADCore
 import CAMCore
 import Foundation
+import LoftLineKit
 
 /// The user's own clipart (io-clipart-library): folders of vector files (SVG, DXF, EPS, AI,
 /// PDF), 3D models (STL, OBJ, DAE) and LoftLine projects, browsed from File > Clipart… LoftLine ships

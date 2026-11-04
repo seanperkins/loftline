@@ -6,6 +6,7 @@ import Metal
 import SceneKit
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct PreviewOverlay3DTests {
     let job = JobSetup(width: 10, height: 10, thickness: 0.75)

@@ -1,6 +1,7 @@
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct GCodeIssueDisplayTests {
     let plunge = "Rapid plunge below the material top to Z-0.1050; use a feed move (14 more)"

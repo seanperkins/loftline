@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct IOMeshImportTests {
     static let tetra = "v 0 0 0\nv 50 0 0\nv 0 0 -50\nv 0 10 0\nf 1 3 2\nf 1 2 4\nf 2 3 4\nf 3 1 4\n"

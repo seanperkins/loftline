@@ -2,6 +2,7 @@ import CADCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// File > Import of an SVG that does not state its size asks for the scale first, with the one the file's
 /// program uses selected; a file that states its size imports at once.

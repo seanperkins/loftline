@@ -1,5 +1,6 @@
 import CADCore
 import SwiftUI
+import LoftLineKit
 
 /// Floating bar over the canvas while envelope corners are being dragged.
 struct EnvelopeEditBanner: View {

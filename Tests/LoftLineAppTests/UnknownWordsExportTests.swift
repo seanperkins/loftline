@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Export warns of a word a copy writes that its built-in does not (#99 item 14).
 @Suite struct UnknownWordsExportTests {

@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Coolant is chosen per toolpath and applied when the program is posted: every toolpath of the operation
 /// carries it, on every export path, and changing it never recalculates.

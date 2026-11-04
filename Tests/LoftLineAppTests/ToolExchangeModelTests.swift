@@ -2,6 +2,7 @@ import CADCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Test func toolLibraryExportThenImportOnAnotherMachine() throws {
     let here = AppTestSupport.library()

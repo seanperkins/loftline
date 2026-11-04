@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 /// Envelope distortion on the canvas: drag the four corners of the selection's quad; the
 /// vectors are previewed bent to follow. Clicks elsewhere are ignored while the edit is open.

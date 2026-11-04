@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import Foundation
 import SwiftUI
+import LoftLineKit
 
 /// Edit ▸ Select helpers. Candidates are the editable shapes on the shown side/sheet (the same
 /// set Select All uses); a command that finds nothing beeps and keeps the selection.

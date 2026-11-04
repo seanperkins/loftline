@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct LayoutProductionPlateCommandTests {
     /// A 6 x 2 in plate at (1, 15) on 24 x 18 material with centred "{Name}" text and a

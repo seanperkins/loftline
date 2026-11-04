@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import Foundation
 import PostCore
+import LoftLineKit
 
 /// Offscreen picture of the material, design vectors and toolpaths (job sheet / print).
 enum DesignSnapshot {

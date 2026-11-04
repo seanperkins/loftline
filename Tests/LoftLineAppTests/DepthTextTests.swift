@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Issue #96. `%g` keeps six significant digits, so from 1000 up the third decimal was dropped ("1234.57").
 @Test(arguments: [

@@ -4,6 +4,7 @@ import Foundation
 import SceneKit
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct PreviewDrawing3DTests {
     @Test func clickingBackOnTheFirstPointClosesTheShape() {

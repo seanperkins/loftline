@@ -4,6 +4,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct IOFileThumbnailTests {
     /// True when the test process runs under a sandbox (an agent shell): Launch Services then

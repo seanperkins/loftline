@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import LoftLineKit
 
 /// Offers recovery copies left by a previous session that did not quit normally.
 enum RecoveryPrompt {

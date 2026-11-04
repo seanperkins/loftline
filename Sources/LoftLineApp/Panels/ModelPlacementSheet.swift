@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// "Place 3D Model": size, position and Z placement of an imported STL, plus optional
 /// Roughing + Finishing toolpaths.

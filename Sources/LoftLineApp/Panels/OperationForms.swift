@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 // Parameter forms for every CAMCore operation. Each binds to its parameter struct.
 

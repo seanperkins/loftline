@@ -2,6 +2,7 @@ import AppKit
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 extension LoftLineDocument {
     /// Inserts clipart: vectors/projects centred on the material and selected; 3D models go

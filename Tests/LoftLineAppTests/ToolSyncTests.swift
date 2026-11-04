@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// A project carries the tools its operations use and posts with them; the library supplies only what it does not carry.
 @Suite struct ToolSyncTests {

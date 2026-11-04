@@ -2,6 +2,7 @@ import AppKit
 import CADCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// The Gadgets menu: built-in and user gadget scripts plus folder / reference helpers.
 struct GadgetCommands: Commands {

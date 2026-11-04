@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Save All and Save Tiled write a set of files as one: all of them or none, never over an
 /// existing file without asking, and a failure part way through puts the folder back or says

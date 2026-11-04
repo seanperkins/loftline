@@ -2,6 +2,7 @@ import AppKit
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// The "Vectors" menu: drawing-area tools that act on the selected vectors (kept apart from
 /// `LoftLineCommands` so the Design menu stays short).

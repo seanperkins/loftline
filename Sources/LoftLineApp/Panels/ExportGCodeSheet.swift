@@ -4,6 +4,7 @@ import CAMCore
 import PostCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Export G-code: choose scope and machine, see validator warnings, then save.
 struct ExportGCodeSheet: View {

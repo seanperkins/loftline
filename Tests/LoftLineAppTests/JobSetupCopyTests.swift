@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Job Setup starts on, shows and keeps the project's own copies of its post and machine.
 @Suite struct JobSetupCopyTests {

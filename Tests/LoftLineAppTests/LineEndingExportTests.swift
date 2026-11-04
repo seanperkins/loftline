@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Each program file gets its post's line endings; the program text stays LF (#99 item 4). Checked on UTF-8 bytes.
 @Suite struct LineEndingExportTests {

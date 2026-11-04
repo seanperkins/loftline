@@ -1,5 +1,6 @@
 import Foundation
 import PostCore
+import LoftLineKit
 
 /// The Post Processors sheet's state: which post is selected, the draft being edited and its report. Built-in posts are
 /// read-only; Duplicate makes an unsaved draft, Save writes it, Cancel discards. While a draft has unsaved changes the list is

@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Builds the files in `samples/` and checks they import, calculate and post cleanly.
 ///

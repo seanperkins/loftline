@@ -1,5 +1,6 @@
 #if DEBUG
 import AppKit
+import LoftLineKit
 
 /// Frames of the document window taken at a fixed rate while a scenario runs, for `scripts/reel.sh` to turn
 /// into a GIF or MP4. Each frame is the window with its sheet, the synthetic pointer and the caption drawn

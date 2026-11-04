@@ -4,6 +4,7 @@ import CAMCore
 import PostCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Menu bar commands. They act on the focused document window via `@FocusedObject`.
 struct LoftLineCommands: Commands {

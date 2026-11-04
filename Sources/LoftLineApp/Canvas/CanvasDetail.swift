@@ -1,5 +1,6 @@
 import CADCore
 import CoreGraphics
+import LoftLineKit
 
 /// How much the canvas draws, by how much there is to draw.
 ///
