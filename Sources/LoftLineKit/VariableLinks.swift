@@ -262,7 +262,15 @@ public enum VariableLinks {
         return true
     }
 
-    public static func isBool(_ n: NSNumber) -> Bool { CFGetTypeID(n) == CFBooleanGetTypeID() }
+    public static func isBool(_ n: NSNumber) -> Bool {
+        #if canImport(Darwin)
+        return CFGetTypeID(n) == CFBooleanGetTypeID()
+        #else
+        // swift-corelibs-foundation stores a JSON true or false as a char or a Bool; parsed numbers are never a char.
+        let type = n.objCType.pointee
+        return type == CChar(UInt8(ascii: "c")) || type == CChar(UInt8(ascii: "B"))
+        #endif
+    }
 
     /// Numeric (non-boolean) leaves by path.
     public static func leaves(_ node: Any, prefix: [String], into out: inout [[String]: Double]) {

@@ -1,6 +1,8 @@
+import Foundation
+#if canImport(CoreText)
 import CoreGraphics
 import CoreText
-import Foundation
+#endif
 
 /// Horizontal alignment of text relative to the origin X.
 public enum TextAlignment: String, Codable, CaseIterable, Sendable {
@@ -25,6 +27,7 @@ public struct TextOutliner: Sendable {
         try outlines(for: text, fontName: fontName, size: size, origin: origin, alignment: .left)
     }
 
+#if canImport(CoreText)
     /// Outline paths for `text`; `alignment` positions each line relative to `origin.x`.
     /// `lineSpacing` multiplies the font's natural line height.
     public func outlines(for text: String, fontName: String, size: Double, origin: Vec2,
@@ -68,6 +71,50 @@ public struct TextOutliner: Sendable {
         let attr = NSAttributedString(string: text, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font])
         return CTLineGetTypographicBounds(CTLineCreateWithAttributedString(attr), nil, nil, nil)
     }
+#else
+    /// Outline paths for `text`; `alignment` positions each line relative to `origin.x`.
+    /// `lineSpacing` multiplies the font's natural line height.
+    public func outlines(for text: String, fontName: String, size: Double, origin: Vec2,
+                         alignment: TextAlignment, lineSpacing: Double = 1, letterSpacing: Double = 0) throws -> [Path] {
+        guard size > 0 else { return [] }
+        let (font, em) = try Self.font(named: fontName, capHeight: size)
+        let lineHeight = font.lineHeight * em * lineSpacing
+        var out: [Path] = []
+        for (i, line) in text.components(separatedBy: "\n").enumerated() where !line.isEmpty {
+            let placed = font.layout(line)
+            let width = (placed.last.map { $0.x + $0.advance } ?? 0) * em + letterSpacing * Double(max(0, placed.count - 1))
+            let factor: Double = alignment == .left ? 0 : alignment == .center ? 0.5 : 1
+            let o = Vec2(origin.x - width * factor, origin.y - Double(i) * lineHeight)
+            for (k, g) in placed.enumerated() {
+                let at = Vec2(o.x + g.x * em + letterSpacing * Double(k), o.y)
+                out += PathGeometry.normalizedOrientation(font.paths(glyph: g.glyph, em: em, origin: at))
+            }
+        }
+        return out
+    }
+
+    /// Outlines for one line of text set at a font POINT size (em size, e.g. SVG `font-size`),
+    /// with the baseline's anchor at `origin`. Throws `fontNotFound` for unknown fonts.
+    public func outlines(for text: String, fontName: String, pointSize: Double, origin: Vec2,
+                         alignment: TextAlignment) throws -> [Path] {
+        guard pointSize > 0, !text.isEmpty else { return [] }
+        let (font, _) = try Self.font(named: fontName, capHeight: 70)
+        let placed = font.layout(text)
+        let width = (placed.last.map { $0.x + $0.advance } ?? 0) * pointSize
+        let factor: Double = alignment == .left ? 0 : alignment == .center ? 0.5 : 1
+        let o = Vec2(origin.x - width * factor, origin.y)
+        return placed.flatMap { g in
+            PathGeometry.normalizedOrientation(font.paths(glyph: g.glyph, em: pointSize, origin: Vec2(o.x + g.x * pointSize, o.y)))
+        }
+    }
+
+    /// Advance width of one line at a font point size.
+    public func advance(of text: String, fontName: String, pointSize: Double) throws -> Double {
+        guard pointSize > 0, !text.isEmpty else { return 0 }
+        let (font, _) = try Self.font(named: fontName, capHeight: 70)
+        return (font.layout(text).last.map { $0.x + $0.advance } ?? 0) * pointSize
+    }
+#endif
 
     /// Outlines of live text, in document coordinates.
     public func outlines(for spec: TextSpec) throws -> [Path] {
@@ -97,6 +144,7 @@ public struct TextOutliner: Sendable {
         return Shape(name: text, layerID: layerID, paths: paths, origin: .text(text, fontName: fontName, size: size))
     }
 
+#if canImport(CoreText)
     /// Installed font family names for the UI picker (sorted, hidden system fonts removed).
     public static func availableFontNames() -> [String] {
         let names = CTFontManagerCopyAvailableFontFamilyNames() as? [String] ?? []
@@ -174,4 +222,14 @@ public struct TextOutliner: Sendable {
         finish()
         return out
     }
+#else
+    /// Installed font family names for the UI picker (sorted, hidden system fonts removed).
+    public static func availableFontNames() -> [String] { PortableFont.familyNames() }
+
+    /// The font and em size whose capital height equals `capHeight`. Accepts family, full or PostScript names.
+    static func font(named name: String, capHeight: Double) throws -> (font: PortableFont, em: Double) {
+        guard let font = PortableFont.named(name) else { throw TextError.fontNotFound(name) }
+        return (font, capHeight / font.capHeight)
+    }
+#endif
 }

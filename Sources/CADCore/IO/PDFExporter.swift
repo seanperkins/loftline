@@ -1,5 +1,7 @@
-import CoreGraphics
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
+#endif
 
 /// Page for vector export: spans min(0, bounds.min)…bounds.max (like the SVG exporter) in
 /// PostScript points, so designs in the material frame keep their position.
@@ -43,6 +45,7 @@ public struct PDFExporter: VectorExporter {
     public static let fileExtension = "pdf"
     public init() {}
 
+#if canImport(CoreGraphics)
     public func export(shapes: [Shape], layers: [Layer], units: LengthUnit) throws -> Data {
         let page = VectorPage(shapes: shapes, units: units)
         let out = NSMutableData()
@@ -91,6 +94,58 @@ public struct PDFExporter: VectorExporter {
         ctx.closePDF()
         return out as Data
     }
+#else
+    /// Written directly off the Mac: a single page stream of the same operators.
+    public func export(shapes: [Shape], layers: [Layer], units: LengthUnit) throws -> Data {
+        let page = VectorPage(shapes: shapes, units: units)
+        func n(_ v: Double) -> String {
+            let s = String(format: "%.4f", locale: Locale(identifier: "en_US_POSIX"), v)
+            return s == "-0.0000" ? "0.0000" : s
+        }
+        func pt(_ p: Vec2) -> String { let (x, y) = page.point(p); return "\(n(x)) \(n(y))" }
+        var content = "0.5 w 1 j\n"
+        for (layer, group) in VectorPage.grouped(shapes, layers: layers) where layer.isVisible {
+            let (r, g, b) = VectorPage.rgb(layer.colorHex)
+            content += "\(n(r)) \(n(g)) \(n(b)) RG\n"
+            for s in group {
+                for p in s.paths where !p.segments.isEmpty {
+                    content += "\(pt(p.start)) m\n"
+                    var cur = p.start
+                    for seg in p.segments {
+                        switch seg {
+                        case .line(let to): content += "\(pt(to)) l\n"
+                        case .cubic(let to, let c1, let c2): content += "\(pt(c1)) \(pt(c2)) \(pt(to)) c\n"
+                        case .arc(let to, let center, let cw):
+                            for c in Flattening.arcToCubics(from: cur, to: to, center: center, clockwise: cw) {
+                                if case .cubic(let t, let c1, let c2) = c { content += "\(pt(c1)) \(pt(c2)) \(pt(t)) c\n" }
+                            }
+                        }
+                        cur = seg.end
+                    }
+                    if p.isClosed { content += "h\n" }
+                }
+                content += "S\n"
+            }
+        }
+        let body = [
+            "<< /Type /Catalog /Pages 2 0 R >>",
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 \(n(page.width * page.scale)) \(n(page.height * page.scale))] /Contents 4 0 R /Resources << >> >>",
+            "<< /Length \(content.utf8.count) >>\nstream\n\(content)endstream",
+            "<< /Creator (LoftLine) >>",
+        ]
+        var out = "%PDF-1.4\n", offsets: [Int] = []
+        for (i, object) in body.enumerated() {
+            offsets.append(out.utf8.count)
+            out += "\(i + 1) 0 obj\n\(object)\nendobj\n"
+        }
+        let xref = out.utf8.count
+        out += "xref\n0 \(body.count + 1)\n0000000000 65535 f \n"
+        for o in offsets { out += String(format: "%010d 00000 n \n", o) }
+        out += "trailer\n<< /Size \(body.count + 1) /Root 1 0 R /Info 5 0 R >>\nstartxref\n\(xref)\n%%EOF\n"
+        return Data(out.utf8)
+    }
+#endif
 }
 
 /// Encapsulated PostScript export (EPSF-3.0). Uses only moveto/lineto/curveto/closepath,

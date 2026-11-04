@@ -1,5 +1,11 @@
 import CADCore
+#if canImport(Darwin)
 import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#endif
 import Foundation
 import PostCore
 
@@ -16,7 +22,7 @@ public struct PostProfileStore {
     /// False = the built-ins only, whatever is in `directory` (the command line's `--builtin-only`).
     public var readsUserFiles = true
     /// How Delete removes a file: to the Trash, so a post (machine output) can be recovered. Tests pass their own.
-    public var trash: (URL) throws -> Void = { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+    public var trash: (URL) throws -> Void = { try Trash.move($0) }
     /// How a new post's bytes are written to the file `saveNew` created (tests make it fail).
     public var write: (FileHandle, Data) throws -> Void = { try $0.write(contentsOf: $1) }
 
@@ -157,6 +163,11 @@ public struct PostProfileStore {
         var p = profile
         for _ in 0..<1000 {
             let url = fileURL(for: p.id)
+            #if os(Windows)
+            if try ExclusiveFile.write(try p.toJSON(), to: url) { return p }
+            if keepingID { throw IDTaken(id: p.id) }
+            p.id = newID(from: p.id)
+            #else
             let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL, 0o644)
             if fd < 0 {
                 guard errno == EEXIST else { throw CocoaError(.fileWriteUnknown) }
@@ -173,6 +184,7 @@ public struct PostProfileStore {
                 throw error
             }
             return p
+            #endif
         }
         throw CocoaError(.fileWriteFileExists)
     }

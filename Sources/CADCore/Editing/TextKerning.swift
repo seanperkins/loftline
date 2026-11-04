@@ -1,13 +1,20 @@
-import CoreText
 import Foundation
+#if canImport(CoreText)
+import CoreText
+#endif
 
 /// Letter-by-letter layout of live text with per-letter moves and rotations.
 public enum TextKerning {
     /// Line pitch for `fontName` at cap height `size` (same rules as the normal layout).
     static func lineHeight(fontName: String, size: Double, lineSpacing: Double) throws -> Double {
         if StrokeFont.isStrokeFont(fontName) { return StrokeFont.lineHeight * size * lineSpacing }
+        #if canImport(CoreText)
         let font = try TextOutliner.font(named: fontName, capHeight: size)
         return (CTFontGetAscent(font) + CTFontGetDescent(font) + CTFontGetLeading(font)) * lineSpacing
+        #else
+        let (font, em) = try TextOutliner.font(named: fontName, capHeight: size)
+        return font.lineHeight * em * lineSpacing
+        #endif
     }
 
     /// Number of letters (glyphs) the adjustments can address.

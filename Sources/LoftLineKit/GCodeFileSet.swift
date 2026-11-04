@@ -1,4 +1,10 @@
+#if canImport(Darwin)
 import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif canImport(Musl)
+import Musl
+#endif
 import Foundation
 import PostCore
 
@@ -17,6 +23,7 @@ public struct GCodeFileSet {
         public var text: String?
     }
 
+    #if !os(Windows)
     /// An open directory, held for as long as a save works in it. Every operation is relative to
     /// one of these, so a folder renamed or swapped under the save after it was opened changes
     /// nothing: the save keeps working in the folder it opened.
@@ -43,7 +50,11 @@ public struct GCodeFileSet {
             guard let real = realpath(url.path, nil) else { throw posixError(errno, url.path) }
             defer { free(real) }
             let path = String(cString: real)
+            #if canImport(Darwin)
             let fd = Darwin.open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW_ANY | O_CLOEXEC)
+            #else
+            let fd = Glibc.open(path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)   // the path is already real
+            #endif
             guard fd >= 0 else { throw posixError(errno, path) }
             return try Folder(fd: fd, url: URL(fileURLWithPath: path, isDirectory: true))
         }
@@ -64,10 +75,18 @@ public struct GCodeFileSet {
             return info.st_mode & S_IFMT
         }
 
+        /// True when `name` in this folder is a folder, without following a link.
+        public func isFolder(_ name: String) -> Bool { type(of: name) == S_IFDIR }
+
         /// Where the folder is now, which is not where it was made if something renamed it meanwhile.
         public var currentURL: URL {
+            #if canImport(Darwin)
             var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
             return fcntl(fd, F_GETPATH, &buffer) == 0 ? URL(fileURLWithPath: String(cString: buffer), isDirectory: true) : url
+            #else
+            let path = try? FileManager.default.destinationOfSymbolicLink(atPath: "/proc/self/fd/\(fd)")
+            return path.map { URL(fileURLWithPath: $0, isDirectory: true) } ?? url
+            #endif
         }
 
         /// True while `name` in `parent` is still this very folder and not something put in its place.
@@ -84,6 +103,8 @@ public struct GCodeFileSet {
         }
     }
 
+    #endif
+
     /// The file operations a write uses, each relative to a held `Folder`. Tests swap in ones that
     /// fail on cue, so every rollback path is exercised; the app uses the live ones. `writeText`
     /// creates the file and fails when anything is at the name already; `moveItem` is an exclusive
@@ -98,6 +119,7 @@ public struct GCodeFileSet {
         public var moveItem: (Folder, String, Folder, String) throws -> Void
         public var removeItem: (Folder, String) throws -> Void
 
+        #if !os(Windows)
         public static let live = FileOperations(
             openFolder: Folder.open,
             makeFolder: Folder.make(in:named:),
@@ -109,10 +131,17 @@ public struct GCodeFileSet {
                 try handle.close()   // a network volume can report a failed write-behind only here
             },
             moveItem: { from, fromName, to, toName in
+                #if canImport(Darwin)
                 if renameatx_np(from.fd, fromName, to.fd, toName, UInt32(RENAME_EXCL)) == 0 { return }
                 var code = errno
+                let linkFlags = AT_SYMLINK_NOFOLLOW_ANY
+                #else
+                // Glibc's module does not export renameat2, so Linux starts where the Mac falls back to: a hard link.
+                var code = ENOTSUP
+                let linkFlags: Int32 = 0   // linkat does not follow a link unless asked
+                #endif
                 if code == ENOTSUP {
-                    if linkat(from.fd, fromName, to.fd, toName, AT_SYMLINK_NOFOLLOW_ANY) == 0 {
+                    if linkat(from.fd, fromName, to.fd, toName, linkFlags) == 0 {
                         guard unlinkat(from.fd, fromName, 0) == 0 else {
                             // Undo the link so that a throw still means nothing happened.
                             let failure = errno
@@ -136,6 +165,7 @@ public struct GCodeFileSet {
                 guard let type = folder.type(of: name) else { throw Folder.posixError(errno, path) }
                 guard unlinkat(folder.fd, name, type == S_IFDIR ? AT_REMOVEDIR : 0) == 0 else { throw Folder.posixError(errno, path) }
             })
+        #endif
     }
 
     public var files: [File]
@@ -283,7 +313,7 @@ public struct GCodeFileSet {
                     try operations.moveItem(dir, name, was, name)
                     aside.append(name)
                     // A directory that took the name after the check must not be treated as a file.
-                    if was.type(of: name) == S_IFDIR { throw GCodeFileSetError.directoryInTheWay([name]) }
+                    if was.isFolder(name) { throw GCodeFileSetError.directoryInTheWay([name]) }
                 }
                 try operations.moveItem(staging, name, dir, name)
                 placed.append(name)

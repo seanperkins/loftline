@@ -6,3 +6,4 @@ dist/
 .claude/settings.local.json
 *.xcodeproj/xcuserdata/
 .tmp/
+.build-linux*/

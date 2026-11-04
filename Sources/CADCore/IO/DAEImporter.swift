@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationXML)
+import FoundationXML
+#endif
 
 /// COLLADA (.dae) mesh import — the open format SketchUp (and most modellers) export.
 /// Reads `<triangles>`, `<polylist>` and `<polygons>` (fan-triangulated) of every geometry

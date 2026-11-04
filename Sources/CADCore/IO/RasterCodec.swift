@@ -1,5 +1,6 @@
-import CoreGraphics
 import Foundation
+#if canImport(ImageIO)
+import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
 
@@ -43,3 +44,22 @@ public enum RasterCodec {
         return ((w, h), inches)
     }
 }
+#else
+/// Raster image helpers off the Mac: fewer formats than ImageIO reads (docs/PLATFORMS.md).
+public enum RasterCodec {
+    public static let fileExtensions = ["png", "jpg", "jpeg", "bmp", "gif"]
+
+    /// Any readable image → PNG (nil when it cannot be decoded).
+    public static func png(fromEncoded data: Data) -> Data? { PortableImage(data: data)?.png }
+
+    /// Pixel size and, when the file records it, the physical size in inches (from its DPI).
+    public static func info(of data: Data) -> (pixels: (width: Int, height: Int), inches: (width: Double, height: Double)?)? {
+        guard let image = PortableImage(data: data) else { return nil }
+        var inches: (Double, Double)?
+        if let (dx, dy) = PortableImage.dpi(of: data), dx > 0, dy > 0, abs(dx - 72) > 0.5 || abs(dy - 72) > 0.5 {
+            inches = (Double(image.width) / dx, Double(image.height) / dy)
+        }
+        return ((image.width, image.height), inches)
+    }
+}
+#endif

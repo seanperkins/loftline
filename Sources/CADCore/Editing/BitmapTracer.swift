@@ -1,6 +1,8 @@
-import CoreGraphics
 import Foundation
+#if canImport(ImageIO)
+import CoreGraphics
 import ImageIO
+#endif
 
 /// A grayscale raster (0 = black, 255 = white), rows top to bottom.
 public struct GrayBitmap: Sendable {
@@ -16,6 +18,7 @@ public struct GrayBitmap: Sendable {
 
     /// Decodes PNG/JPEG/TIFF/… data, scaled so the longer side is at most `maxSide` pixels.
     /// Transparent areas count as white.
+#if canImport(ImageIO)
     public static func decode(_ data: Data, maxSide: Int = 1000) -> GrayBitmap? {
         guard let src = CGImageSourceCreateWithData(data as CFData, nil),
               let img = CGImageSourceCreateImageAtIndex(src, 0, nil) else { return nil }
@@ -33,6 +36,13 @@ public struct GrayBitmap: Sendable {
         }
         return ok ? GrayBitmap(width: w, height: h, pixels: px) : nil
     }
+#else
+    public static func decode(_ data: Data, maxSide: Int = 1000) -> GrayBitmap? {
+        guard let image = PortableImage(data: data) else { return nil }
+        let g = image.gray(maxSide: maxSide)
+        return GrayBitmap(width: g.width, height: g.height, pixels: g.pixels)
+    }
+#endif
 }
 
 /// Vectorises a bitmap by brightness threshold: pixels darker than the threshold (or lighter,

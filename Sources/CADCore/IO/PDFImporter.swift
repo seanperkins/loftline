@@ -1,5 +1,6 @@
-import CoreGraphics
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
 
 /// PDF and PDF-based Illustrator (.ai) import. Reads the vector paths of the first page with
 /// Core Graphics' content-stream scanner (m l c v y h re + paint operators, q/Q, cm, Form
@@ -260,3 +261,16 @@ enum PDFImageDecoder {
         return RasterCodec.png(from: img)
     }
 }
+#else
+/// PDF import needs Core Graphics' content-stream scanner, so it is Mac-only for now (docs/PLATFORMS.md). The importer stays
+/// registered so the message names the reason.
+public struct PDFImporter: VectorImporter {
+    public static let fileExtensions = ["pdf"]
+    public init() {}
+    public typealias EmbeddedImage = ImportedImage
+
+    public func importVectors(from data: Data, targetUnits: LengthUnit) throws -> ImportResult {
+        throw LoftLineIOError.malformed("PDF import works only on the Mac so far. Export DXF, SVG or EPS instead.")
+    }
+}
+#endif
