@@ -72,7 +72,7 @@ jobs:
       - name: Swift on Linux
         if: runner.os == 'Linux'
         run: |
-          curl -fsSL https://download.swift.org/swift-6.4.2-release/ubuntu2404/swift-6.4.2-RELEASE/swift-6.4.2-RELEASE-ubuntu24.04.tar.gz | sudo tar -xz --strip-components=2 -C /usr/local
+          curl -fsSL https://download.swift.org/swift-6.4.2-release/ubuntu2404/swift-6.4.2-RELEASE/swift-6.4.2-RELEASE-ubuntu24.04.tar.gz | sudo tar -xz --strip-components=1 -C /
       - name: Swift on Windows
         if: runner.os == 'Windows'
         uses: compnerd/gha-setup-swift@main

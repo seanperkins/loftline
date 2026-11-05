@@ -12,7 +12,7 @@
     "active": true,
     "targets": ["deb", "appimage", "nsis", "msi"],
     "externalBin": ["binaries/loftline-core"],
-    "icon": ["icons/icon.png"],
+    "icon": ["icons/icon.png", "icons/icon.ico"],
     "fileAssociations": [{ "ext": ["loftline"], "name": "LoftLine Project", "role": "Editor", "mimeType": "application/x-loftline" }]
   }
 }
