@@ -8,7 +8,7 @@ Plan and rulings: `docs/specs/2026-11-03-windows-linux-design.md`. Status as of 
 | Check | Mac | Linux arm64 | Linux x86-64 | Windows |
 |---|---|---|---|---|
 | Cores and CLI build | yes | yes | yes | **not run** |
-| Test suites (cores, kit, updates) | yes | yes | not run | **not run** |
+| Test suites (cores, kit, updates) | yes | yes | yes (under emulation) | **not run** |
 | 48 sample programs byte for byte (`samples/expected`) | yes | yes | yes (under emulation) | **not run** |
 | Desktop app builds and opens a project | native app | yes, in Docker under Xvfb | not run | **not run** |
 | Desktop end-to-end test (`desktop/tools/e2e.mjs`) | yes, in Chromium | yes, in Chromium | not run | **not run** |

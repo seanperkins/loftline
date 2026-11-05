@@ -8,12 +8,14 @@
 set -euo pipefail
 cd "${0:A:h}/.."
 arch=${LOFTLINE_LINUX_ARCH:-}
-platform=(); scratch=.build-linux; image=loftline-linux
+platform=(); scratch=.build-linux; image=loftline-linux; backtrace=()
 if [[ -n "$arch" ]]; then platform=(--platform "linux/$arch"); scratch=".build-linux-$arch"; image="loftline-linux-$arch"; fi
+# Under emulation Swift's crash backtracer can't attach and waits forever, so a crashing test would hang the run instead of failing it.
+if [[ -n "$arch" ]]; then backtrace=(-e SWIFT_BACKTRACE=enable=no); fi
 # Built once, then cached by Docker.
 docker build -q "${platform[@]}" -t "$image" -f docker/linux.Dockerfile docker >/dev/null
 case "${1:-}" in
   build) shift; set -- swift build --scratch-path "$scratch" "$@" ;;
   test) shift; set -- swift test --scratch-path "$scratch" "$@" ;;
 esac
-exec docker run --rm "${platform[@]}" -v "$PWD:/src" -w /src -e LOFTLINE_SCRATCH="$scratch" "$image" "$@"
+exec docker run --rm "${platform[@]}" -v "$PWD:/src" -w /src -e LOFTLINE_SCRATCH="$scratch" "${backtrace[@]}" "$image" "$@"
