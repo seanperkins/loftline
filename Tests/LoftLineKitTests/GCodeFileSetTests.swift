@@ -236,6 +236,32 @@ import Testing
         #expect(try content(dir, "b.tap/x.txt") == "inside")
     }
 
+    #if os(Windows)
+    @Test func aFolderSwappedInForTheWorkingFolderStopsTheSaveAndIsLeftAlone() throws {
+        // As on the Mac and Linux below, but a Windows save holds the path, not the folder: it notices the swap and stops.
+        let dir = AppTestSupport.tempDir()
+        try FileManager.default.createDirectory(at: dir.appendingPathComponent("Projects"), withIntermediateDirectories: false)
+        try write("precious", dir, "Projects/notes.txt")
+        try write("mine", dir, "Projects/b.tap")
+        var set = GCodeFileSet(files: [file("a.tap", "A"), file("b.tap", "B")])
+        let live = GCodeFileSet.FileOperations.live
+        var swapped: URL?
+        set.operations.writeText = { text, folder, name in
+            try live.writeText(text, folder, name)
+            if name == "a.tap" {
+                try FileManager.default.moveItem(at: folder.url, to: dir.appendingPathComponent("elsewhere"))
+                try FileManager.default.moveItem(at: dir.appendingPathComponent("Projects"), to: folder.url)
+                swapped = folder.url
+            }
+        }
+        #expect(throws: (any Error).self) { try set.write(to: dir) }
+        let projects = try #require(swapped)
+        #expect(try content(projects, "notes.txt") == "precious")
+        #expect(try content(projects, "b.tap") == "mine")
+        #expect(names(in: projects) == ["b.tap", "notes.txt"])
+        #expect(!FileManager.default.fileExists(atPath: dir.appendingPathComponent("a.tap").path))
+    }
+    #else
     @Test func aFolderSwappedInForTheWorkingFolderIsNeitherUsedNorEmptied() throws {
         // Someone with write access to the folder moves the working folder away and puts the user's
         // own "Projects" folder, which holds a file with one of the set's names, at its name while
@@ -279,6 +305,7 @@ import Testing
         #expect(try content(other, "a.tap") == "G0 Z1\nM30\n")
         #expect(FileManager.default.fileExists(atPath: try #require(planted).path))
     }
+    #endif
 
     @Test func theLiveOperationsNeverWriteOverAnything() throws {
         // The exclusive create and exclusive rename the app uses: a file and a live link at the destination refuse, and nothing is

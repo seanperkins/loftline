@@ -13,7 +13,7 @@ Plan and rulings: `docs/specs/2026-11-03-windows-linux-design.md`. Status as of 
 | Desktop app builds and opens a project | native app | yes, in Docker under Xvfb | not run | **not run** |
 | Desktop end-to-end test (`desktop/tools/e2e.mjs`) | yes, in Chromium | yes, in Chromium | not run | **not run** |
 
-**Save All on Windows works by path.** The Mac and Linux hold the folder open while they save, so a folder swapped mid-save can't redirect the files. `FileSetWindows.swift` checks the path instead, so someone who can change a shared folder could swap it for a junction during a save and send the files elsewhere. Save only to folders you control.
+**Save All on Windows works by path.** The Mac and Linux hold the folder open while they save, so a folder swapped mid-save can't redirect the files. Windows remembers which folder it opened and checks before every file operation, so a swap stops the save and the swapped-in folder is left alone. A swap in the instant between a check and its operation isn't caught, so save to folders you control.
 
 **Windows has never been compiled.** There's no Windows machine or VM here, and its CI job (`.github/workflows/platforms.yml`) needs the
 branch pushed. Expect fixes after the first run. In particular `Sources/LoftLineKit/FileSetWindows.swift` is unproven, and MSVC's C++ library
