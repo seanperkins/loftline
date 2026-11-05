@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Dialogs added by the io workstream, shown through `DocumentSheet.io`.
 enum IOSheet: Equatable {

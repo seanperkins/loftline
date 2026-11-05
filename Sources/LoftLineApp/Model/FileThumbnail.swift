@@ -2,6 +2,7 @@ import AppKit
 import CADCore
 import CAMCore
 import Foundation
+import LoftLineKit
 
 /// Finder thumbnails for `.loftline` files: after each save the design picture is set as the file's
 /// custom icon. Done as a coordinated metadata-only write that restores the exact modification

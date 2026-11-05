@@ -4,6 +4,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct IOVariablesTests {
     @Test func fieldStyleParsesExpressions() throws {

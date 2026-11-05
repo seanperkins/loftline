@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The command line posts a project the way the Export G-code sheet does (issue #17). Every test runs the entry point
 /// in-process and reads what it printed.

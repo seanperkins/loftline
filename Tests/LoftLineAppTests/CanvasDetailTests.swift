@@ -4,6 +4,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// A drawing of tens of thousands of curve segments (a traced image, an imported SVG) must draw in a fraction of a
 /// second, not tens of seconds (issue #30): CoreGraphics' full stroker costs about 30 microseconds a segment.

@@ -1,0 +1,110 @@
+name: Windows and Linux
+
+# The cores, the command line and the desktop app off the Mac. The samples check compares every program, byte for byte, with the one
+# the Mac committed in samples/expected. Nothing here rewrites them: a difference is a bug or a line in docs/PLATFORMS.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  SWIFT_VERSION: "6.4.2"
+
+jobs:
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    container: swift:6.4
+    steps:
+      - name: Tools the tests use
+        run: apt-get update && apt-get install -y --no-install-recommends fonts-liberation zsh openssl git python3 jq
+      - uses: actions/checkout@v4
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+      - name: Post the samples and compare
+        run: scripts/check-samples-portable.sh
+        env:
+          LOFTLINE_SCRATCH: .build
+
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: compnerd/gha-setup-swift@main
+        with:
+          swift-version: swift-6.4.2-release
+          swift-build: 6.4.2-RELEASE
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
+      - name: Post the samples and compare
+        run: pwsh scripts/check-samples.ps1
+
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            swift: container
+          - runner: windows-2022
+            swift: setup
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        # Azure's Ubuntu mirror stalls now and then: 25 seconds normally, but 31 minutes and 2.5 hours when it did.
+        run: |
+          apt='apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20'
+          for attempt in 1 2 3; do
+            sudo timeout 240 sh -c "$apt update && $apt install -y libwebkit2gtk-4.1-dev build-essential curl file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev fonts-liberation" && exit 0
+          done
+          exit 1
+      - name: Swift on Linux
+        if: runner.os == 'Linux'
+        run: |
+          curl -fsSL https://download.swift.org/swift-6.4.2-release/ubuntu2404/swift-6.4.2-RELEASE/swift-6.4.2-RELEASE-ubuntu24.04.tar.gz | sudo tar -xz --strip-components=1 -C /
+      - name: Swift on Windows
+        if: runner.os == 'Windows'
+        uses: compnerd/gha-setup-swift@main
+        with:
+          swift-version: swift-6.4.2-release
+          swift-build: 6.4.2-RELEASE
+      - name: Build the core
+        shell: bash
+        run: |
+          swift build -c release --product loftline-core
+          triple="$(rustc -vV | sed -n 's/^host: //p')"
+          bin="$(swift build -c release --show-bin-path)"
+          ext=""; [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
+          mkdir -p desktop/src-tauri/binaries
+          cp "$bin/loftline-core$ext" "desktop/src-tauri/binaries/loftline-core-$triple$ext"
+      - name: Build the app
+        working-directory: desktop
+        run: |
+          npm ci
+          npx tauri build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: loftline-desktop-${{ runner.os }}
+          path: |
+            desktop/src-tauri/target/release/bundle/**/*.deb
+            desktop/src-tauri/target/release/bundle/**/*.AppImage
+            desktop/src-tauri/target/release/bundle/**/*.exe
+            desktop/src-tauri/target/release/bundle/**/*.msi

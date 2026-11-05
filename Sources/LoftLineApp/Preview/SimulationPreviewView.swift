@@ -5,6 +5,7 @@ import CAMCore
 import PostCore
 import SceneKit
 import SwiftUI
+import LoftLineKit
 
 /// SCNView wrapper with built-in orbit (drag), zoom (scroll/pinch) and pan (option-drag).
 struct StockSceneView: NSViewRepresentable {

@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Findings of the final whole-branch review (debate panel 6dbe3a28) that were graded Important and fixed.
 @Suite struct FinalReviewFixesTests {

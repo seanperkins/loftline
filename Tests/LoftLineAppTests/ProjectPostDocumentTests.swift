@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct ProjectPostDocumentTests {
     let inch = BuiltInPosts.avidMach4Inch

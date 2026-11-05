@@ -1,5 +1,6 @@
-import CoreGraphics
 import Foundation
+#if canImport(CoreGraphics)
+import CoreGraphics
 
 /// PDF and PDF-based Illustrator (.ai) import. Reads the vector paths of the first page with
 /// Core Graphics' content-stream scanner (m l c v y h re + paint operators, q/Q, cm, Form
@@ -260,3 +261,28 @@ enum PDFImageDecoder {
         return RasterCodec.png(from: img)
     }
 }
+#else
+/// PDF and PDF-based Illustrator import off the Mac, through `PortablePDFImporter`.
+public struct PDFImporter: VectorImporter {
+    public static let fileExtensions = ["pdf"]
+    public init() {}
+    public typealias EmbeddedImage = ImportedImage
+
+    static func imageByteCount(width: Int, height: Int, components: Int) -> Int? {
+        let (wh, o1) = width.multipliedReportingOverflow(by: height)
+        let (n, o2) = wh.multipliedReportingOverflow(by: components)
+        return o1 || o2 ? nil : n
+    }
+
+    public func importVectors(from data: Data, targetUnits: LengthUnit) throws -> ImportResult {
+        let (r, images) = try PortablePDFImporter.importPage(from: data, targetUnits: targetUnits, includeImages: true)
+        var result = r
+        result.images = images
+        return result
+    }
+
+    public func importPage(from data: Data, targetUnits: LengthUnit, includeImages: Bool) throws -> (result: ImportResult, images: [EmbeddedImage]) {
+        try PortablePDFImporter.importPage(from: data, targetUnits: targetUnits, includeImages: includeImages)
+    }
+}
+#endif

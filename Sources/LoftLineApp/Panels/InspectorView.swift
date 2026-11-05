@@ -2,6 +2,7 @@ import AppKit
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Right-hand inspector: drawing-tool options, toolpath parameters, selection properties or
 /// the job summary, depending on context.

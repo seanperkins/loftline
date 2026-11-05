@@ -4,6 +4,7 @@ import Foundation
 import SceneKit
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct PreviewCameraTests {
     let job = JobSetup(width: 96, height: 60, thickness: 0.75)

@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Regressions found in the 2026-10-20 deep review (docs/REVIEW-2026-10-20.md).
 @Suite struct ReviewRegressionTests {

@@ -251,8 +251,7 @@ public struct SVGImporter: VectorImporter {
     /// Installed font for a CSS `font-family` list (generic families map to macOS fonts);
     /// bold weights prefer the family's "Bold" face. nil when none of them is installed.
     static func resolveFont(family: String?, weight: String?) -> String? {
-        let generic = ["sans-serif": "Helvetica", "serif": "Times New Roman", "monospace": "Menlo",
-                       "cursive": "Apple Chancery", "fantasy": "Papyrus", "system-ui": "Helvetica"]
+        let generic = TextOutliner.genericFontFamilies
         let names = (family ?? "sans-serif").split(separator: ",").map {
             $0.trimmingCharacters(in: CharacterSet(charactersIn: " \"'"))
         }.filter { !$0.isEmpty }
@@ -371,8 +370,8 @@ extension SVGImporter.Context {
             let size = length(style.inherited("font-size"), percentOf: 16) ?? 16
             let family = style.inherited("font-family")
             guard let font = SVGImporter.resolveFont(family: family, weight: style.inherited("font-weight")) ?? {
-                warnOnce("Font \(family ?? "?") is not installed; Helvetica was used.")
-                return "Helvetica"
+                warnOnce("Font \(family ?? "?") is not installed; \(TextOutliner.defaultFontName) was used.")
+                return TextOutliner.defaultFontName
             }() else { return }
             let anchor = style.inherited("text-anchor")
             let align: TextAlignment = anchor == "middle" ? .center : anchor == "end" ? .right : .left

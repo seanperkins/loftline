@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Settings mistakes shown in the toolpath form before the export validator would catch them (issue #24).
 @Suite struct OperationWarningsTests {

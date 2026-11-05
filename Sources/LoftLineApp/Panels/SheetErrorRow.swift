@@ -1,4 +1,5 @@
 import SwiftUI
+import LoftLineKit
 
 /// The error line of a sheet, above its buttons: nothing when `message` is nil. A sheet shows its own
 /// failures (a file that cannot be written or read) because an alert set on the document sits under

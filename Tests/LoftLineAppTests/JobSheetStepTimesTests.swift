@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The job sheet's step times and its total come from one model: the user's time-estimate settings (issue #55).
 @Suite struct JobSheetStepTimesTests {

@@ -3,6 +3,7 @@ import Combine
 import Foundation
 import UpdateCore
 import os
+import LoftLineKit
 
 /// What the controller needs to know about the running app.
 struct BundleInfo: Equatable {

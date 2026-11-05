@@ -3,6 +3,7 @@ import AppKit
 import CADCore
 import CAMCore
 import SceneKit
+import LoftLineKit
 
 /// Owns the SceneKit scene: lit stock mesh, cutter marker and an orbit camera.
 /// The content node uses the material frame with Z up (top at z = 0); it is rotated so that

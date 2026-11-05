@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// How to type exact values on the canvas for the active tool.
 struct QuickEntryHelp: View {

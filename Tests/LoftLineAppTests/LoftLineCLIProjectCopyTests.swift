@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The command line posts with the project's own copy of its post and machine, as the app does.
 @Suite struct LoftLineCLIProjectCopyTests {

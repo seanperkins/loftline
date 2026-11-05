@@ -1,5 +1,6 @@
 import CADCore
 import Foundation
+import LoftLineKit
 
 extension LoftLineDocument {
     /// Runs a gadget on the current design and applies everything it did as one undo step.

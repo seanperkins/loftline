@@ -1,5 +1,6 @@
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct SavePanelNameTests {
     @Test func theExtensionTheAllowedTypeAddsIsLeftOffTheSuggestedName() {

@@ -2,6 +2,7 @@ import CADCore
 import CAMCore
 import Foundation
 import JavaScriptCore
+import LoftLineKit
 
 /// What a gadget run produced. The project is a modified copy; nothing touches the open
 /// document until the caller applies it (one undo step).

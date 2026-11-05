@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationXML)
+import FoundationXML
+#endif
 
 /// Minimal XML element tree for SVG import (namespace prefixes stripped from element names).
 final class SVGNode {

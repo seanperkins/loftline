@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import LoftLineKit
 
 /// A colour for the contrast arithmetic (sRGB components 0...1).
 struct RGB: Equatable {

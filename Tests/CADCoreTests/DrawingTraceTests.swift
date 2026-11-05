@@ -1,6 +1,8 @@
-import CoreGraphics
 import Foundation
+#if canImport(ImageIO)
+import CoreGraphics
 import ImageIO
+#endif
 import Testing
 @testable import CADCore
 
@@ -57,6 +59,7 @@ import Testing
         #expect(img[0, 0] < 30 && img[1, 0] > 225)
     }
 
+#if canImport(ImageIO)
     static func png(width: Int, height: Int, gray: [UInt8]) -> Data? {
         var px = gray
         guard let ctx = CGContext(data: &px, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width,
@@ -67,4 +70,9 @@ import Testing
         CGImageDestinationAddImage(dest, img, nil)
         return CGImageDestinationFinalize(dest) ? out as Data : nil
     }
+#else
+    static func png(width: Int, height: Int, gray: [UInt8]) -> Data? {
+        PortableImage(width: width, height: height, rgba: gray.flatMap { [$0, $0, $0, 255] }).png
+    }
+#endif
 }

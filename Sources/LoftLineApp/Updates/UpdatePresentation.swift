@@ -1,5 +1,6 @@
 import Foundation
 import UpdateCore
+import LoftLineKit
 
 /// What the update window says and offers for each controller state. Pure data: every state is tested without a window.
 struct UpdatePresentation: Equatable {

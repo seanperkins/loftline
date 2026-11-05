@@ -4,6 +4,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The inspector sits under the window toolbar. A scroll view that takes the toolbar as a top content inset makes
 /// SwiftUI report its controls' accessibility frames without that inset (52 pt above where they are drawn), so

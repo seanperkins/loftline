@@ -3,6 +3,7 @@ import AppKit
 import Metal
 import SceneKit
 import UniformTypeIdentifiers
+import LoftLineKit
 
 enum PreviewImageExport {
     /// Renders `stockScene` offscreen from `pointOfView` (the on-screen camera when given).

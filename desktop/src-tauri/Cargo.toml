@@ -1,0 +1,13 @@
+[package]
+name = "loftline-desktop"
+version = "0.3.0"
+edition = "2021"
+description = "LoftLine for Windows and Linux"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde_json = "1"

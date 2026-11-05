@@ -141,6 +141,12 @@ Download `LoftLine-vX.Y.Z-macos-arm64.zip` from the [Releases](https://github.co
 
 LoftLine looks for a newer release when it starts and then once a day. A found update opens a window with the release notes; you can install it when you quit (the default) or now, skip that version, or decide later. Settings ▸ General ▸ **Check for updates automatically** turns the daily check off, and LoftLine ▸ Check for Updates… looks once, on request. The only request goes to github.com, with the user agent `LoftLine/<version>` and nothing else. A download is checked against its SHA-256 and a signature made with LoftLine's own key before anything is installed, and an update installs only when LoftLine quits.
 
+## Windows and Linux
+
+A desktop app for Windows and Linux lives in `desktop/`, on the same Swift core, and is in progress. On Linux and Windows the same sample programs post byte for byte
+with the Mac's. **The Windows app has only been built, never opened.** [docs/PLATFORMS.md](docs/PLATFORMS.md) lists what doesn't match the Mac app and how far each platform is checked. Don't cut with
+either until its samples check has passed and you've done an air cut.
+
 ## Build and run
 
 Requires an Apple Silicon Mac on macOS 14+ with Swift 6 (Command Line Tools are enough;

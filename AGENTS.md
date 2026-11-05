@@ -17,6 +17,9 @@ scripts/check-release-workflow.sh    # structural check of .github/workflows/rel
 scripts/update-feed.sh v0.2.1        # build build/latest.json, the signed update feed for a release (`genkey` makes the signing key)
 scripts/verify-feed.sh <feed> <zip> <public key>   # check a feed the way a client will (the release workflow runs it before it publishes)
 scripts/ui.sh main --light           # UI harness: screenshots + accessibility tree, no permissions (docs/UI-HARNESS.md)
+scripts/linux.sh test                # the test suites on Linux, in Docker (scripts/linux.sh build, or any command)
+scripts/linux.sh scripts/check-samples-portable.sh   # every sample, byte for byte against samples/expected, on Linux; LOFTLINE_LINUX_ARCH=amd64 for x86-64
+scripts/linux-desktop.sh             # builds the desktop app on Linux, runs it under Xvfb, screenshots it and runs its end-to-end test
 LOFTLINE_UPDATE_GOLDEN=1 scripts/test.sh # regenerate golden G-code after an intended output change
 LOFTLINE_WRITE_SAMPLES=1 scripts/test.sh --filter SampleFiles   # regenerate samples/
 LOFTLINE_WRITE_SAMPLES=1 scripts/test.sh --filter HarnessProjects   # then, in a separate run, the harness projects (they embed the sample's ids)
@@ -48,7 +51,11 @@ a byte of any sample's G-code needs `scripts/check-samples.sh --update` and a lo
 | `Sources/CAMCore` | Toolpath operations (pure functions of shapes + tool + parameters), simulation, time estimates. |
 | `Sources/PostCore` | Template-driven post processor (JSON `PostProfile`s) and `GCodeValidator`. |
 | `Sources/UpdateCore` | Update checking without AppKit: version comparison, the signed feed, signature verification, remembered state. |
-| `Sources/LoftLineApp` | SwiftUI/AppKit app: document, canvas, inspector, dialogs, 3D preview, update window (`Updates/`). |
+| `Sources/LoftLineKit` | What the app, the command line and the sidecar share with no window system: the exporter, validation report, editing commands, project files. |
+| `Sources/LoftLineApp` | The Mac app, SwiftUI/AppKit: document, canvas, inspector, dialogs, 3D preview, update window (`Updates/`). |
+| `Sources/loftline-cli`, `Sources/loftline-core` | The command line, and the JSON sidecar the desktop app talks to. |
+| `Sources/CStb`, `Vendor/stb` | Images and fonts off the Mac. The Mac uses ImageIO and CoreText. |
+| `desktop/` | Windows and Linux app: Tauri and TypeScript over `loftline-core`. Holds no CAM and never builds program text. `scripts/build.sh` doesn't touch it. |
 
 Each module has a matching test target in `Tests/`. Fixtures and golden `.tap` files live in
 `Tests/Fixtures/`.
@@ -61,6 +68,7 @@ changes as safety-critical:
 - All depth → machine-Z conversion goes through the single Z-zero helper so the
   material-top and spoilboard modes both stay correct. Test both modes for any Z-related change.
 - Every program must pass `GCodeValidator`. Don't weaken a validator check to make a test pass.
+- `samples/expected` is the Mac's output. Never regenerate it for a difference on Linux or Windows: that's a bug, or a line in `docs/PLATFORMS.md`.
 - Changing post output means regenerating the golden files on purpose and reviewing the diff.
 - Retract to safe Z before XY rapids; keep-out zones and the move home are checked on export.
 
@@ -75,6 +83,7 @@ from yours, but not its preferences (docs/UI-HARNESS.md). Add a scenario in `har
 ## Docs to keep current
 
 - `docs/PARITY.md`: feature status against VCarve Pro. Update it when you add or finish a feature.
+- `docs/PLATFORMS.md`: every way Windows and Linux differ from the Mac app, and how far each is checked.
 - `docs/DECISIONS.md`: append a short entry for each non-obvious design decision.
 - `TESTING.md`: the manual test script and air-cut procedure.
 - `THIRD_PARTY.md`: any new vendored code and its licence.

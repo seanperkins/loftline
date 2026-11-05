@@ -2,6 +2,7 @@ import CADCore
 import CAMCore
 import Combine
 import Foundation
+import LoftLineKit
 
 /// One recoverable snapshot of an unsaved document.
 struct RecoveryEntry: Codable, Identifiable, Equatable {

@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Design > Layout > Label Parts…: engraves part numbers / names on parts.
 struct PartLabelsSheet: View {

@@ -3,6 +3,7 @@
 import AppKit
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// CAMCore.RGBColor (QuickDraw also exports an `RGBColor`).
 typealias StockColor = CAMCore.RGBColor

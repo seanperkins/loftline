@@ -2,6 +2,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct PreviewAppearanceTests {
     @Test func hexRoundTrip() {

@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 private let quarter = ToolLibrary.seeded.tools[3]   // 1/4" ball nose
 private let eighth = ToolLibrary.seeded.tools[4]    // 1/8" ball nose

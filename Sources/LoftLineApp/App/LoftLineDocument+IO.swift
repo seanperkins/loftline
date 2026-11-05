@@ -5,6 +5,7 @@ import Foundation
 import PostCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// File-menu actions added by the io workstream (extra formats, templates, print).
 extension LoftLineDocument {

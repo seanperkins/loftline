@@ -1,5 +1,6 @@
 import CADCore
 import SwiftUI
+import LoftLineKit
 
 /// "Images" section of the Design sidebar: one row per tracing image with an editor popover.
 struct PlacedImagesSection: View {

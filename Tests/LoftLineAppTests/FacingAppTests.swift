@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// What the app wraps around a facing: its defaults, millimeter scaling, the job sheet's note and the help topic (issue #20).
 @Suite struct FacingAppTests {

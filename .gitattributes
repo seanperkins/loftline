@@ -1,1 +1,3 @@
-samples/expected/** -text
+# Bytes stay as committed on every platform. A Windows checkout must not turn the fixtures, the goldens or samples/expected into
+# CRLF: the G-code checks compare bytes, and a post's line endings are its own setting.
+* -text

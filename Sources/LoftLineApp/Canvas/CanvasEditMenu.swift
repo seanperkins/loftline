@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 /// Context menu and Edit-menu (responder chain) actions for the canvas.
 extension CanvasNSView {

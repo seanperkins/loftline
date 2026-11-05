@@ -5,6 +5,7 @@ import PostCore
 import SwiftUI
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The Machines editor's park-and-probe section draws with probing on, for each controller.
 @Suite struct MachineProbeRenderTests {

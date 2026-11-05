@@ -2,6 +2,7 @@ import CADCore
 import CAMCore
 import PostCore
 import SwiftUI
+import LoftLineKit
 
 /// Main document window: sidebar (Design/Toolpaths), canvas (2D) or 3D preview, inspector.
 struct ContentView: View {

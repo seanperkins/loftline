@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 /// Dimension tool: clicks build reference dimensions, which are drawn on top of the design.
 extension CanvasNSView {

@@ -2,6 +2,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// A machine can carry its spindle range (#99 item 13): the GRBL notes and export warning ask for a copy's Max RPM to match $30.
 @Suite struct MachineRPMFieldTests {

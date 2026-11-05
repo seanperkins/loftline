@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import Foundation
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Layout commands (job sheet, sheets) kept out of LoftLineDocument.swift.
 extension LoftLineDocument {

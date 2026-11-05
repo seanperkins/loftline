@@ -1,6 +1,7 @@
 // Standard view directions and camera framing for the 3D preview. Owned by preview.
 import CADCore
 import Foundation
+import LoftLineKit
 
 /// A standard direction to look at the stock from. Directions are named for where the viewer
 /// stands relative to the machine: "front" is the material's low-Y edge (the operator side).

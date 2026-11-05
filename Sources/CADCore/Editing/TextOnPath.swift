@@ -1,6 +1,8 @@
+import Foundation
+#if canImport(CoreText)
 import CoreGraphics
 import CoreText
-import Foundation
+#endif
 
 /// One laid-out character: outlines with its baseline origin at x = `x`, y = 0.
 public struct TextGlyph: Sendable {
@@ -14,6 +16,7 @@ extension TextOutliner {
     public func glyphs(for text: String, fontName: String, size: Double, letterSpacing: Double = 0) throws -> [TextGlyph] {
         guard size > 0 else { return [] }
         if StrokeFont.isStrokeFont(fontName) { return StrokeFont.glyphs(for: text, size: size, letterSpacing: letterSpacing) }
+#if canImport(CoreText)
         let font = try Self.font(named: fontName, capHeight: size)
         var attrs: [NSAttributedString.Key: Any] = [NSAttributedString.Key(kCTFontAttributeName as String): font]
         if letterSpacing != 0 { attrs[NSAttributedString.Key(kCTKernAttributeName as String)] = letterSpacing }
@@ -38,6 +41,15 @@ extension TextOutliner {
             }
         }
         return out
+#else
+        let (font, em) = try Self.font(named: fontName, capHeight: size)
+        let line = text.replacingOccurrences(of: "\n", with: " ")
+        return font.layout(line).enumerated().map { k, g in
+            let x = g.x * em + letterSpacing * Double(k)
+            return TextGlyph(paths: PathGeometry.normalizedOrientation(font.paths(glyph: g.glyph, em: em, origin: Vec2(x, 0))),
+                             x: x, advance: g.advance * em + letterSpacing)
+        }
+#endif
     }
 }
 

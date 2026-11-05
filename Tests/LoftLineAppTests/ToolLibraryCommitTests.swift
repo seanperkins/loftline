@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// A Tool Database edit is one write of tools.json, and only an edit that can change a toolpath
 /// makes open documents' toolpaths stale.

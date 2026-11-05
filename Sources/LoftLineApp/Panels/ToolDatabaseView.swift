@@ -3,6 +3,7 @@ import CAMCore
 import PostCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Tool Database window: list of tools + editor. A number or choice saves to tools.json as it is made;
 /// text saves when you leave the field. The editor saves once more when it closes, so switching tools

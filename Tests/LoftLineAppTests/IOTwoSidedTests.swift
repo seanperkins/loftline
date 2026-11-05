@@ -4,6 +4,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct IOTwoSidedTests {
     @Test func mirrorAndPerSideZeroInTheModel() throws {

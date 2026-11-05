@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Every setting in the toolpath forms, Job Setup and the Tool Database has a one-line tooltip:
 /// either a `FieldHelp` entry for its label or an inline `help:` on the call. Beginners on the

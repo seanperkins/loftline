@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import SwiftUI
+import LoftLineKit
 
 /// The update window's content for one `UpdatePresentation`; knows nothing about the controller.
 struct UpdateSheetContent: View {

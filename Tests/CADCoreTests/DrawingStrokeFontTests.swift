@@ -17,7 +17,7 @@ import Testing
     @Test func theNameKerfStoredIsStillTheStrokeFont() {
         #expect(StrokeFont.isStrokeFont("LoftLine Single Line"))
         #expect(StrokeFont.isStrokeFont("Kerf Single Line"))
-        #expect(!StrokeFont.isStrokeFont("Helvetica"))
+        #expect(!StrokeFont.isStrokeFont(testFont))
     }
 
     @Test func capHeightAndOpenStrokes() {

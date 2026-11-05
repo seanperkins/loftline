@@ -4,6 +4,7 @@ import SwiftUI
 import Testing
 import UpdateCore
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The update window is a pure function of the controller's state (`UpdatePresentation`), so every state is checked without
 /// a window; one hosting pass per state catches layout crashes.

@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 /// Guides: drag from a ruler to add, drag a guide to move it, drag it back onto a ruler to
 /// delete it. Points snap to guides and line up with existing nodes.

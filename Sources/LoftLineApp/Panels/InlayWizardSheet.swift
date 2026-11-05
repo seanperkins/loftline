@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Inlay wizard: one set of settings → a female pocket and a mirrored male plug toolpath.
 struct InlayWizardSheet: View {

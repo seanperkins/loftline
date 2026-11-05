@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Every place a file becomes a project that can be edited or posted refuses a post or machine copy it cannot read,
 /// with the message, and never opens it with the installed post instead.

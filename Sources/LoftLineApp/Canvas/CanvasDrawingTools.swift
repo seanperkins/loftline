@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 /// Per-canvas state of the drawing extras.
 struct CanvasDrawingState {

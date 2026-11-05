@@ -1,4 +1,5 @@
 import SwiftUI
+import LoftLineKit
 
 /// Line breaking for `WrappingHStack`, kept apart from the layout so it can be tested.
 enum WrapLines {

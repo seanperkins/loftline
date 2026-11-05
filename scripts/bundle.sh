@@ -112,7 +112,7 @@ if [[ -z "${LOFTLINE_NO_QL_EXTENSION:-}" ]]; then
   swiftc $OPT -module-name LoftLineThumbnail -parse-as-library -application-extension \
     -target "$(uname -m)-apple-macos14.0" -Xlinker -e -Xlinker _NSExtensionMain \
     -framework QuickLookThumbnailing \
-    Extensions/QuickLookThumbnail/ThumbnailProvider.swift Sources/LoftLineApp/Model/QuickLookThumbnailData.swift \
+    Extensions/QuickLookThumbnail/ThumbnailProvider.swift Sources/LoftLineKit/QuickLookThumbnailData.swift \
     -o $APPEX/Contents/MacOS/LoftLineThumbnail
   sed -e "s/__SHORT_VERSION__/${SHORT_VERSION}/" -e "s/__VERSION__/${BUILD_VERSION}/" \
     Extensions/QuickLookThumbnail/Info.plist > $APPEX/Contents/Info.plist

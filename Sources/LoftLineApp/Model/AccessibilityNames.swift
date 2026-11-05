@@ -1,5 +1,6 @@
 import CADCore
 import Foundation
+import LoftLineKit
 
 /// What VoiceOver says for controls that are drawn as a symbol or carry an arrow glyph in their title.
 /// Pure, so the wording can be tested.

@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Design > Layout > Production Plates…: repeats the selected design once per spreadsheet row,
 /// filling `{Field}` placeholders in its text, and adds the copies to the template's toolpaths.

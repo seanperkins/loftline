@@ -1,6 +1,7 @@
 import CADCore
 import PostCore
 import SwiftUI
+import LoftLineKit
 
 /// Post picker listing the machine's own posts first, then any others.
 struct PostProfilePicker: View {

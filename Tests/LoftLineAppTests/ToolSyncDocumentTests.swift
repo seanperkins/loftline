@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The document carries the tools its operations use, follows Tool Database edits into them, and posts with them.
 @Suite struct ToolSyncDocumentTests {

@@ -2,6 +2,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 struct TimeEstimatePopover: View {
     @ObservedObject var store: TimeEstimateStore

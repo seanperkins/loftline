@@ -1,4 +1,5 @@
 import SwiftUI
+import LoftLineKit
 
 /// Shown by the export/check sheets while stale toolpaths are recalculated in the background.
 struct CalculationProgressView: View {

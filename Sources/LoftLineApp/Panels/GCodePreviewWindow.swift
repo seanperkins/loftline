@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Toolpaths ▸ Preview G-code File…: simulates a .tap/.nc file from another job (or another
 /// program) on this job's stock, in its own window. Preview only (toolpaths-2d round 2).

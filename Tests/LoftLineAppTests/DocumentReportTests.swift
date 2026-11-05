@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// An alert cannot show over a sheet, so a report made while one is up waits for it to close.
 @MainActor

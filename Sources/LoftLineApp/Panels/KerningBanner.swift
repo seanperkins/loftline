@@ -1,4 +1,5 @@
 import SwiftUI
+import LoftLineKit
 
 /// Floating bar over the canvas while letters of a text object are being kerned.
 struct KerningBanner: View {

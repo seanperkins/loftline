@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 /// Layout overlays on the design canvas: clamp / keep-out zones and the outlines of nesting
 /// sheets parked beside the material.

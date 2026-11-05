@@ -2,6 +2,7 @@
 import CADCore
 import CAMCore
 import Foundation
+import LoftLineKit
 
 enum PreviewSamples {
     /// 12 x 8 x 0.75 in job with a raster pocket, a circular profile, a V-bit zigzag and a

@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The Tool Database editor commits each edit; switching tools must not lose one.
 @MainActor

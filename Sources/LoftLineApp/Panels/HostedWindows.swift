@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import LoftLineKit
 
 /// App-level utility windows (Help, Welcome) hosted in plain NSWindows, so they can be opened
 /// from anywhere — menus, sheets, the app delegate at launch — without a SwiftUI scene context.

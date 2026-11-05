@@ -1290,3 +1290,20 @@
 - **missing-machine — a chosen machine that is neither installed nor carried is reported, and Job Setup keeps its id.** (Audit #18.) The first installed machine that lists the post silently stood in for it; Job Setup showed the stand-in and Apply saved its id over the project's choice. `ProjectPost.issues` now warns, naming the missing id and the stand-in. Job Setup keeps the project's id as the selection, listed as "<id> (not installed, using <stand-in>)", while the stand-in's bed still judges the fit, so Apply keeps the id unless another machine is picked. Projects with no chosen machine behave as before.
 - **show-vectors-one-owner — the stored preference is the only "show vectors" flag in 3D.** (Audit #20.) The model kept its own copy, read once at init, beside the host's `@AppStorage`, so two windows in 3D disagreed; entering Select or Draw wrote the preference on; and Measure could stay on with its toggle disabled. `SimulationPreviewModel.showVectors` now reads and writes the stored preference directly, and each view refreshes its overlay when it changes (`preferenceChanged`). Select and Draw show the vectors (`vectorsShown`) without touching the preference; the host always passes the vectors so they are there to show. With no toolpaths (the toolbar disabled) the tool ends (`toolpathsChanged`). Harness scenario `preview-draw-vectors`.
 - **attach-window — a document window attaches in one step.** (Audit #26.) The undo manager, the file URL and the crash-recovery registration were set by three separate `onAppear`s, so an edit before the first ran was not undoable and a recovery copy could be written before the URL was known. `LoftLineDocument.attachWindow(undoManager:fileURL:)` sets the undo manager and URL, then registers with `RecoveryCoordinator`, from one `onAppear`. The `onChange` handlers that follow later changes stay as they were.
+
+- **windows-linux — The app runs on Windows and Linux as a Tauri front end over the Swift core.** Rewriting the CAM core would mean re-proving every G-code
+  rule. The Swift cores port with a few changes, so all G-code still comes from them: `loftline-core` takes JSON on standard input, and `desktop/` holds no CAM.
+  A web UI was chosen over egui to match the Mac app's look, and because it can be screenshotted headless. The Mac app stays native and unchanged. Differences are
+  listed in `docs/PLATFORMS.md`, not here.
+- **fma-parity — x86-64 builds the C++ geometry code with `-mfma`.** Apple Silicon's compiler fuses `a*b+c` into one rounded step and x86-64's doesn't by default.
+  That tiny difference changed which medial-axis branch a V-carve took, by up to 0.007 in. Tested: arm64 with contraction off gives exactly what x86-64 gives, and
+  x86-64 with `-mfma` gives exactly what the Mac gives. The alternative, contraction off everywhere, would have changed the Mac's committed G-code. Cost: x86-64
+  needs a CPU from 2013 or later.
+- **portable-services — stb, not FreeType and HarfBuzz; no swift-crypto.** The plan named FreeType, HarfBuzz and swift-crypto. stb is two headers with no build system,
+  and off the Mac there's no shaping need that justifies more. swift-crypto's RSA verifies only its own digest types, which can't be made from the hex digest the
+  update feed carries, so verification is written out (SHA-256 and RSA PKCS#1 v1.5, public key only) and tested against real OpenSSL signatures. No package dependency
+  was added on any platform.
+- **portable-pdf — A PDF reader in Swift off the Mac.** It compiles on the Mac too, where a test holds it to Core Graphics' result on a file Core Graphics wrote. The Mac
+  app keeps Core Graphics.
+- **kit-public — LoftLineKit's API is public by a mechanical pass.** A script marked the moved declarations `public`, and explicit initializers were added only where the app
+  needed them. Nothing changed behaviour; the Mac's 2,279 tests stayed green through the move.

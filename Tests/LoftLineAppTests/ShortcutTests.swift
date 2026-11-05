@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Keyboard shortcuts, read from the source so a new binding cannot quietly clash.
 @Suite struct ShortcutTests {

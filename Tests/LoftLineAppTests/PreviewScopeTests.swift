@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct PreviewScopeTests {
     /// Profile on shape 0, Pocket on shape 1, Profile on shape 1 (disabled); all calculated.

@@ -1,4 +1,5 @@
 import SwiftUI
+import LoftLineKit
 
 /// A folder save held until the user agrees to replace the files already there.
 struct ReplaceRequest {

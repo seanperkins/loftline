@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import LoftLineKit
 
 final class LoftLineAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {

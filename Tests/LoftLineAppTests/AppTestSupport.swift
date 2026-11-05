@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import Foundation
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 enum AppTestSupport {
     static func tempDir() -> URL {

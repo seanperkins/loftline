@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Trace Bitmap: pick an image, threshold it into regions and add their outlines as vectors.
 struct TraceBitmapSheet: View {

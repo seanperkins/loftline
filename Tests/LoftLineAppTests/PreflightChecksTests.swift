@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Warnings for mistakes a valid program hides: loose parts, shared tool numbers, model depth,
 /// tool names that disagree with their diameter.

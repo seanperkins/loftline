@@ -2,6 +2,7 @@ import AppKit
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Hosts the 3D material-removal simulation (Sources/LoftLineApp/Preview/) for the document's
 /// calculated toolpaths (all, visible or selected; see `PreviewScope`). The 2D overlay is drawn

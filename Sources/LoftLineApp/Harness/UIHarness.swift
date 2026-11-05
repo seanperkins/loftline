@@ -3,6 +3,7 @@ import AppKit
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// A scripted, headless-friendly UI driver for debug builds.
 ///
