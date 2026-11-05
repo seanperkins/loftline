@@ -19,6 +19,9 @@ private let glyphGroups: [[Character]] = ["ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefg
 #if canImport(CoreText)
 private let fonts = ["Times New Roman", "Helvetica", "Snell Roundhand", "Avenir Next Condensed", "Impact"]   // serif, sans, script, condensed, display
 private let twoFonts = ["Times New Roman", "Helvetica"]
+#elseif os(Windows)
+private let fonts = ["Times New Roman", "Arial", "Courier New"]
+private let twoFonts = ["Times New Roman", "Arial"]
 #else
 private let fonts = ["Liberation Serif", "Liberation Sans", "Liberation Mono"]
 private let twoFonts = ["Liberation Serif", "Liberation Sans"]
