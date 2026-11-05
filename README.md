@@ -143,8 +143,8 @@ LoftLine looks for a newer release when it starts and then once a day. A found u
 
 ## Windows and Linux
 
-A desktop app for Windows and Linux lives in `desktop/`, on the same Swift core, and is in progress. On Linux the same sample programs post byte for byte
-with the Mac's. **Windows hasn't been built yet.** [docs/PLATFORMS.md](docs/PLATFORMS.md) lists what doesn't match the Mac app and how far each platform is checked. Don't cut with
+A desktop app for Windows and Linux lives in `desktop/`, on the same Swift core, and is in progress. On Linux and Windows the same sample programs post byte for byte
+with the Mac's. **The Windows app has only been built, never opened.** [docs/PLATFORMS.md](docs/PLATFORMS.md) lists what doesn't match the Mac app and how far each platform is checked. Don't cut with
 either until its samples check has passed and you've done an air cut.
 
 ## Build and run

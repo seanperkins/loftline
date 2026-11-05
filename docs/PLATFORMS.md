@@ -5,19 +5,20 @@ Plan and rulings: `docs/specs/2026-11-03-windows-linux-design.md`. Status as of 
 
 ## How far each platform is checked
 
-| Check | Mac | Linux arm64 | Linux x86-64 | Windows |
+| Check | Mac | Linux arm64 | Linux x86-64 | Windows x86-64 |
 |---|---|---|---|---|
-| Cores and CLI build | yes | yes | yes | **not run** |
-| Test suites (cores, kit, updates) | yes | yes | yes (under emulation) | **not run** |
-| 48 sample programs byte for byte (`samples/expected`) | yes | yes | yes (under emulation) | **not run** |
-| Desktop app builds and opens a project | native app | yes, in Docker under Xvfb | not run | **not run** |
-| Desktop end-to-end test (`desktop/tools/e2e.mjs`) | yes, in Chromium | yes, in Chromium | not run | **not run** |
+| Cores and CLI build | yes | yes | yes | yes, in CI |
+| Test suites (cores, kit, updates) | yes | yes | yes | yes, in CI, without the update signature tests |
+| 48 sample programs byte for byte (`samples/expected`) | yes | yes | yes | yes, in CI |
+| Desktop app builds | native app | yes | yes, in CI | yes, in CI |
+| Desktop app opens a project | native app | yes, in Docker under Xvfb | **not run** | **not run** |
+| Desktop end-to-end test (`desktop/tools/e2e.mjs`) | yes, in Chromium | yes, in Chromium | **not run** | **not run** |
 
 **Save All on Windows works by path.** The Mac and Linux hold the folder open while they save, so a folder swapped mid-save can't redirect the files. Windows remembers which folder it opened and checks before every file operation, so a swap stops the save and the swapped-in folder is left alone. A swap in the instant between a check and its operation isn't caught, so save to folders you control.
 
-**Windows has never been compiled.** There's no Windows machine or VM here, and its CI job (`.github/workflows/platforms.yml`) needs the
-branch pushed. Expect fixes after the first run. In particular `Sources/LoftLineKit/FileSetWindows.swift` is unproven, and MSVC's C++ library
-may sort equal elements differently from the others, so the samples check there is the one that matters.
+**Windows has only run in CI.** There's no Windows machine or VM here, so `.github/workflows/platforms.yml` on GitHub's `windows-2022` runner is the
+whole of the evidence. The desktop installer is built there but has never been opened or installed. The update signature tests are left out on Windows
+because they run zsh scripts and OpenSSL, so its own SHA-256 and RSA code is unchecked there; in-app update isn't wired up, so nothing relies on it yet.
 
 **Don't cut with a Windows or Linux build until** its samples check has passed on that machine, and the air cut in `TESTING.md` is done.
 
@@ -25,7 +26,7 @@ may sort equal elements differently from the others, so the samples check there 
 
 | Item | Status |
 |---|---|
-| Program bytes | Identical in all 48 samples on Linux arm64 and x86-64. |
+| Program bytes | Identical in all 48 samples on Linux arm64, Linux x86-64 and Windows x86-64. Windows on Arm hasn't been checked. |
 | x86-64 CPUs | Need FMA (Intel Haswell 2013, AMD Piledriver 2012, or later). Without it the geometry code crashes on an illegal instruction. |
 | Why x86-64 needs `-mfma` | Apple Silicon fuses a multiply and an add in the C++ geometry code; x86-64 doesn't unless told to. Without it the sign's V-carve differed by up to 0.007 in. |
 | Projects that hold live text | Stored outlines are used as they are, so opening and posting never changes the cut. Editing the text re-outlines it with a font on this computer. |
