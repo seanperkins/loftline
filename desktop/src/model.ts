@@ -6,8 +6,8 @@ export type Segment =
   | { arc: { to: Vec2; center: Vec2; clockwise: boolean } };
 export interface Path { start: Vec2; segments: Segment[]; isClosed: boolean }
 export interface Shape { id: string; name: string; layerID: string; paths: Path[]; isLocked?: boolean; groupID?: string; text?: TextSpec; origin?: unknown }
-export interface TextSpec { string: string; fontName: string; size: number; alignment?: string; lineSpacing?: number; letterSpacing?: number; transform?: unknown }
-export interface Layer { id: string; name: string; colorHex: string; isVisible: boolean; isLocked: boolean }
+export interface TextSpec { string: string; fontName: string; size: number; alignment: string; lineSpacing: number; letterSpacing: number; transform: unknown }
+export interface Layer { id: string; name: string; colorHex: string; isVisible: boolean; isLocked: boolean; side?: string }
 export interface Job {
   width: number; height: number; thickness: number; xyOrigin: string; zZero: string; safeZ: number; homeZ: number; home: Vec2; [key: string]: unknown;
 }
@@ -26,11 +26,12 @@ export interface OperationStatus {
 export interface Issue { severity: string; line?: number; message: string }
 export interface State {
   project: Project; path?: string; title: string; isDirty: boolean; undoAction?: string; redoAction?: string; designRevision: number;
-  post: { id: string; name: string; fileExtension: string }; machine?: string; statuses: OperationStatus[]; issues: Issue[];
+  post: { id: string; name: string; fileExtension: string }; machine?: string; side: string; coverage?: string; statuses: OperationStatus[]; issues: Issue[];
   job: { hasEstimate: boolean; totalSeconds: number; duration: string; toolLoads: number; toolChanges: number; sequence: string[] };
 }
 export interface PostRow { id: string; name: string; fileExtension: string; units: string }
 export interface Machine { id: string; name: string; postIDs: string[]; notes?: string }
+export interface JobForm { machineID?: string; machineChoices: { id: string; title: string }[]; postID?: string }
 export interface Posted {
   text?: string; errorMessage?: string; issues: Issue[]; missingSteps: Issue[]; hasErrors: boolean; toolpathCount: number; fileName: string; post: string; written?: string;
 }

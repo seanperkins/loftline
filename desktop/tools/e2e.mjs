@@ -2,7 +2,8 @@
 // program it writes is byte for byte the one the command line writes. Run tools/serve.mjs first.
 // Usage: node tools/e2e.mjs <loftline-cli> [base url]
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -97,6 +98,128 @@ const post = (await state()).post.id;
 execFileSync(cli, ["export", sample, "--post", post, "--builtin-only", "--quiet", "--out", out]);
 const cliProgram = readFileSync(join(out, readdirSync(out)[0]));
 check(readFileSync(written).equals(cliProgram), "the UI's program is the command line's, byte for byte");
+
+const wait = Number(process.env.E2E_WAIT ?? 120000);
+const row = (label) => page.locator(`label.row:has(.row-label:text-is("${label}"))`).locator("select, input").first();
+const until = (f, arg) => page.waitForFunction(f, arg, { timeout: wait });
+const applyJob = async () => { await page.getByRole("button", { name: "Apply" }).click(); await until(() => !document.querySelector(".sheet")); };
+const sampleJSON = () => JSON.parse(readFileSync(sample, "utf8"));
+const openEdited = async (name, change) => {
+  const object = sampleJSON();
+  change(object);
+  const file = join(work, name);
+  writeFileSync(file, JSON.stringify(object));
+  await page.evaluate((path) => window.loftline.apply("open", { path }), file);
+  await until((n) => window.loftline.app.state.path?.endsWith(n), name);
+};
+// One group of checks: a failure is reported and the next group still runs.
+const section = async (name, body) => {
+  try {
+    await body();
+  } catch (e) {
+    check(false, `${name}: ${e.message.split("\n")[0]}`);
+    await page.evaluate(() => { document.querySelector(".sheet-host")?.replaceChildren(); document.querySelector(".sheet-host")?.classList.remove("open"); document.body.click(); });
+  }
+};
+
+// The text tool: what the sheet sends is what the core's decoder takes.
+await section("text tool", async () => {
+  await page.evaluate(() => window.loftline.apply("new"));
+  await page.locator('[data-tool="text"]').click();
+  await page.mouse.click(box.x + 500, box.y + 300);
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await until(() => window.loftline.app.state.project.document.shapes[0]?.text);
+  check(!(await page.locator(".alert-text").count()), "the text tool makes text");
+});
+
+// V-carve's pass limit reaches the field the toolpath reads.
+await section("V-carve pass depth", async () => {
+  await menu("Edit", /^Select All/);
+  await page.getByRole("tab", { name: "Toolpaths" }).click();
+  await page.getByLabel("New Toolpath").selectOption("vcarve");
+  await until(() => window.loftline.app.state.project.operations.length === 1);
+  await row("Max pass depth").fill("0.05");
+  await row("Max pass depth").blur();
+  await until(() => window.loftline.app.state.undoAction === "Edit Toolpath");
+  const vcarve = (await state()).project.operations[0].vcarve._0.params;
+  check(vcarve.passDepth === 0.05, "V-carve's Max pass depth sets passDepth");
+  check(await row("Max pass depth").inputValue() === "0.05", "and shows it");
+});
+
+// Job Setup: Z zero on the spoilboard, and a units switch converts what the form doesn't show.
+await section("Job Setup", async () => {
+  await menu("Job", /^Job Setup/);
+  await row("Z zero").selectOption("spoilboard");
+  await applyJob();
+  check((await state()).project.document.job.zZero === "spoilboard", "Z zero on the spoilboard");
+  await page.evaluate(() => {
+    const d = window.loftline.app.state.project.document;
+    return window.loftline.apply("setJob", { units: d.units, gridSpacing: d.gridSpacing, job: { ...d.job, zZero: "materialTop", datumOffset: { x: 0.5, y: 0.25 }, touchOffSpot: { x: 1, y: 2 }, plungeGap: 0.1 } });
+  });
+  const inInches = (await state()).project.document.job;
+  await menu("Job", /^Job Setup/);
+  await row("Units").selectOption("millimeter");
+  await until((w) => [...document.querySelectorAll(".sheet input.number")].some((i) => Number(i.value) === w), inInches.width * 25.4);
+  await applyJob();
+  const inMM = (await state()).project.document;
+  check(inMM.units === "millimeter" && inMM.job.width === inInches.width * 25.4, "the units switch converts the material");
+  check(inMM.job.datumOffset.x === 12.7 && inMM.job.touchOffSpot.y === 50.8 && Math.abs(inMM.job.plungeGap - 2.54) < 1e-9, "and the datum offset, touch-off spot and plunge gap");
+});
+
+// A post only the project has: posted from its copy, and named in the pickers.
+await section("carried post", async () => {
+  await openEdited("carried.loftline", (o) => { o.postProfileID = "carried-post"; o.postSnapshot.id = "carried-post"; o.postSnapshot.name = "Carried"; });
+  await menu("File", /^Export G-code/);
+  await until(() => document.querySelector(".program")?.textContent.length > 1000);
+  check(await row("Post processor").inputValue() === "carried-post", "Export G-code names the project's own post");
+  check(!(await page.locator(".sheet .error-text").count()), "and posts with it");
+  await page.getByRole("button", { name: "Close" }).click();
+  await menu("Toolpaths", /^Save All/);
+  await until(() => document.querySelector(".sheet table tbody tr"));
+  check(await row("Post processor").inputValue() === "carried-post", "Save All names it too");
+  check(!(await page.locator(".sheet .error-text").count()), "and posts with it");
+  await page.getByRole("button", { name: "Close" }).click();
+});
+
+// A machine that isn't installed stays the project's.
+await section("missing machine", async () => {
+  await openEdited("machine.loftline", (o) => { o.machineID = "gone"; delete o.machineSnapshot; delete o.machineInferredFor; });
+  await menu("Job", /^Job Setup/);
+  await until(() => [...document.querySelectorAll(".sheet select option")].some((o) => o.value === "gone"));
+  check(await row("Machine").inputValue() === "gone", "Job Setup shows the project's own machine");
+  await page.getByRole("button", { name: "Cancel" }).click();
+});
+
+// A two-sided job: the side on show is what posts, and the window says so.
+await section("two-sided job", async () => {
+  await page.evaluate((path) => window.loftline.apply("open", { path }), sample);
+  await until(() => window.loftline.app.state.project.operations.length === 4);
+  await page.evaluate(() => {
+    const d = window.loftline.app.state.project.document;
+    return window.loftline.apply("setJob", { units: d.units, gridSpacing: d.gridSpacing, job: { ...d.job, twoSided: { flip: "leftRight" } } });
+  });
+  check((await page.locator(".status-bar").textContent()).includes("Top side"), "the status bar says which side");
+  await menu("View", /^Show Bottom Side/);
+  await until(() => window.loftline.app.state.side === "bottom");
+  check((await page.locator(".status-bar").textContent()).includes("Bottom side"), "Show Bottom Side");
+  await menu("File", /^Export G-code/);
+  await until(() => document.querySelector(".sheet .coverage"));
+  check((await page.locator(".sheet .coverage").textContent()).includes("Bottom side"), "Export G-code says what the program covers");
+  await page.getByRole("button", { name: "Close" }).click();
+});
+
+// The test server is this computer's only: another site's page, or another host's name, can't reach the core.
+await section("test server", async () => {
+  const probe = (headers) => new Promise((resolve, reject) => {
+    const u = new URL(base);
+    const r = request({ host: u.hostname, port: u.port, path: "/core", method: "POST", headers }, (res) => { res.resume(); resolve(res.statusCode); });
+    r.on("error", reject);
+    r.end('{"id":1,"method":"state"}');
+  });
+  check(await probe({}) === 200, "the test server answers this computer");
+  check(await probe({ origin: "http://evil.example" }) === 403, "and refuses another site's page");
+  check(await probe({ host: "evil.example" }) === 403, "and another host's name");
+});
 
 // Help comes from the core, and a bad open is shown, not swallowed.
 await page.evaluate(() => window.loftline.sheets.openHelp());

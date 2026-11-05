@@ -2,7 +2,7 @@ import { message as nativeMessage, open as nativeOpen, save as nativeSave } from
 import { call, inShell } from "./core";
 import { h, replace } from "./dom";
 import type { Child } from "./dom";
-import type { Issue, Job, Machine, Operation, Posted, PostRow, Tool } from "./model";
+import type { Issue, Job, JobForm, Machine, Operation, Posted, PostRow, Tool } from "./model";
 import { kindTitles, opBody, unitLabel } from "./model";
 import { app, apply, busy, doc, project, refresh, setErrorHandler } from "./state";
 import { numberRow, selectRow } from "./inspector";
@@ -91,6 +91,16 @@ export function askNumbers(title: string, fields: Field[], flag?: { label: strin
   });
 }
 
+/** The post pickers' entries: the installed posts, and the project's own when only the file has it, so the selection still shows. */
+function postChoices(posts: PostRow[]): [string, string][] {
+  const own = app.state!.post;
+  const rows = posts.map((p): [string, string] => [p.id, p.name]);
+  return rows.some(([id]) => id === own.id) ? rows : [...rows, [own.id, `${own.name} (from this project)`]];
+}
+
+/** What a program covers when it isn't the whole job: the sheet and side on show. */
+const coverageNote = () => app.state?.coverage ? h("p", { class: "small coverage" }, `This covers only: ${app.state.coverage}.`) : null;
+
 // MARK: Save All
 
 interface SaveAllFile { fileName: string; title: string; posted: boolean; issues: Issue[] }
@@ -138,8 +148,9 @@ export async function openSaveAll() {
   present("Save All Toolpaths", [
     h("div", { class: "form-grid" },
       selectRow("Files", mode, [["oneFile", "One file"], ["filePerToolpath", "One file per toolpath"], ["filePerTool", "One file per tool"]], (v) => { mode = v; void plan(); }),
-      selectRow("Post processor", postID, posts.map((p) => [p.id, p.name]), (v) => { postID = v; void plan(); }),
+      selectRow("Post processor", postID, postChoices(posts), (v) => { postID = v; void plan(); }),
       h("label", { class: "row toggle" }, h("input", { type: "checkbox", onchange: (e: Event) => { groupByTool = (e.target as HTMLInputElement).checked; void plan(); } }), "Group by tool (fewest tool changes)")),
+    coverageNote(),
     list,
   ], [h("button", { class: "button", onclick: close }, "Close"), save], true);
   void plan();
@@ -236,9 +247,9 @@ export async function openExport(operationID: string | null) {
   present(op ? `Export G-code: ${opBody(op).setup.name}` : "Export G-code",
     [
       h("div", { class: "form-grid" },
-        selectRow("Post processor", postID, posts.map((p) => [p.id, p.name]), (v) => { postID = v; void post(); }),
+        selectRow("Post processor", postID, postChoices(posts), (v) => { postID = v; void post(); }),
         h("label", { class: "row toggle" }, h("input", { type: "checkbox", onchange: (e: Event) => { groupByTool = (e.target as HTMLInputElement).checked; void post(); } }), "Group by tool (fewest tool changes)")),
-      summary, text,
+      coverageNote(), summary, text,
     ],
     [h("button", { class: "button", onclick: close }, "Close"), force, save], true);
   void post();
@@ -270,12 +281,14 @@ export async function openValidation() {
 // MARK: Job Setup
 
 export async function openJobSetup() {
-  const [machines, posts] = await Promise.all([call<Machine[]>("machines"), call<PostRow[]>("posts")]);
+  const [machines, posts, form] = await Promise.all([call<Machine[]>("machines"), call<PostRow[]>("posts"), call<JobForm>("jobForm")]);
   const d = doc();
-  const job: Job = { ...d.job };
+  let job: Job = { ...d.job };
   let units: string = d.units, gridSpacing = d.gridSpacing, name = d.name;
-  let machineID = machines.find((m) => m.name === app.state!.machine)?.id ?? "";
+  let machineID = form.machineID ?? "";
   let postID = app.state!.post.id;
+  // The project's own machine, even one not installed here; no machine at all is a choice too, since Apply then leaves it unset.
+  const machineChoices: [string, string][] = [...(form.machineID ? [] : [["", "Custom (post limits)"] as [string, string]]), ...form.machineChoices.map((m): [string, string] => [m.id, m.title])];
   const body = h("div", {});
   const render = () => {
     const u = unitLabel(units);
@@ -283,23 +296,24 @@ export async function openJobSetup() {
       h("div", { class: "form-grid" },
         h("label", { class: "row" }, h("span", { class: "row-label" }, "Job name"), h("input", { class: "text", value: name, onchange: (e: Event) => { name = (e.target as HTMLInputElement).value; } })),
         selectRow("Units", units, [["inch", "Inches"], ["millimeter", "Millimeters"]], (v) => {
-          const factor = v === units ? 1 : v === "millimeter" ? 25.4 : 1 / 25.4;
-          for (const k of ["width", "height", "thickness", "safeZ", "homeZ"] as const) job[k] = (job[k] as number) * factor;
-          job.home = { x: job.home.x * factor, y: job.home.y * factor };
-          gridSpacing *= factor;
-          units = v;
-          render();
+          // The core converts: it knows every length a job holds, shown here or not.
+          void call<{ job: Job; gridSpacing: number }>("convertJob", { units, job, gridSpacing, to: v }).then((r) => {
+            job = r.job;
+            gridSpacing = r.gridSpacing;
+            units = v;
+            render();
+          }, (e) => openAlert("Job Setup", e instanceof Error ? e.message : String(e)));
         }),
         numberRow("Width", job.width, u, (v) => { job.width = v; }, { min: 0 }),
         numberRow("Height", job.height, u, (v) => { job.height = v; }, { min: 0 }),
         numberRow("Thickness", job.thickness, u, (v) => { job.thickness = v; }, { min: 0 }),
-        selectRow("Z zero", job.zZero, [["materialTop", "Material surface"], ["machineBed", "Machine bed (spoilboard)"]], (v) => { job.zZero = v; }),
+        selectRow("Z zero", job.zZero, [["materialTop", "Material surface"], ["spoilboard", "Machine bed (spoilboard)"]], (v) => { job.zZero = v; }),
         selectRow("XY origin", job.xyOrigin, [["lowerLeft", "Lower left"], ["lowerRight", "Lower right"], ["upperLeft", "Upper left"], ["upperRight", "Upper right"], ["center", "Center"]], (v) => { job.xyOrigin = v; }),
         numberRow("Safe Z", job.safeZ, u, (v) => { job.safeZ = v; }),
         numberRow("Home Z", job.homeZ, u, (v) => { job.homeZ = v; }),
         numberRow("Grid spacing", gridSpacing, u, (v) => { gridSpacing = v; }, { min: 0 }),
-        selectRow("Machine", machineID, machines.map((m) => [m.id, m.name]), (v) => { machineID = v; const m = machines.find((x) => x.id === v); if (m && !m.postIDs.includes(postID) && m.postIDs[0]) { postID = m.postIDs[0]; render(); } }),
-        selectRow("Post processor", postID, posts.map((p) => [p.id, p.name]), (v) => { postID = v; })));
+        selectRow("Machine", machineID, machineChoices, (v) => { machineID = v; const m = machines.find((x) => x.id === v); if (m && !m.postIDs.includes(postID) && m.postIDs[0]) { postID = m.postIDs[0]; render(); } }),
+        selectRow("Post processor", postID, postChoices(posts), (v) => { postID = v; })));
   };
   render();
   present("Job Setup", body, [
@@ -359,7 +373,7 @@ export function openText(at: { x: number; y: number }, defaultFont: string, font
   ], [
     h("button", { class: "button", onclick: close }, "Cancel"),
     h("button", { class: "button primary", onclick: async () => {
-      const ok = await apply("addText", { spec: { string: text.value, fontName: font, size, transform: { a: 1, b: 0, c: 0, d: 1, tx: at.x, ty: at.y } } });
+      const ok = await apply("addText", { spec: { string: text.value, fontName: font, size, alignment: "left", lineSpacing: 1, letterSpacing: 0, transform: { a: 1, b: 0, c: 0, d: 1, tx: at.x, ty: at.y } } });
       if (ok) { app.tool = "select"; close(); refresh(); }
     } }, "Add"),
   ]);

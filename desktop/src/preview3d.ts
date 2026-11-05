@@ -189,7 +189,7 @@ export function createPreview(): HTMLElement {
 
   subscribe(() => {
     if (!app.state || app.center === "2d") return;
-    const nextSign = JSON.stringify([app.state.designRevision, app.state.statuses.map((s) => [s.id, s.isCalculated, s.isStale, s.moveCount]), app.state.project.operations.map((o) => opBody(o).setup.isEnabled)]);
+    const nextSign = JSON.stringify([app.state.designRevision, app.state.side, app.state.statuses.map((s) => [s.id, s.isCalculated, s.isStale, s.moveCount]), app.state.project.operations.map((o) => opBody(o).setup.isEnabled)]);
     if (nextSign !== sign || revision < 0) {
       sign = nextSign; revision = app.state.designRevision;
       void restart().catch((e) => showError("Preview", e instanceof Error ? e.message : String(e)));

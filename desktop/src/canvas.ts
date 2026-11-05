@@ -58,7 +58,8 @@ export function createCanvas(onTextTool: (at: Vec2) => void): HTMLElement {
   };
 
   function visibleShapes(): Shape[] {
-    const hidden = new Set(doc().layers.filter((l) => !l.isVisible).map((l) => l.id));
+    const twoSided = !!doc().job.twoSided;
+    const hidden = new Set(doc().layers.filter((l) => !l.isVisible || (twoSided && (l.side ?? "top") !== app.state?.side)).map((l) => l.id));
     return doc().shapes.filter((s) => !hidden.has(s.layerID));
   }
 

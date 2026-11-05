@@ -66,6 +66,9 @@ public final class CoreService {
         var designRevision: Int
         var post: PostSummary
         var machine: String?
+        /// The side on show of a two-sided job, and what a program covers when it isn't the whole job.
+        var side: JobSide
+        var coverage: String?
         var statuses: [OperationStatus]
         var issues: [IssueRow]
         var job: JobTotals
@@ -126,7 +129,7 @@ public final class CoreService {
                      isDirty: s.isDirty, undoAction: s.undoAction, redoAction: s.redoAction, designRevision: s.designRevision,
                      post: PostSummary(id: resolved.post.id, name: resolved.post.name,
                                        fileExtension: GCodeExporter.fileExtension(for: resolved.post)),
-                     machine: resolved.machine?.name, statuses: statuses(),
+                     machine: resolved.machine?.name, side: s.activeSide, coverage: s.coverage, statuses: statuses(),
                      issues: (ProjectPost.issues(for: s.project, profiles: s.profiles, machines: s.machines) + extraIssues).map(Self.row),
                      job: jobTotals())
     }
@@ -314,7 +317,30 @@ public final class CoreService {
             if let n = p.name { form.name = n }
             if let m = p.machineID { form.machineID = m }
             if let post = p.postID { form.postID = post }
+            guard form.problems.isEmpty else { throw CoreFailure(form.problems.joined(separator: " ")) }
             s.perform("Job Setup") { $0 = form.apply(to: $0) }
+            return try reply(id, state())
+
+        // What the Job Setup form shows, and its units switch: the same conversion as the Mac's form, so no length is left behind.
+        case "jobForm":
+            struct Choice: Encodable { var id: String; var title: String }
+            struct Form: Encodable { var machineID: String?; var machineChoices: [Choice]; var postID: String? }
+            let form = JobSetupForm(project: s.project, machines: s.machines, profiles: s.profiles)
+            return try reply(id, Form(machineID: form.machineID, machineChoices: form.machineChoices(installed: s.machines).map { Choice(id: $0.id, title: $0.title) },
+                                      postID: form.postID))
+        case "convertJob":
+            struct P: Decodable { var units: LengthUnit; var job: JobSetup; var gridSpacing: Double; var to: LengthUnit }
+            struct Converted: Encodable { var job: JobSetup; var gridSpacing: Double }
+            let p = try params(line, P.self)
+            var form = JobSetupForm(project: s.project, machines: s.machines, profiles: s.profiles)
+            form.units = p.units
+            form.job = p.job
+            form.gridSpacing = p.gridSpacing
+            form.setUnits(p.to)
+            return try reply(id, Converted(job: form.job, gridSpacing: form.gridSpacing))
+        case "setSide":
+            struct P: Decodable { var side: JobSide }
+            s.showSide(try params(line, P.self).side)
             return try reply(id, state())
 
         // Toolpaths
@@ -353,9 +379,10 @@ public final class CoreService {
             struct Line: Encodable { var points: [Double]; var isRapid: Bool; var operation: UUID? }
             struct Lines: Encodable { var lines: [Line]; var maxDepth: Double }
             let want = try params(line, LinesParam.self).ids
-            let coords = MachineCoordinates(job: s.project.document.job)
+            let output = s.outputProject
+            let coords = MachineCoordinates(job: output.document.job)
             var out = Lines(lines: [], maxDepth: 0)
-            for op in s.project.operations where want?.contains(op.id) ?? true {
+            for op in output.operations where want?.contains(op.id) ?? true {
                 guard let tps = s.results[op.id]?.toolpaths else { continue }
                 let lines = ToolpathLines3D(toolpaths: tps, coords: coords)
                 out.maxDepth = max(out.maxDepth, lines.maxDepth)
@@ -368,9 +395,8 @@ public final class CoreService {
         // Posting: the program text only ever comes from here.
         case "export":
             let p = try params(line, Export.self)
-            if let post = p.postID, !s.profiles.contains(where: { $0.id == post }) { throw CoreFailure("Unknown post \"\(post)\".") }
             let scope: GCodeExportScope = p.operation.map { .operation($0) } ?? .all
-            let (r, profile) = s.post(scope: scope, postID: p.postID, side: p.side, groupByTool: p.groupByTool ?? false)
+            let (r, profile) = try s.post(scope: scope, postID: p.postID, side: p.side, groupByTool: p.groupByTool ?? false)
             struct Posted: Encodable {
                 var text: String?; var errorMessage: String?; var issues: [IssueRow]; var missingSteps: [IssueRow]
                 var hasErrors: Bool; var toolpathCount: Int; var fileName: String; var post: String; var written: String?
@@ -394,11 +420,8 @@ public final class CoreService {
             struct Saved: Encodable { var files: [FileRow]; var existing: [String]; var invalidNames: [String]; var unposted: [String]; var written: Bool; var hasErrors: Bool }
             let p = try params(line, P.self)
             guard let mode = SaveAllMode(rawValue: p.mode) else { throw UnknownMethod(method: "save mode \(p.mode)") }
-            if let post = p.postID, !s.profiles.contains(where: { $0.id == post }) { throw CoreFailure("Unknown post \"\(post)\".") }
-            let own = s.resolved
-            let installed = p.postID.flatMap { id in s.profiles.first { $0.id == id } }
-            let profile = installed.map { MachineResolver.effectiveProfile($0, machine: own.machine) } ?? own.post
-            let output = s.project.exportProject(for: .all, side: .top)
+            let profile = try s.profile(postID: p.postID)
+            let output = s.outputProject
             s.calculateStale(output.operations.filter(\.setup.isEnabled).map(\.id))
             let files = GCodeBatchExport.plan(mode: mode, operations: output.operations, results: s.results, jobName: s.project.document.name,
                                               profile: profile, groupByTool: p.groupByTool ?? false)
@@ -421,10 +444,13 @@ public final class CoreService {
         case "jobSheet":
             let p = try params(line, PathParam.self)
             let own = s.resolved
-            let output = s.project.exportProject(for: .all, side: .top)
+            let output = s.outputProject
             s.calculateStale(output.operations.filter(\.setup.isEnabled).map(\.id))
-            let sheet = JobSheet.make(project: output, results: s.results, profile: own.post, groupByTool: false, rapidRate: s.rapidRate,
-                                      settings: TimeEstimateSettings.load())
+            var sheet = JobSheet.make(project: output, results: s.results, profile: own.post, groupByTool: false, rapidRate: s.rapidRate,
+                                      sheets: JobSheet.sheets(of: s.project), settings: TimeEstimateSettings.load())
+            // As the Mac's: which material sheet and side this sheet is for.
+            let doc = s.project.document
+            sheet.jobName = doc.name + (doc.isMultiSheet ? " – \(doc.currentSheetName)" : "") + (doc.job.isTwoSided ? " (\(s.activeSide.displayName) side)" : "")
             try Data(JobSheetHTML.render(sheet).utf8).write(to: URL(fileURLWithPath: p.path), options: .atomic)
             return try reply(id, Nothing())
         case "help":
@@ -441,8 +467,12 @@ public final class CoreService {
             let tool = try params(line, SaveTool.self).tool
             var library = s.library
             library.upsert(tool)
+            // As the Mac's Tool Database, a copy that matched what was edited follows the edit, and one that had diverged stays. The
+            // dialog also lists tools only the project has: for those, the copy is what was edited.
+            var before = s.library
+            for carried in s.project.tools where before.tool(id: carried.id) == nil { before.upsert(carried) }
             try s.saveLibrary(library)
-            s.perform("Update Tool from Library") { $0 = ToolSync.carrying($0, library: library) }
+            s.perform("Update Tool from Library") { $0 = ToolSync.applyingLibraryChange(old: before, new: library, to: $0) }
             return try reply(id, s.project.mergedTools(with: s.library).tools)
 
         // Files in and out
@@ -593,7 +623,7 @@ final class CoreSimulation {
     }
 
     init(session: CoreSession, groupByTool: Bool, material: String?) {
-        let doc = session.project.document
+        let doc = session.outputProject.document
         toolpaths = session.previewToolpaths(groupByTool: groupByTool)
         let minCell = doc.units == .inch ? 0.004 : 0.1
         let cell = Heightfield.automaticCellSize(width: doc.job.width, height: doc.job.height, targetCells: 400_000, minimum: minCell)

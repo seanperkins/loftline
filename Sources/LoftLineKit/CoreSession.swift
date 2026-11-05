@@ -10,6 +10,8 @@ public final class CoreSession {
     public private(set) var fileURL: URL?
     public private(set) var designRevision = 0
     public private(set) var results: [UUID: ToolpathResult] = [:]
+    /// The side of a two-sided job on show, which is the side that posts (`LoftLineDocument.activeSide`).
+    public private(set) var activeSide: JobSide = .top
     public var library: ToolLibrary
     public let toolStore: ToolLibraryStore
     public let postStore: PostProfileStore
@@ -70,16 +72,18 @@ public final class CoreSession {
         undoStack = []
         redoStack = []
         results = [:]
+        activeSide = .top
         designRevision += 1
     }
 
     // MARK: Edits
 
-    /// As `LoftLineDocument.perform`: the post and machine copies, the carried tools and the through depths follow every edit, and
-    /// one that changes nothing leaves no undo step.
+    /// As `LoftLineDocument.perform`: linked fields, the post and machine copies, the carried tools and the through depths follow every
+    /// edit, and one that changes nothing leaves no undo step.
     public func perform(_ action: String, _ change: (inout LoftLineProject) throws -> Void) rethrows {
         var p = project
         try change(&p)
+        VariableLinks.reconcile(&p, old: project, pending: [])
         p = ProjectPost.syncing(p, profiles: profiles, machines: machines)
         p = ToolSync.carrying(p, library: library)
         p = p.resolvingThroughDepths(from: project)
@@ -111,6 +115,34 @@ public final class CoreSession {
             return [op.id]
         })
         results = results.filter { live.contains($0.key) }
+        if !new.document.job.isTwoSided { activeSide = .top }
+    }
+
+    // MARK: What posts
+
+    /// Which side of a two-sided job is on show, and so posts.
+    public func showSide(_ side: JobSide) {
+        guard project.document.job.isTwoSided else { return }
+        activeSide = side
+    }
+
+    /// What a program covers when it isn't the whole job: the sheet and side on show. Nil for a one-sheet, one-sided job.
+    public var coverage: String? {
+        let d = project.document
+        let parts = (d.isMultiSheet ? ["Sheet: \(d.currentSheetName)"] : []) + (d.job.isTwoSided ? ["\(activeSide.displayName) side"] : [])
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+
+    /// The project as a program all of whose toolpaths are on show sees it.
+    public var outputProject: LoftLineProject { project.exportProject(for: .all, side: activeSide) }
+
+    /// The chosen post with the job's machine limits. The project's own post is the project's copy, even when a post of that id is
+    /// installed or none is (`LoftLineDocument.effectiveProfile`).
+    public func profile(postID: String?) throws -> PostProfile {
+        let own = resolved
+        guard let postID, postID != ProjectPost.effectivePostID(project), postID != own.post.id else { return own.post }
+        guard let installed = profiles.first(where: { $0.id == postID }) else { throw CoreFailure("Unknown post \"\(postID)\".") }
+        return MachineResolver.effectiveProfile(installed, machine: own.machine)
     }
 
     private static func toolContentChanged(from old: [Tool], to new: [Tool]) -> Bool {
@@ -152,11 +184,10 @@ public final class CoreSession {
     // MARK: Posting
 
     /// Posts as the Export G-code sheet does: everything stale among what the program needs is calculated first.
-    public func post(scope: GCodeExportScope, postID: String?, side: JobSide?, groupByTool: Bool) -> (GCodeExportResult, PostProfile) {
-        let installed = postID.flatMap { id in profiles.first { $0.id == id } }
-        let own = resolved
-        let profile = installed.map { MachineResolver.effectiveProfile($0, machine: own.machine) } ?? own.post
-        let output = project.exportProject(for: scope, side: side ?? .top)
+    public func post(scope: GCodeExportScope, postID: String?, side: JobSide?, groupByTool: Bool) throws -> (GCodeExportResult, PostProfile) {
+        let profile = try profile(postID: postID)
+        let isOwnPost = profile.id == resolved.post.id
+        let output = project.exportProject(for: scope, side: side ?? activeSide)
         let targets: [AnyOperation]
         switch scope {
         case .all: targets = output.operations.filter(\.setup.isEnabled)
@@ -173,13 +204,13 @@ public final class CoreSession {
         var result = GCodeExporter.export(project: output, toolpaths: toolpaths, profile: profile, jobName: project.document.name,
                                           expected: .operations(asked, results: results), sheetToolpaths: sheet)
         result.issues.insert(contentsOf: ProjectPost.issues(for: project, profiles: profiles, machines: machines,
-                                                            includingPost: installed == nil || installed?.id == own.post.id), at: 0)
+                                                            includingPost: isOwnPost), at: 0)
         return (result, profile)
     }
 
     /// The toolpaths the 3D preview simulates, in program order, as the export would order them.
     public func previewToolpaths(groupByTool: Bool) -> [Toolpath] {
-        let output = project.exportProject(for: .all, side: .top)
+        let output = outputProject
         calculateStale(output.operations.filter(\.setup.isEnabled).map(\.id))
         return GCodeExporter.toolpaths(scope: .all, operations: output.operations, results: results, groupByTool: groupByTool)
     }

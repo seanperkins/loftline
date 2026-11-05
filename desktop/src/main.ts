@@ -129,7 +129,7 @@ const setCenter = (m: typeof app.center) => {
 
 // MARK: Menu bar: in the window, as is usual on Windows and Linux (the Mac app uses the system menu bar).
 
-type Item = { label: string; keys?: string; run: () => void; enabled?: () => boolean } | "-";
+type Item = { label: string | (() => string); keys?: string; run: () => void; enabled?: () => boolean } | "-";
 const hasSelection = () => app.selection.size > 0;
 const menus: [string, Item[]][] = [
   ["File", [
@@ -156,7 +156,12 @@ const menus: [string, Item[]][] = [
     { label: "Zoom to Fit", keys: "Ctrl+0", run: () => document.querySelector(".canvas-host")?.dispatchEvent(new Event("loftline-fit")) },
     { label: "Snap to Grid", run: () => { app.snapToGrid = !app.snapToGrid; refresh(); } },
     { label: "Toolpaths", run: () => { app.showToolpaths = !app.showToolpaths; refresh(); } },
-    { label: "Inspector", run: () => { app.showInspector = !app.showInspector; layout(); refresh(); } },
+    { label: "Inspector", run: () => { app.showInspector = !app.showInspector; layout(); refresh(); } }, "-",
+    {
+      label: () => (app.state?.side === "bottom" ? "Show Top Side" : "Show Bottom Side"),
+      run: () => { app.selection = new Set(); void apply("setSide", { side: app.state?.side === "bottom" ? "top" : "bottom" }); },
+      enabled: () => !!doc().job.twoSided,
+    },
   ]],
   ["Design", [
     { label: "Align Left", run: () => void command("align", { mode: "left" }), enabled: hasSelection },
@@ -214,7 +219,7 @@ function createMenuBar() {
     const fill = () => replace(popup, items.map((item) => item === "-" ? h("div", { class: "menu-sep" }) : h("button", {
       class: "menu-item", role: "menuitem", disabled: !!item.enabled && !item.enabled(),
       onclick: () => { closeAll(); item.run(); },
-    }, h("span", {}, item.label), item.keys ? h("span", { class: "keys" }, item.keys) : null)));
+    }, h("span", {}, typeof item.label === "function" ? item.label() : item.label), item.keys ? h("span", { class: "keys" }, item.keys) : null)));
     const menu = h("div", { class: "menu" }, h("button", {
       class: "menu-title", "aria-haspopup": "true",
       onclick: () => { const was = open === menu; closeAll(); if (!was) { fill(); menu.classList.add("open"); open = menu; } },
@@ -282,6 +287,7 @@ function renderStatus() {
     h("span", {}, `Z0: ${job.zZero === "materialTop" ? "Material surface" : "Machine bed"}`),
     h("span", {}, `Origin: ${job.xyOrigin === "lowerLeft" ? "Lower left" : job.xyOrigin === "center" ? "Center" : job.xyOrigin}`),
     h("span", {}, app.state.post.name),
+    app.state.coverage ? h("strong", {}, app.state.coverage) : null,
     app.state.issues.filter((i) => i.severity !== "note").slice(0, 1).map((i) => h("span", { class: "warn-text", title: i.message }, "Check the post")),
     h("span", { class: "spacer" }),
     h("span", { class: "muted" }, cursor),

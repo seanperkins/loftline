@@ -169,7 +169,7 @@ function operationEditor(op: Operation): Child {
     specific.push(section("V-Carve",
       numberRow("Start depth", params.startDepth as number, u, (v) => set("startDepth", v)),
       numberRow("Flat depth", (params.flatDepth as number) ?? 0, u, (v) => set("flatDepth", v > 0 ? v : null)),
-      numberRow("Max pass depth", (params.maxPassDepth as number) ?? 0, u, (v) => set("maxPassDepth", v > 0 ? v : null))),
+      numberRow("Max pass depth", (params.passDepth as number) ?? 0, u, (v) => set("passDepth", v > 0 ? v : null))),
       section("Order",
         toggleRow("Use vector start points", Boolean(params.useVectorStartPoints), (v) => set("useVectorStartPoints", v)),
         toggleRow("Use vector selection order", Boolean(params.useSelectionOrder), (v) => set("useSelectionOrder", v))));
