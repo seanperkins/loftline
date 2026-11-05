@@ -6,7 +6,7 @@
 
 **Architecture:** The UI-free code moves to a `LoftLineKit` library. Mac-only services get portable versions behind `#if canImport`. A `loftline-core` sidecar speaks JSON to a Tauri front end in `desktop/`. All G-code comes from the Swift core.
 
-**Tech Stack:** Swift 6.4, SwiftPM, C++17, vendored stb, swift-crypto (off the Mac only), Rust + Tauri 2, TypeScript, Playwright for headless UI checks, Docker for Linux.
+**Tech Stack:** Swift 6.4, SwiftPM, C++17, vendored stb, Rust + Tauri 2, TypeScript, Playwright for headless UI checks, Docker for Linux.
 
 **Spec:** `docs/specs/2026-11-03-windows-linux-design.md`
 
@@ -93,7 +93,7 @@
 
 **Files:** Modify `Sources/UpdateCore/UpdateSignature.swift`.
 
-- [ ] swift-crypto and `_CryptoExtras` replace CryptoKit and Security off the Mac. The update tests pass on Linux.
+- [ ] SHA-256 and RSA verification written out, replacing CryptoKit and Security off the Mac (spec ruling). The update tests pass on Linux.
 - [ ] Commit `feat(update): signature checks off the Mac`.
 
 ### Task 8: Linux gate

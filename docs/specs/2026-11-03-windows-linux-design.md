@@ -32,8 +32,8 @@ something can't match, `docs/PLATFORMS.md` says so.
 2. **Mac-only services in CADCore get a portable implementation.** The Mac keeps its implementation unchanged.
    - Text outlines: FreeType plus HarfBuzz was the plan; see the ruling below.
    - Images: vendored `stb_image`, in the `CGeom` pattern.
-   - PDF: export written directly, since it is only vector paths. Import uses PDFium, or stays Mac-only.
-3. **UpdateCore:** `swift-crypto` replaces CryptoKit, with the same API. The signed feed carries over. The install step is per
+   - PDF: export written directly, since it is only vector paths. Import uses PDFium, or stays Mac-only; see the ruling below.
+3. **UpdateCore:** `swift-crypto` replaces CryptoKit, with the same API; see the ruling below. The signed feed carries over. The install step is per
    platform.
 4. **Build and CI:** Ubuntu and Windows jobs run `swift build` and `swift test`. Scripts get a cross-platform path. `Darwin`
    imports are guarded.
@@ -63,4 +63,7 @@ Decisions taken without asking, as instructed. Each says what it costs if wrong.
 - **Windows can't be run here.** No local VM, `desktop-apgpe0g` is offline, and GitHub Actions needs a push, which waits for Sean.
   Windows code and a CI job are written but stay marked unverified until that CI runs. Cost if wrong: Windows-only fixes after
   the first CI run.
+- **stb, no swift-crypto, and a PDF reader in Swift.** stb_truetype replaced FreeType and HarfBuzz. swift-crypto's RSA can't verify from the hex digest
+  the update feed carries, so SHA-256 and RSA verification are written out and tested against OpenSSL. PDF import is a reader in Swift rather than PDFium
+  or Mac-only, so Mac projects' PDF workflows carry over (`docs/DECISIONS.md`, portable-services and portable-pdf). Cost if wrong: maintaining both.
 - **Only Docker is used for Linux.** `bitwarden` and `el-duro-1` run other workloads and aren't build hosts.

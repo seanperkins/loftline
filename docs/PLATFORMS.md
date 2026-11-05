@@ -13,6 +13,8 @@ Plan and rulings: `docs/specs/2026-11-03-windows-linux-design.md`. Status as of 
 | Desktop app builds and opens a project | native app | yes, in Docker under Xvfb | not run | **not run** |
 | Desktop end-to-end test (`desktop/tools/e2e.mjs`) | yes, in Chromium | yes, in Chromium | not run | **not run** |
 
+**Save All on Windows works by path.** The Mac and Linux hold the folder open while they save, so a folder swapped mid-save can't redirect the files. `FileSetWindows.swift` checks the path instead, so someone who can change a shared folder could swap it for a junction during a save and send the files elsewhere. Save only to folders you control.
+
 **Windows has never been compiled.** There's no Windows machine or VM here, and its CI job (`.github/workflows/platforms.yml`) needs the
 branch pushed. Expect fixes after the first run. In particular `Sources/LoftLineKit/FileSetWindows.swift` is unproven, and MSVC's C++ library
 may sort equal elements differently from the others, so the samples check there is the one that matters.
@@ -35,6 +37,7 @@ may sort equal elements differently from the others, so the samples check there 
 | CoreText text outlines | stb_truetype | No ligatures, no complex script shaping (Arabic, Devanagari…), no fallback to another font for a missing character. Kerning comes from the font's tables, so text spacing can differ slightly. |
 | Mac system fonts (Helvetica…) | The fonts installed there. New text defaults to Liberation Sans or Arial | Editing a Mac project's Helvetica text on Linux reports the font as missing. Choose another; the shapes change. |
 | ImageIO: PNG, JPEG, BMP, TIFF, GIF, WebP, HEIC | stb_image: PNG, JPEG, BMP, GIF | TIFF, WebP and HEIC can't be imported. |
+| ImageIO reads a JPEG's size from JFIF or Exif | JFIF only | A camera JPEG with its density only in Exif has no stated size, so it can import at a different size. |
 | Core Graphics grey conversion | Rec. 709 weights | Bitmap trace and PhotoVCarve can differ by a few grey levels, so those toolpaths may not be byte-identical to the Mac's. |
 | Core Graphics PDF import | `PortablePDF.swift`, checked against Core Graphics on a file it wrote | JPEG 2000, LZW and CCITT streams and non-8-bit images are skipped. Encrypted files are refused, as on the Mac. |
 | Core Graphics PDF export | Written directly | Same operators. The bytes differ. |
@@ -73,7 +76,10 @@ Help; light and dark.
 | Profile form | Tab placement on the canvas, lead in/out, last pass, order, sharp corners. |
 | Pocket form | Clearance tools, raster angle and profile pass. |
 | Tool Database | Editing the common fields. No add, delete, import, feeds calculator or per-material data. |
-| Job Setup | The main fields. No two-sided, multi-sheet, variables or touch-off settings. |
+| Job Setup | The main fields. No two-sided, multi-sheet, variables or touch-off settings. Those settings a project already has are kept and convert with its units. |
+| Two-sided jobs | View > Show Bottom Side picks the side that shows in 2D and posts, as on the Mac, and the status bar and Export say which. A job can't be made two-sided here, and the layer and toolpath lists show both sides. |
+| Multiple sheets | A Mac project with several sheets posts the sheet it was saved on, and the status bar and Export name it. There's no way to change sheet, and the 2D view draws every sheet's vectors. |
+| SVG import | An SVG with no stated size imports at the guessed scale. The Mac asks. |
 | 3D preview | No material choice, camera images, measuring or per-toolpath scope. |
 | Check Toolpaths | The list and the validator's findings. No clickable lines into a G-code view. |
 
