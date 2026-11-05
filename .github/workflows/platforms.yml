@@ -69,9 +69,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Linux packages
         if: runner.os == 'Linux'
+        # Azure's Ubuntu mirror stalls now and then: 25 seconds normally, but 31 minutes and 2.5 hours when it did.
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev fonts-liberation
+          apt='apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20'
+          for attempt in 1 2 3; do
+            sudo timeout 240 sh -c "$apt update && $apt install -y libwebkit2gtk-4.1-dev build-essential curl file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev fonts-liberation" && exit 0
+          done
+          exit 1
       - name: Swift on Linux
         if: runner.os == 'Linux'
         run: |
