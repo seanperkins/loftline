@@ -78,6 +78,46 @@ import CoreGraphics
         #expect(throws: (any Error).self) { try PortablePDFImporter.importPage(from: Data(encrypted.utf8), targetUnits: .inch, includeImages: true) }
     }
 
+    /// A one-page file whose page holds `content`, with `extra` as more objects.
+    static func document(content: String, streamDictionary: String? = nil, extra: String = "") -> Data {
+        let dictionary = streamDictionary ?? "<< /Length \(content.utf8.count) >>"
+        return Data("""
+        %PDF-1.7
+        1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+        2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+        3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R >> endobj
+        4 0 obj \(dictionary)
+        stream
+        \(content)
+        endstream
+        endobj
+        \(extra)
+        trailer << /Root 1 0 R >>
+        """.utf8)
+    }
+
+    static let square = "10 10 m 100 10 l 100 100 l 10 100 l h S"
+
+    @Test(arguments: ["9223372036854775808", "1e300", "-1"])
+    func aStreamLengthNoIntegerCanHoldIsIgnored(length: String) throws {
+        let data = Self.document(content: Self.square, streamDictionary: "<< /Length \(length) >>")
+        let (result, _) = try PortablePDFImporter.importPage(from: data, targetUnits: .inch, includeImages: true)
+        #expect(result.shapes.count == 1)
+    }
+
+    @Test(arguments: [("9223372036854775808", "0"), ("1e300", "0"), ("-1", "0"), ("1", "9223372036854775808"), ("1", "-5")])
+    func anObjectStreamWithAHostileHeaderIsSkipped(count: String, first: String) throws {
+        let extra = "5 0 obj << /Type /ObjStm /N \(count) /First \(first) /Length 4 >>\nstream\n6 0 \nendstream\nendobj"
+        let (result, _) = try PortablePDFImporter.importPage(from: Self.document(content: Self.square, extra: extra), targetUnits: .inch, includeImages: true)
+        #expect(result.shapes.count == 1)
+    }
+
+    @Test func anInlineImageWhoseBytesSpellItsEndMarkerDoesNotEatThePage() throws {
+        let content = "BI /W 1 /H 1 /CS /G /BPC 8 ID EI(\nEI\n" + Self.square
+        let (result, _) = try PortablePDFImporter.importPage(from: Self.document(content: content), targetUnits: .inch, includeImages: true)
+        #expect(result.shapes.count == 1)
+    }
+
     @Test func inflateReadsStoredAndCompressedBlocks() throws {
         // zlib of "hello hello hello hello", made with Python's zlib.compress.
         let compressed: [UInt8] = [120, 156, 203, 72, 205, 201, 201, 87, 200, 64, 39, 1, 104, 3, 8, 177]

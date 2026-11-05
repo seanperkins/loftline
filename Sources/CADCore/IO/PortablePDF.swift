@@ -77,8 +77,8 @@ struct PortablePDF {
     }
 
     private func streamEnd(dict d: Dictionary, start: Int) -> Int {
-        if case .number(let n)? = d["Length"], n >= 0, start + Int(n) <= bytes.count {
-            let end = start + Int(n)
+        if case .number(let n)? = d["Length"], let length = Self.int(n), length >= 0, length <= bytes.count - start {
+            let end = start + length
             // Trust the length only when endstream follows it: a wrong length is common.
             if Self.find(Array("endstream".utf8), in: bytes, from: end, upTo: min(end + 16, bytes.count)) != nil { return end }
         }
@@ -88,12 +88,14 @@ struct PortablePDF {
     private mutating func expandObjectStreams() {
         for (_, object) in objects {
             guard case .stream(let d, _) = object, d["Type"]?.name == "ObjStm", let data = decoded(object),
-                  let n = resolve(d["N"]).number, let first = resolve(d["First"]).number else { continue }
+                  let n = Self.int(resolve(d["N"]).number), n >= 0, let first = Self.int(resolve(d["First"]).number), first >= 0, first <= data.count
+            else { continue }
             var header = Lexer(bytes: data, position: 0)
-            for _ in 0..<Int(n) {
-                guard case .number(let number)? = header.object(), case .number(let offset)? = header.object() else { break }
-                var body = Lexer(bytes: data, position: Int(first) + Int(offset))
-                if objects[Int(number)] == nil, let inner = body.object() { objects[Int(number)] = inner }
+            for _ in 0..<n {
+                guard case .number(let number)? = header.object(), case .number(let offset)? = header.object(),
+                      let id = Self.int(number), let at = Self.int(offset), at >= 0, at <= data.count - first else { break }
+                var body = Lexer(bytes: data, position: first + at)
+                if objects[id] == nil, let inner = body.object() { objects[id] = inner }
             }
         }
     }
@@ -120,8 +122,9 @@ struct PortablePDF {
                 guard let out = Inflate.zlib(data) else { return nil }
                 data = out
                 if i < parms.count, let p = dict(parms[i]), let predictor = resolve(p["Predictor"]).number, predictor > 1 {
-                    guard let undone = Self.undoPredictor(data, predictor: Int(predictor), columns: Int(resolve(p["Columns"]).number ?? 1),
-                                                           colors: Int(resolve(p["Colors"]).number ?? 1), bits: Int(resolve(p["BitsPerComponent"]).number ?? 8)) else { return nil }
+                    guard let predictorID = Self.int(predictor), let columns = Self.int(resolve(p["Columns"]).number ?? 1),
+                          let colors = Self.int(resolve(p["Colors"]).number ?? 1), let bits = Self.int(resolve(p["BitsPerComponent"]).number ?? 8),
+                          let undone = Self.undoPredictor(data, predictor: predictorID, columns: columns, colors: colors, bits: bits) else { return nil }
                     data = undone
                 }
             case "ASCIIHexDecode", "AHx": data = Self.asciiHex(data)
@@ -188,6 +191,24 @@ struct PortablePDF {
     }
 
     // MARK: Bytes
+
+    /// A number from the file as an Int, when it fits. A file can say anything, and `Int(_:)` traps on what doesn't.
+    static func int(_ value: Double?) -> Int? {
+        value.flatMap { Int(exactly: $0.rounded(.towardZero)) }
+    }
+
+    /// Where an inline image's end marker is: "EI" with white space before it, and white space or the end of the content after it. Its
+    /// bytes can hold the same two letters, and what follows them would be read as drawing.
+    static func inlineImageEnd(in content: [UInt8], from: Int) -> Int? {
+        let space: Set<UInt8> = [0, 9, 10, 12, 13, 32]
+        var at = from
+        while let found = find(Array("EI".utf8), in: content, from: at, upTo: content.count) {
+            let after = found + 2
+            if found > 0, space.contains(content[found - 1]), after == content.count || space.contains(content[after]) { return found }
+            at = found + 1
+        }
+        return nil
+    }
 
     static func find(_ needle: [UInt8], in hay: [UInt8], from: Int, upTo: Int) -> Int? {
         guard !needle.isEmpty, upTo - from >= needle.count, from >= 0 else { return nil }
@@ -364,7 +385,7 @@ struct PortablePDF {
             guard case .object(let o)? = token() else { return nil }
             if case .number(let n) = o, n >= 0, n == n.rounded() {
                 let saved = position
-                if case .object(.number(let g))? = token(), g == g.rounded(), case .keyword("R")? = token() { return .reference(Int(n)) }
+                if case .object(.number(let g))? = token(), g == g.rounded(), case .keyword("R")? = token(), let id = PortablePDF.int(n) { return .reference(id) }
                 position = saved
             }
             return o
@@ -684,7 +705,7 @@ struct PortablePDFImporter {
                 case "BT": textObjects += 1
                 case "BI":
                     // An inline image: its data can hold anything, so it is skipped by its end marker.
-                    if let end = PortablePDF.find(Array("EI".utf8), in: content, from: lexer.position, upTo: content.count) { lexer.position = end + 2 }
+                    if let end = PortablePDF.inlineImageEnd(in: content, from: lexer.position) { lexer.position = end + 2 }
                     skippedImages += 1
                 case "Do":
                     if let name = operands.last?.name { place(name, resources: resources) }
@@ -720,7 +741,7 @@ struct PortablePDFImporter {
     private func imagePNG(_ object: PortablePDF.Object, _ d: PortablePDF.Dictionary) -> Data? {
         guard let data = pdf.decoded(object) else { return nil }
         if pdf.isJPEG(d) { return RasterCodec.png(fromEncoded: Data(data)) }
-        guard let w = pdf.resolve(d["Width"]).number, let h = pdf.resolve(d["Height"]).number, w > 0, h > 0 else { return nil }
+        guard let w = PortablePDF.int(pdf.resolve(d["Width"]).number), let h = PortablePDF.int(pdf.resolve(d["Height"]).number), w > 0, h > 0 else { return nil }
         guard (pdf.resolve(d["BitsPerComponent"]).number ?? 8) == 8 else { return nil }
         var components = 3
         switch pdf.resolve(d["ColorSpace"]).name {
@@ -728,7 +749,7 @@ struct PortablePDFImporter {
         case "DeviceCMYK": components = 4
         default: break
         }
-        guard let needed = PDFImporter.imageByteCount(width: Int(w), height: Int(h), components: components), data.count >= needed else { return nil }
-        return RasterCodec.png(width: Int(w), height: Int(h), samples: data, components: components)
+        guard let needed = PDFImporter.imageByteCount(width: w, height: h, components: components), data.count >= needed else { return nil }
+        return RasterCodec.png(width: w, height: h, samples: data, components: components)
     }
 }
