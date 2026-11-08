@@ -144,7 +144,7 @@ public enum GCodeExporter {
 
     /// A warning when the job has keep-out zones or clamps and the footer does something the check cannot follow.
     public static func footerWarning(after toolpaths: [Toolpath], document doc: Document, profile: PostProfile) -> GCodeIssue? {
-        let zones = (doc.keepOutZones ?? []).contains { $0.outline.count > 2 } || !Fixtures.zones(in: doc).isEmpty
+        let zones = (doc.keepOutZones ?? []).contains(where: \.isUsable) || !Fixtures.zones(in: doc).isEmpty
         guard zones, let line = footerTravel(after: toolpaths, document: doc, profile: profile)?.unmodelledFrom else { return nil }
         return GCodeIssue(severity: .warning, message: "Keep-out zones and clamps are not checked from the footer's line "
                           + "\"\(line)\" on: LoftLine cannot tell where the machine goes from there.")
@@ -167,7 +167,7 @@ public enum GCodeExporter {
     /// since where the tool change leaves the spindle is unknown. nil = safe Z is enough.
     public static func approachHeight(document doc: Document) -> Double? {
         let margin = doc.units == .inch ? 0.05 : 1.0
-        let tops = (doc.keepOutZones ?? []).filter { $0.outline.count > 2 }.map(\.height)
+        let tops = (doc.keepOutZones ?? []).filter(\.isUsable).map(\.height)
             + Fixtures.zones(in: doc).map(\.height)
         guard let h = tops.max() else { return nil }
         let clear = h + 2 * margin

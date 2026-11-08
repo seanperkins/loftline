@@ -19,7 +19,7 @@ public struct ClampItem: Equatable, Sendable {
 public enum ClampList {
     public static func items(in doc: Document) -> [ClampItem] {
         let fromLayers = Fixtures.zones(in: doc).map { ClampItem(name: $0.name, loops: $0.loops, height: $0.height, layerID: $0.layerID) }
-        let fromZones = (doc.keepOutZones ?? []).filter { $0.outline.count > 2 }
+        let fromZones = (doc.keepOutZones ?? []).filter(\.isUsable)
             .map { ClampItem(name: $0.name, loops: [$0.outline], height: max(0, $0.height), layerID: nil) }
         var items = fromLayers + fromZones
         // Several sharing a name are numbered in list order; a name used once stays as it is. A number is never one that would

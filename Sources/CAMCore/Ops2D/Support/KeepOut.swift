@@ -18,7 +18,7 @@ public enum KeepOut {
 
     public static func violations(_ toolpaths: [Toolpath], zones: [KeepOutZone], coords: MachineCoordinates,
                                   margin: Double, tolerance: Double) -> [Violation] {
-        let usable = zones.filter { $0.outline.count > 2 }
+        let usable = zones.filter(\.isUsable)
         guard !usable.isEmpty else { return [] }
         var out: [Violation] = []
         // The program is one move stream: the post travels from one toolpath's last point to

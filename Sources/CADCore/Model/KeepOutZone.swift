@@ -14,6 +14,9 @@ public struct KeepOutZone: Codable, Hashable, Identifiable, Sendable {
     /// uncut); nil/false = only checked on export (toolpaths-2d round 2 addition).
     public var liftOver: Bool?
 
+    /// Three or more points: the only outlines toolpaths are checked against, lifted over or shown (fewer enclose nothing).
+    public var isUsable: Bool { outline.count > 2 }
+
     public init(id: UUID = UUID(), name: String, outline: [Vec2], height: Double, liftOver: Bool? = nil) {
         self.id = id; self.name = name; self.outline = outline; self.height = height; self.liftOver = liftOver
     }
