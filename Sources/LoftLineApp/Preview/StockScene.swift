@@ -18,6 +18,7 @@ final class StockScene {
     private let toolNode = SCNNode()
     private let measureNode = SCNNode()
     private let overlayNode = SCNNode()
+    private let clampNode = SCNNode()
     private(set) var job = JobSetup()
     /// Specular strength of the stock (0...1), from the material appearance.
     var shininess = 0.15
@@ -32,6 +33,7 @@ final class StockScene {
         content.addChildNode(toolNode)
         content.addChildNode(measureNode)
         content.addChildNode(overlayNode)
+        content.addChildNode(clampNode)
 
         let camera = SCNCamera()
         camera.zNear = 0.01
@@ -262,6 +264,43 @@ final class StockScene {
             let n = SCNNode(geometry: g)
             n.renderingOrder = 5
             overlayNode.addChildNode(n)
+        }
+    }
+
+    /// Clamps and screws as blocks standing on the material top (issue #134).
+    func setClamps(_ items: [ClampItem]) {
+        clampNode.childNodes.forEach { $0.removeFromParentNode() }
+        for n in Self.clampNodes(items, job: job) { clampNode.addChildNode(n) }
+    }
+
+    /// Clamp blocks showing (for tests).
+    var clampCount: Int { clampNode.childNodes.count }
+
+    /// One translucent red block per item, from the material top (z = 0) up to its height; a flush one (a screw head) is a
+    /// thin slab so it still shows. Material frame, so a clamp over an edge stands past the stock as it does on the machine.
+    static func clampNodes(_ items: [ClampItem], job: JobSetup) -> [SCNNode] {
+        let slab = max(job.thickness, 0.01) * 0.02
+        return items.map { item in
+            let path = NSBezierPath()
+            path.windingRule = .evenOdd
+            for loop in item.loops {
+                guard let first = loop.first else { continue }
+                path.move(to: NSPoint(x: first.x, y: first.y))
+                for p in loop.dropFirst() { path.line(to: NSPoint(x: p.x, y: p.y)) }
+                path.close()
+            }
+            let depth = item.height > 0 ? item.height : slab
+            let shape = SCNShape(path: path, extrusionDepth: CGFloat(depth))
+            let m = SCNMaterial()
+            m.diffuse.contents = NSColor(srgbRed: 0.85, green: 0.2, blue: 0.15, alpha: 1)
+            m.transparency = 0.8
+            m.lightingModel = .blinn
+            shape.materials = [m]
+            let node = SCNNode(geometry: shape)
+            node.name = item.name
+            // SCNShape extrudes evenly about z = 0.
+            node.position = SCNVector3(0, 0, depth / 2)
+            return node
         }
     }
 

@@ -63,6 +63,7 @@ struct Preview3DHost: View {
             rapidRate: SimulationPreviewView.rapidRate(for: document.postProfile, units: document.document.units),
             scope: $scope, emptyMessage: scope.emptyMessage, documentName: document.document.name,
             vectors: vectors, selectedVectors: selectedVectors,
+            clamps: ClampList.items(in: document.outputProject.document),
             onDrawShape: { addDrawnShape($0, closed: $1) },
             onSelectAt: { select(at: $0, tolerance: $1) })
     }

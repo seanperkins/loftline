@@ -177,6 +177,7 @@ final class SimulationPreviewModel: ObservableObject {
     static let showToolpathsKey = "preview3D.showToolpaths"
     static let showRapidsKey = "preview3D.showRapids"
     static let showVectorsKey = "preview3D.showVectors"
+    static let showClampsKey = "preview3D.showClamps"
 
     private static func storedFlag(_ key: String, default value: Bool) -> Bool {
         UserDefaults.standard.object(forKey: key) as? Bool ?? value
@@ -186,6 +187,20 @@ final class SimulationPreviewModel: ObservableObject {
     @Published var showToolpathLines = storedFlag(showToolpathsKey, default: true) {
         didSet { UserDefaults.standard.set(showToolpathLines, forKey: Self.showToolpathsKey); applyOverlay() }
     }
+    /// Clamps and screws standing on the stock.
+    @Published var showClamps = storedFlag(showClampsKey, default: true) {
+        didSet { UserDefaults.standard.set(showClamps, forKey: Self.showClampsKey); applyClamps() }
+    }
+    private var clamps: [ClampItem] = []
+
+    func setClamps(_ c: [ClampItem]) {
+        guard c != clamps else { return }
+        clamps = c
+        applyClamps()
+    }
+
+    private func applyClamps() { stockScene.setClamps(showClamps ? clamps : []) }
+
     /// Rapid moves drawn with the toolpath lines.
     @Published var showRapidLines = storedFlag(showRapidsKey, default: true) {
         didSet { UserDefaults.standard.set(showRapidLines, forKey: Self.showRapidsKey); applyOverlay() }
@@ -287,6 +302,7 @@ final class SimulationPreviewModel: ObservableObject {
                                   unitsPerInch: LengthUnit.inch.factor(to: units))
         stockScene.configure(job: job)
         applyOverlay()
+        applyClamps()   // a flush one's slab follows the thickness
         // Show the finished result by default; scrub back to watch it being cut.
         if time == totalTime { requestFrame() } else { time = totalTime }
     }

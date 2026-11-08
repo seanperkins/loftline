@@ -16,9 +16,11 @@ public enum Fixtures {
         public var name: String
         public var loops: [[Vec2]]
         public var height: Double
+        /// The keep-out layer the shape is on.
+        public var layerID: UUID?
 
-        public init(name: String, loops: [[Vec2]], height: Double) {
-            self.name = name; self.loops = loops; self.height = height
+        public init(name: String, loops: [[Vec2]], height: Double, layerID: UUID? = nil) {
+            self.name = name; self.loops = loops; self.height = height; self.layerID = layerID
         }
     }
 
@@ -34,7 +36,7 @@ public enum Fixtures {
             for s in doc.shapes where s.layerID == layer.id {
                 let loops = s.paths.filter(\.isClosed).map { $0.flattened(tolerance: tolerance) }.filter { $0.count > 2 }
                 guard !loops.isEmpty else { continue }
-                out.append(Zone(name: s.name.isEmpty ? layer.name : s.name, loops: loops, height: max(0, k.height)))
+                out.append(Zone(name: s.name.isEmpty ? layer.name : s.name, loops: loops, height: max(0, k.height), layerID: layer.id))
             }
         }
         return out
