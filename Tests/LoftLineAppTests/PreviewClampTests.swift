@@ -16,7 +16,10 @@ import Testing
         let node = try #require(StockScene.clampNodes([item], job: job).first)
         let shape = try #require(node.geometry as? SCNShape)
         #expect(shape.extrusionDepth == 1.5)
-        #expect(node.position.z == 0.75)   // centred on half its height: bottom on the top (z = 0), top at 1.5
+        // From the geometry's own bounds, not the placement arithmetic: bottom on the top (z = 0), top at 1.5.
+        let (lo, hi) = node.boundingBox
+        #expect(abs(Double(lo.z + node.position.z)) < 1e-6)
+        #expect(abs(Double(hi.z + node.position.z) - 1.5) < 1e-6)
         #expect(node.name == "Clamps 1")
     }
 

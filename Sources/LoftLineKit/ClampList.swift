@@ -22,13 +22,23 @@ public enum ClampList {
         let fromZones = (doc.keepOutZones ?? []).filter { $0.outline.count > 2 }
             .map { ClampItem(name: $0.name, loops: [$0.outline], height: max(0, $0.height), layerID: nil) }
         var items = fromLayers + fromZones
-        // Several sharing a name are numbered in list order; a name used once stays as it is.
+        // Several sharing a name are numbered in list order; a name used once stays as it is. A number is never one that would
+        // repeat a name already in use ("Clamps 1" typed by the user), and a name that ends in a number gets it in brackets
+        // ("Clamp 1 (2)", when Clamps and Fixture Holes has been run twice).
         let counts = Dictionary(items.map { ($0.name, 1) }, uniquingKeysWith: +)
-        var seen: [String: Int] = [:]
+        var taken = Set(counts.filter { $0.value == 1 }.keys)
+        var next: [String: Int] = [:]
         for i in items.indices where counts[items[i].name, default: 0] > 1 {
             let name = items[i].name
-            seen[name, default: 0] += 1
-            items[i].name = "\(name) \(seen[name]!)"
+            let bracketed = name.last?.isNumber == true
+            var n = next[name, default: 1], candidate: String
+            repeat {
+                candidate = bracketed ? "\(name) (\(n))" : "\(name) \(n)"
+                n += 1
+            } while taken.contains(candidate)
+            next[name] = n
+            taken.insert(candidate)
+            items[i].name = candidate
         }
         return items
     }

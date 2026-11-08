@@ -49,6 +49,25 @@ import Testing
         #expect(ClampList.items(in: d).map(\.name) == ["Clamps 1", "Screw", "Clamps 2", "Clamps 3"])
     }
 
+    /// Review finding: a number handed out must not be a name a zone already has, or two clamps share a label.
+    @Test func aGeneratedNumberSkipsANameAlreadyInUse() {
+        var (d, clamps) = doc()
+        d.add(box(2, 2, 1, 1, layer: clamps))
+        d.add(box(8, 2, 1, 1, layer: clamps))
+        d.keepOutZones = [KeepOutZone(name: "Clamps 1", outline: [Vec2(4, 4), Vec2(6, 4), Vec2(6, 6)], height: 0)]
+        let names = ClampList.items(in: d).map(\.name)
+        #expect(names == ["Clamps 2", "Clamps 3", "Clamps 1"])
+        #expect(Set(names).count == names.count)
+    }
+
+    /// Clamps and Fixture Holes names its shapes "Clamp 1"…; pressed twice it makes each name twice.
+    @Test func aSharedNameEndingInANumberIsNumberedInBrackets() {
+        var (d, clamps) = doc()
+        d.add(box(2, 2, 1, 1, layer: clamps, name: "Clamp 1"))
+        d.add(box(8, 2, 1, 1, layer: clamps, name: "Clamp 1"))
+        #expect(ClampList.items(in: d).map(\.name) == ["Clamp 1 (1)", "Clamp 1 (2)"])
+    }
+
     @Test func aClampAtTheLeftEdgeIsWordedFromThatEdge() throws {
         var (d, clamps) = doc()
         d.add(box(-2, 11, 3, 2, layer: clamps))   // 2 in outside, reaches 1 in on, centre 12 in up

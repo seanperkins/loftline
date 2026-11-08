@@ -176,9 +176,9 @@ minute or two. Use `samples/sign.loftline` (or a new document) unless a step say
     the calibration Scale in the time-estimate popover and export again: the step times and the total
     both follow it, and the line under the toolpath table says what the total holds beyond the steps.
     Open `harness/projects/sign-clamps.loftline` and export its sheet: "Clamps and screws" lists four, each measured from the
-    material's edges, and the picture draws all four, including the three that stand past an edge. Hide the Clamps layer and export again:
-    the sheet still lists and draws them. On the canvas each is named; in the 3D preview they stand as red blocks, and
-    Show ▸ Clamps and Screws hides them.
+    material's edges, and the picture draws all four, including the three that stand past an edge. On the canvas each is named;
+    in the 3D preview they stand as red blocks, and Show ▸ Clamps and Screws hides them. Hide the Clamps layer and export
+    again: the sheet still lists and draws all four, while the canvas now names only the Screw.
 
 Every toolpath in steps 1–8 should calculate without an error, and Check Toolpaths… (⇧⌘K) should
 report no errors for the sample. The status of every VCarve Pro feature is in `docs/PARITY.md`.
