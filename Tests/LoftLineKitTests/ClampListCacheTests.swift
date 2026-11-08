@@ -24,7 +24,8 @@ import Testing
         _ = cache.items(in: d)
         #expect(cache.builds == 1)
 
-        // Moving the clamp, hiding its layer, and adding a Keep-Out Zone each are.
+        // Moving the clamp, hiding its layer, and adding a Keep-Out Zone each are. Hiding doesn't change the list (callers filter
+        // by visibility), but the key holds the whole layer so a change to any of its fields can't be missed: one cheap rebuild.
         d.shapes[1] = clamp.transformed(.translation(Vec2(0, 1)))
         #expect(try #require(cache.items(in: d).first).bounds.min.y == 3)
         #expect(cache.builds == 2)

@@ -4,8 +4,8 @@ import Foundation
 /// One clamp, screw or other keep-out, named the way the job sheet, the canvas and the 3D preview show it.
 public struct ClampItem: Equatable, Sendable {
     public var name: String
-    /// Closed loops, even-odd, document units, material frame.
-    public var loops: [[Vec2]]
+    /// Closed loops, even-odd, document units, material frame. Set once, since `labelPoint` is worked out from them.
+    public private(set) var loops: [[Vec2]]
     /// How far its top stands above the material top (0 = flush).
     public var height: Double
     /// The keep-out layer the shape is on; nil for a zone from Toolpaths > Keep-Out Zones.
@@ -16,7 +16,8 @@ public struct ClampItem: Equatable, Sendable {
 
     public init(name: String, loops: [[Vec2]], height: Double, layerID: UUID?) {
         self.name = name; self.loops = loops; self.height = height; self.layerID = layerID
-        let centre = Rect2(points: loops.joined()).center
+        let box = Rect2(points: loops.joined())
+        let centre = box.isEmpty ? .zero : box.center
         let inside = loops.filter { $0.count > 2 && PathGeometry.contains($0, centre) }.count % 2 == 1
         labelPoint = inside ? centre : PartLabels.labelPoint(region: loops)?.point ?? centre
     }
@@ -34,7 +35,7 @@ public enum ClampList {
         var items = fromLayers + fromZones
         // Several sharing a name are numbered in list order; a name used once stays as it is. A number is never one that would
         // repeat a name already in use ("Clamps 1" typed by the user), and a name that ends in a number gets it in brackets
-        // ("Clamp 1 (2)", when Clamps and Fixture Holes has been run twice).
+        // ("Clamp 1 (2)", for two shapes both named "Clamp 1").
         let counts = Dictionary(items.map { ($0.name, 1) }, uniquingKeysWith: +)
         var taken = Set(counts.filter { $0.value == 1 }.keys)
         var next: [String: Int] = [:]

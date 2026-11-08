@@ -1325,6 +1325,8 @@
 - **Drawn on every nesting sheet.** Keep-out layers never move with a sheet, so every sheet's picture shows the same zones, and the picture
   grows to show a clamp past the material's edge. Hatched with a dashed outline so it still reads printed in grey.
 - **3D preview.** Show ▸ Clamps and Screws, on by default and remembered (`preview3D.showClamps`), like the menu's other three toggles.
+  The stored preference is the only flag, read by every window's model, and `preferenceChanged` re-applies it, as for Vectors: a
+  copy in each model let two open windows disagree.
   A flush zone is a slab 2% of the thickness tall so it still shows.
 - **What isn't shown.** The canvas names only zones it fills, so a hidden layer's are named on the sheet alone. The 3D preview shows blocks without
   names. The G-code preview window has no project, so no clamps. On Windows and Linux only the job sheet has them (docs/PLATFORMS.md).

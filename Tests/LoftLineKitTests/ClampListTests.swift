@@ -60,7 +60,7 @@ import Testing
         #expect(Set(names).count == names.count)
     }
 
-    /// Clamps and Fixture Holes names its shapes "Clamp 1"…; pressed twice it makes each name twice.
+    /// Two shapes named "Clamp 1" by hand: the number goes in brackets so it doesn't read as "Clamp 1 1".
     @Test func aSharedNameEndingInANumberIsNumberedInBrackets() {
         var (d, clamps) = doc()
         d.add(box(2, 2, 1, 1, layer: clamps, name: "Clamp 1"))
@@ -80,6 +80,12 @@ import Testing
         #expect(PathGeometry.contains(l, angle.labelPoint))
         let block = try #require(items.first { $0.name == "Clamps" })
         #expect(block.labelPoint.distance(to: Vec2(11, 10.5)) < 1e-6)
+    }
+
+    /// `ClampItem` is public: one built with no loops gets a finite label point, not NaN from an empty box's centre.
+    @Test func anItemWithNoLoopsHasAFiniteLabelPoint() {
+        let item = ClampItem(name: "Empty", loops: [], height: 0, layerID: nil)
+        #expect(item.labelPoint.x.isFinite && item.labelPoint.y.isFinite)
     }
 
     @Test func aClampAtTheLeftEdgeIsWordedFromThatEdge() throws {

@@ -79,9 +79,12 @@ public enum FixtureCommands {
     }
 
     /// One past the highest "<prefix>N" already on the layer, so running the command again numbers on ("Clamp 7") and every clamp
-    /// keeps a name of its own on the job sheet and canvas.
+    /// keeps a name of its own on the job sheet and canvas. Numbers of a billion or more are ignored: a name like
+    /// "Clamp 9223372036854775807", typed or in a file someone sent, would otherwise overflow the count and crash. If one is
+    /// ever repeated, the clamp list still tells them apart (`ClampList`).
     static func nextNumber(_ prefix: String, on layer: UUID, in doc: Document) -> Int {
-        let used = doc.shapes.filter { $0.layerID == layer && $0.name.hasPrefix(prefix) }.compactMap { Int($0.name.dropFirst(prefix.count)) }
+        let used = doc.shapes.filter { $0.layerID == layer && $0.name.hasPrefix(prefix) }
+            .compactMap { Int($0.name.dropFirst(prefix.count)) }.filter { $0 < 1_000_000_000 }
         return (used.max() ?? 0) + 1
     }
 

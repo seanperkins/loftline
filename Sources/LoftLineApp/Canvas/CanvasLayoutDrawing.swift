@@ -11,8 +11,9 @@ extension CanvasNSView {
         drawSheetSlots(ctx, doc, vt)
     }
 
-    /// Clamp / keep-out zones: translucent red fill under their outlines. The fill is the closed loops the export checks
-    /// (`ClampList`), so a shape mixing closed and open paths fills its closed ones, and every named clamp has its fill.
+    /// Clamps on keep-out layers: translucent red fill, from the closed loops the export checks (`ClampList`), so a shape mixing
+    /// closed and open paths fills its closed ones. Keep-Out Zones (no layer) are left out here on purpose: `drawKeepOutZones`
+    /// fills and hatches them, so between the two every named clamp has its fill.
     private func drawClampZones(_ ctx: CGContext, _ doc: LoftLineDocument, _ vt: CGAffineTransform) {
         let d = doc.document
         let items = clampCache.items(in: d).filter { item in item.layerID.map { d.layer(id: $0)?.isVisible ?? false } ?? false }
@@ -31,7 +32,7 @@ extension CanvasNSView {
         ctx.restoreGState()
     }
 
-    /// Each drawn clamp's name at its centre, numbered as the job sheet and the 3D preview number it (`ClampList`, issue #134).
+    /// Each drawn clamp's name at its label point (`ClampItem.labelPoint`), numbered as the job sheet and the 3D preview number it (`ClampList`, issue #134).
     /// Zones on hidden keep-out layers aren't drawn, so they aren't named here; the job sheet still lists them.
     func drawClampNames(_ ctx: CGContext, _ doc: LoftLineDocument, _ vt: CGAffineTransform) {
         let d = doc.document
