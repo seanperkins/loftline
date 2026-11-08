@@ -1307,3 +1307,16 @@
   app keeps Core Graphics.
 - **kit-public — LoftLineKit's API is public by a mechanical pass.** A script marked the moved declarations `public`, and explicit initializers were added only where the app
   needed them. Nothing changed behaviour; the Mac's 2,279 tests stayed green through the move.
+
+## Clamps and screws on the job sheet, canvas and 3D preview (2026-11-08, #134)
+
+- **One list, `ClampList`.** The job sheet, the canvas names and the 3D blocks read the same list: closed shapes on keep-out layers, hidden layers
+  included (`Fixtures.zones`), then Toolpaths > Keep-Out Zones with three or more points, which is what the export checks. Names several zones
+  share are numbered in that order ("Clamps 1", "Clamps 2"), across both sources. Export messages keep `Fixtures.zones`' own names, unnumbered.
+- **Positions from the material's edges, not X0 Y0.** That's what the operator can measure. A zone whose bounding box crosses exactly one edge
+  is worded from that edge ("left edge, centre 12 in from the bottom, reaches 1 in onto the material"). A zone at a corner, across the whole
+  material or inside it is given as ranges from the left and bottom edges; one wholly outside the material says "off the material" first.
+- **Drawn on every nesting sheet.** Keep-out layers never move with a sheet, so every sheet's picture shows the same zones, and the picture
+  grows to show a clamp past the material's edge. Hatched with a dashed outline so it still reads printed in grey.
+- **What isn't shown.** The canvas names only zones it fills, so a hidden layer's are named on the sheet alone. The 3D preview shows blocks without
+  names. The G-code preview window has no project, so no clamps. On Windows and Linux only the job sheet has them (docs/PLATFORMS.md).

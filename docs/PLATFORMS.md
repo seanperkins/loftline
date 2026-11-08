@@ -87,7 +87,8 @@ Help; light and dark.
 **Not built yet.** Their data still round-trips, and the checks still run: a project with keep-out zones is still checked on export.
 
 - **Editing:** node editing, trim, extend, guides, snapping to objects, dimensions and measuring, kerning on the canvas, text on a curve, envelope distort, vector texture, trace bitmap, fit curves, dog-bones, straight inlay offsets, validate vectors.
-- **Layout:** nesting, multiple sheets, part labels, production plates, clamps and fixture holes, keep-out zone editor, tiling.
+- **Layout:** nesting, multiple sheets, part labels, production plates, clamps and fixture holes, keep-out zone editor, tiling. The job sheet lists and draws
+  every clamp and screw, as on the Mac, but the canvas doesn't name them and the 3D preview doesn't show them.
 - **Toolpaths:** merge, toolpath templates, inlay wizard, G-code preview pane, time estimate settings.
 - **Files:** recovery after a crash, clipart browser, gadgets (JavaScriptCore), 3D model placement and parts import, Print, thumbnails, job notes, document variables and `=` expressions in fields.
 - **App:** Preferences, Machines and Post Processors editors, welcome window, in-app updates. The Tauri updater would do the install step, and the signed feed format carries over.
