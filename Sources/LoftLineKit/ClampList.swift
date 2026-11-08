@@ -66,3 +66,31 @@ public enum ClampList {
         item.height > 0 ? "\(JobSheet.fmt(item.height, units)) above the material" : "flush with the top"
     }
 }
+
+/// Remembers the clamp list until a keep-out changes, so a view redrawn on every mouse move doesn't flatten the zones each time.
+public struct ClampListCache {
+    private struct Key: Equatable {
+        var layers: [Layer]
+        var shapes: [Shape]
+        var zones: [KeepOutZone]?
+    }
+
+    /// How many times the list was built (for tests).
+    public private(set) var builds = 0
+    private var key: Key?
+    private var cached: [ClampItem] = []
+
+    public init() {}
+
+    public mutating func items(in doc: Document) -> [ClampItem] {
+        let ids = Fixtures.keepOutLayerIDs(in: doc)
+        let k = Key(layers: doc.layers.filter { ids.contains($0.id) }, shapes: doc.shapes.filter { ids.contains($0.layerID) },
+                    zones: doc.keepOutZones)
+        if k != key {
+            key = k
+            cached = ClampList.items(in: doc)
+            builds += 1
+        }
+        return cached
+    }
+}

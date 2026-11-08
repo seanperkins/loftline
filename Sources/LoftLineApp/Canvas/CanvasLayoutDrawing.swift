@@ -32,7 +32,7 @@ extension CanvasNSView {
     /// Zones on hidden keep-out layers aren't drawn, so they aren't named here; the job sheet still lists them.
     func drawClampNames(_ ctx: CGContext, _ doc: LoftLineDocument, _ vt: CGAffineTransform) {
         let d = doc.document
-        let items = ClampList.items(in: d).filter { item in item.layerID.map { d.layer(id: $0)?.isVisible ?? false } ?? true }
+        let items = clampCache.items(in: d).filter { item in item.layerID.map { d.layer(id: $0)?.isVisible ?? false } ?? true }
         guard !items.isEmpty else { return }
         let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: 10), .foregroundColor: NSColor.systemRed]
         for item in items {
