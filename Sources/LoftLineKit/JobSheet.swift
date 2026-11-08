@@ -41,6 +41,14 @@ public struct JobSheet: Equatable {
         public var partCentres: [Vec2] = []
     }
 
+    /// A clamp, screw or other keep-out as the table lists it (`ClampList`).
+    public struct Clamp: Equatable {
+        public var name: String
+        /// Measured from the material's edges.
+        public var position: String
+        public var height: String
+    }
+
     public var jobName: String
     public var date: String
     public var units: LengthUnit
@@ -65,6 +73,10 @@ public struct JobSheet: Equatable {
     public var pauses: Int = 0
     /// The lowest cut of the whole job, as the Export sheet words it ("Z -0.77 in (0.02 in below the material bottom)"); empty with no toolpaths.
     public var deepestCut: String = ""
+    /// Every keep-out the export checks, hidden layers and Keep-Out Zones included; drawn on every sheet (keep-outs never move).
+    public var zones: [ClampItem] = []
+    /// The "Clamps and screws" table, one row per zone.
+    public var clamps: [Clamp] = []
 
     /// One entry per nesting sheet (shapes moved onto the material frame), or nil when the
     /// document has a single sheet.
@@ -172,7 +184,10 @@ public struct JobSheet: Equatable {
             ? "Touch off Z0 on the TOP of the material (\(fmt(job.thickness, u)) thick)."
             : "Touch off Z0 on the SPOILBOARD (machine bed); the material top is Z \(fmt(job.thickness, u))."
 
-        let visible = doc.shapes.filter { project.isVisible($0) }
+        // Keep-outs are drawn as zones from `ClampList`, not as parts.
+        let keepOutLayers = Fixtures.keepOutLayerIDs(in: doc)
+        let visible = doc.shapes.filter { project.isVisible($0) && !keepOutLayers.contains($0.layerID) }
+        let zones = ClampList.items(in: doc)
         let defaultParts = partList(visible, in: doc)
         let defaultSheet = Sheet(title: "Sheet 1", shapes: visible, partNames: defaultParts.map(\.name),
                                  partCentres: defaultParts.map(\.centre))
@@ -201,7 +216,10 @@ public struct JobSheet: Equatable {
             layerColors: Dictionary(uniqueKeysWithValues: doc.layers.map { ($0.id, $0.colorHex) }),
             notes: doc.jobNotes,
             pauses: steps.filter { $0.pauseAfter != nil }.count,
-            deepestCut: deepest)
+            deepestCut: deepest,
+            zones: zones,
+            clamps: zones.map { Clamp(name: $0.name, position: ClampList.position(of: $0, job: job, units: u),
+                                      height: ClampList.heightText(of: $0, units: u)) })
     }
 }
 
@@ -240,6 +258,15 @@ public enum JobSheetHTML {
         </table>
 
         """
+        if !js.clamps.isEmpty {
+            h += "<h2>Clamps and screws</h2><p class=\"muted\">The export checks the toolpaths against these positions. Measured from the "
+                + "material's edges. Check each one is in place before you start.</p>\n"
+                + "<table><tr><th>✓</th><th>Name</th><th>Where</th><th>Height</th></tr>\n"
+            for c in js.clamps {
+                h += "<tr><td><input type=\"checkbox\"></td><td>\(e(c.name))</td><td>\(e(c.position))</td><td>\(e(c.height))</td></tr>\n"
+            }
+            h += "</table>\n"
+        }
         if !js.notes.isEmpty {
             h += "<h2>Notes</h2><div style=\"white-space:pre-wrap\">\(e(js.notes))</div>\n"
         }
@@ -267,8 +294,8 @@ public enum JobSheetHTML {
                 + "times the whole program as one run (the moves between toolpaths, the tool-change allowance, the stops, "
                 + "speed carried across a join), so it is not the sum of this column.</p>\n"
         }
-        for sheet in js.sheets {
-            h += "<div class=\"sheet\"><h2>\(e(sheet.title))</h2>\n" + preview(sheet, js) + "\n"
+        for (i, sheet) in js.sheets.enumerated() {
+            h += "<div class=\"sheet\"><h2>\(e(sheet.title))</h2>\n" + preview(sheet, js, index: i) + "\n"
             if !sheet.partNames.isEmpty {
                 h += "<p><b>Parts (\(sheet.partNames.count)):</b> " + sheet.partNames.map(e).joined(separator: ", ") + "</p>\n"
             }
@@ -278,13 +305,16 @@ public enum JobSheetHTML {
         return h
     }
 
-    /// Material outline, vectors (flattened) and the XY origin marker, Y up.
-    public static func preview(_ sheet: JobSheet.Sheet, _ js: JobSheet) -> String {
+    /// Material outline, vectors (flattened), clamps and the XY origin marker, Y up. `index` keeps each sheet's hatch pattern id unique.
+    public static func preview(_ sheet: JobSheet.Sheet, _ js: JobSheet, index: Int = 0) -> String {
         let w = max(js.materialSize.x, 1e-6), hgt = max(js.materialSize.y, 1e-6)
         let pad = max(w, hgt) * 0.04
         let stroke = max(w, hgt) / 600
         func pt(_ p: Vec2) -> String { "\(num(p.x)),\(num(hgt - p.y))" }
-        var s = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"720\" viewBox=\"\(num(-pad)) \(num(-pad)) \(num(w + 2 * pad)) \(num(hgt + 2 * pad))\">"
+        // A clamp can stand past the material's edge: the picture grows to show all of it.
+        let area = js.zones.reduce(Rect2(min: .zero, max: Vec2(w, hgt))) { $0.union($1.bounds) }
+        var s = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"720\" viewBox=\"\(num(area.min.x - pad)) \(num(hgt - area.max.y - pad)) "
+            + "\(num(area.width + 2 * pad)) \(num(area.height + 2 * pad))\">"
         s += "<rect x=\"0\" y=\"0\" width=\"\(num(w))\" height=\"\(num(hgt))\" fill=\"#f3e7cf\" stroke=\"#555\" stroke-width=\"\(num(stroke * 2))\"/>"
         let tol = max(w, hgt) / 2000
         for shape in sheet.shapes {
@@ -294,6 +324,24 @@ public enum JobSheetHTML {
                 guard pts.count > 1 else { continue }
                 let tag = path.isClosed ? "polygon" : "polyline"
                 s += "<\(tag) points=\"\(pts.map(pt).joined(separator: " "))\" fill=\"none\" stroke=\"\(escape(color))\" stroke-width=\"\(num(stroke))\"/>"
+            }
+        }
+        if !js.zones.isEmpty {
+            // Hatched with a dashed outline, so a zone still reads as one printed in grey.
+            let id = "clamp-hatch-\(index)", step = pad * 0.25
+            s += "<defs><pattern id=\"\(id)\" patternUnits=\"userSpaceOnUse\" width=\"\(num(step))\" height=\"\(num(step))\" "
+                + "patternTransform=\"rotate(45)\"><rect width=\"\(num(step))\" height=\"\(num(step))\" fill=\"#f8d7d3\"/>"
+                + "<line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"\(num(step))\" stroke=\"#b00\" stroke-width=\"\(num(step * 0.35))\"/></pattern></defs>"
+            for z in js.zones {
+                let d = z.loops.map { "M" + $0.map(pt).joined(separator: " L") + " Z" }.joined(separator: " ")
+                s += "<path d=\"\(d)\" fill=\"url(#\(id))\" fill-rule=\"evenodd\" stroke=\"#b00\" stroke-width=\"\(num(stroke * 2))\" "
+                    + "stroke-dasharray=\"\(num(stroke * 8)) \(num(stroke * 4))\"/>"
+            }
+            for z in js.zones {
+                let c = z.bounds.center
+                s += "<text x=\"\(num(c.x))\" y=\"\(num(hgt - c.y))\" font-size=\"\(num(pad * 0.45))\" text-anchor=\"middle\" "
+                    + "dominant-baseline=\"middle\" font-weight=\"bold\" fill=\"#800\" stroke=\"#fff\" stroke-width=\"\(num(pad * 0.14))\" "
+                    + "paint-order=\"stroke\">\(escape(z.name))</text>"
             }
         }
         for (name, c) in zip(sheet.partNames, sheet.partCentres) {
