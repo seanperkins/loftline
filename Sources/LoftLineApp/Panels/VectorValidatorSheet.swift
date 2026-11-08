@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Validate Vectors: lists problem vectors in the selection (or the whole design), circles them
 /// on the canvas and repairs what can be repaired.

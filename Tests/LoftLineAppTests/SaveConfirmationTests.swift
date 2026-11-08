@@ -2,6 +2,7 @@ import CADCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// A save is only a save once the file holds the project. SwiftUI hands the bytes to the system after
 /// `snapshot` and `fileWrapper`, and says nothing about the write, so the document counts the project as saved

@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Bottom of the Toolpaths sidebar: total time and the tool-change sequence of the combined
 /// program (grouped by tool, as "Save All Toolpaths" does by default).

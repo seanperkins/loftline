@@ -2,6 +2,7 @@ import CADCore
 import CAMCore
 import PostCore
 import SwiftUI
+import LoftLineKit
 
 /// Text for the status bar, kept apart from the view so it can be tested.
 enum StatusReadout {

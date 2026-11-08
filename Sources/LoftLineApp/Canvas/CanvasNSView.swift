@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 /// The 2D design canvas: material, grid, rulers, shapes, toolpath overlay, selection, drawing
 /// tools. Unflipped (Y up) so document and view axes agree.

@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The touch plate must lie on solid material: on the stock, off keep-out zones and clamps, and clear of every toolpath of
 /// the posted sheet, switched on or off (spec §5). Each failure refuses the export with no program.

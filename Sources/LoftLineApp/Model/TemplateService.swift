@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import Foundation
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Applies saved toolpath templates to a project.
 enum TemplateService {

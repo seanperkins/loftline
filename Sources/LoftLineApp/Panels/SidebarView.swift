@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Left sidebar: Design (layers / objects / models) and Toolpaths tabs.
 struct SidebarView: View {

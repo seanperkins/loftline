@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct IOModelPartsTests {
     /// OBJ (millimetres) with two loose boxes: 254 x 508 x 19.05 and 127 x 203.2 x 12.7.

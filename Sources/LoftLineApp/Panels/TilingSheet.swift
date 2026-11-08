@@ -3,6 +3,7 @@ import CADCore
 import CAMCore
 import PostCore
 import SwiftUI
+import LoftLineKit
 
 /// Toolpaths > Save Tiled G-code…: splits a job larger than the machine into tiles, one
 /// program each, zeroed at the tile's lower-left corner on the material.

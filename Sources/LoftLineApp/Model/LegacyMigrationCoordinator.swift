@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import LoftLineKit
 
 /// Runs the Kerf migration at launch and owns what happens when it fails. A failure is never retried silently: LoftLine could
 /// otherwise run, save a seeded `tools.json` over the missing one, and a later retry would skip that file and mark the migration

@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import Foundation
+import LoftLineKit
 
 /// Interactive kerning: drag the letters of a live text shape on the canvas. Each drag or nudge
 /// is one "Kern Letters" undo step; the text stays live (`TextSpec.letterAdjustments`).

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The app's defaults are inches and an American machine, so its text is American English. This scans
 /// string literals (single-line and multi-line help text) for the British spellings that had crept in;

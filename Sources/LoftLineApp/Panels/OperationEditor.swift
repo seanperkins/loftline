@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Edits an operation. Every change is written through to the document immediately (merged
 /// into one undo step), so nothing is lost when the selection changes and Calculate All /

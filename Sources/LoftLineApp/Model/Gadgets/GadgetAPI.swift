@@ -1,4 +1,5 @@
 import Foundation
+import LoftLineKit
 
 /// The JavaScript side of the gadget API: a friendly `loftline` object over the native functions
 /// in `__loftlineNative` (see `GadgetHost`). Written for LoftLine.

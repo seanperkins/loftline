@@ -1,3 +1,5 @@
+@testable import LoftLineApp
+@testable import LoftLineKit
 import Foundation
 
 /// Runs the repo's shell scripts (scripts/, packaging/) with `Process`, so the release tooling is tested like any other code.

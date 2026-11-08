@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// A document window attaches in one step (docs/implicit-state-machines.md #26): the undo manager, the file URL and the
 /// crash-recovery registration are set together, so no edit can land between them.

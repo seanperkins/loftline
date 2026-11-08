@@ -1,5 +1,6 @@
 import AppKit
 import CADCore
+import LoftLineKit
 
 /// One VoiceOver element per visible shape; "press" selects it.
 final class CanvasShapeElement: NSAccessibilityElement {

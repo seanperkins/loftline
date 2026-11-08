@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The sidebar total through the app's own wiring (issue #27): the document's motion estimate over
 /// the program the summary orders, against the 3D preview's estimate of the same toolpaths.

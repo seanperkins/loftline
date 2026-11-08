@@ -4,6 +4,7 @@ import CAMCore
 import PostCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Save All Toolpaths: one combined program (grouped by tool or in list order), one file per
 /// toolpath, or one file per tool. Shows each file's tools, time and validator result.

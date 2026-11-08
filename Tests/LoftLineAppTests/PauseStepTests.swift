@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The operator pause from the operation's setup to the program, the job sheet and the stale check.
 @Suite struct PauseStepTests {

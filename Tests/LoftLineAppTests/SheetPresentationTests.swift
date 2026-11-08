@@ -2,6 +2,7 @@ import CADCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The document's one sheet slot and its alert (docs/implicit-state-machines.md #14): a command never replaces an open
 /// sheet (whose draft would be lost), and a report never replaces an alert that is showing.

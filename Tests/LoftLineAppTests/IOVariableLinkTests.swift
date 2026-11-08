@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite @MainActor struct IOVariableLinkTests {
     static func setup() -> (LoftLineDocument, UUID) {

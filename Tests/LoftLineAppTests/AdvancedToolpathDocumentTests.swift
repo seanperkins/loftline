@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// LoftLineDocument wiring for the inlay wizard, STL placement dialog and tab editor.
 @Suite struct AdvancedToolpathDocumentTests {

@@ -1,4 +1,5 @@
 import SwiftUI
+import LoftLineKit
 
 /// A line in the Welcome window while an update is waiting for the user or about to install.
 struct UpdateBanner: View {

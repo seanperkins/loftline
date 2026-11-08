@@ -3,6 +3,7 @@ import CADCore
 import PostCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Toolpaths ▸ Post Processors…: the posts (built in, custom, and files that did not load), a form for every field of the
 /// selected post, and the G-code it writes for a fixed sample job with the validator's verdict. Built-in posts are read-only;

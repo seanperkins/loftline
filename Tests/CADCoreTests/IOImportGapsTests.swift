@@ -1,4 +1,6 @@
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 import Testing
 @testable import CADCore
@@ -50,6 +52,7 @@ import Testing
         #expect(try EPSImporter().importVectors(from: IOFixtures.data("simple.eps"), targetUnits: .inch).warnings.isEmpty)
     }
 
+#if canImport(CoreGraphics)
     @Test func pdfReportsANearlyClosedOutline() throws {
         let out = NSMutableData()
         var box = CGRect(x: 0, y: 0, width: 288, height: 216)
@@ -68,4 +71,5 @@ import Testing
         #expect(r.shapes.count == 1)
         #expect(r.warnings.contains { $0.hasPrefix("Layer \"PDF Import\": 1 open vector has ends that nearly meet, 0.0069 in apart") })
     }
+#endif
 }

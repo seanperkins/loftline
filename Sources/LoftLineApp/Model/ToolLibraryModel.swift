@@ -1,6 +1,7 @@
 import CADCore
 import Combine
 import Foundation
+import LoftLineKit
 
 /// The shared, persisted tool database (CRUD + autosave). One instance per app.
 final class ToolLibraryModel: ObservableObject {

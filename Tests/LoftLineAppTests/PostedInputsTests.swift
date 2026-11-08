@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The export sheets post a program once and keep it; `LoftLineDocument.postedInputs` is how they see that the
 /// document has moved on (issue #61), for instance after an edit in the Tool Database window.

@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// HIG (Accessibility, "Offer sufficiently sized controls"): macOS controls default to 28 x 28 pt and
 /// should never be smaller than 20 x 20 pt.

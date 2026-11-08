@@ -5,6 +5,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Offscreen renders of the advanced toolpath UI (sheets, sidebar summary, tab editor) to catch
 /// crashes and blank output. Set LOFTLINE_RENDER_DIR to keep the PNGs.

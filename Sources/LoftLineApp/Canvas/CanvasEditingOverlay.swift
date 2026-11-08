@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 extension Transform2D {
     var cg: CGAffineTransform { CGAffineTransform(a: a, b: b, c: c, d: d, tx: tx, ty: ty) }

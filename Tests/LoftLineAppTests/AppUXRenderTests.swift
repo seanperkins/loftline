@@ -5,6 +5,7 @@ import Foundation
 import SwiftUI
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Offscreen renders of the app-ux windows and the side-by-side view, to catch layout crashes.
 @Suite struct AppUXRenderTests {

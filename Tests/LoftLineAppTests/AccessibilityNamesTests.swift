@@ -2,6 +2,7 @@ import CADCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// What VoiceOver says for controls that are drawn as a symbol or with an arrow glyph.
 @Suite struct AccessibilityNamesTests {

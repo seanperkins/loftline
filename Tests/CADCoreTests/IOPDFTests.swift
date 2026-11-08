@@ -1,3 +1,5 @@
+#if canImport(CoreGraphics)
+// PDF import is Mac-only so far (docs/PLATFORMS.md).
 import CoreGraphics
 import Foundation
 import Testing
@@ -81,3 +83,4 @@ enum PDFFixture {
         }
     }
 }
+#endif

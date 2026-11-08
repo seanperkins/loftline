@@ -2,6 +2,7 @@ import CADCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The Tool Database's search box, and names made from a tool's geometry (issue #18).
 @Suite struct ToolSearchTests {

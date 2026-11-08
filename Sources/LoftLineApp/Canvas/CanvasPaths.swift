@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 /// CGPath construction in DOCUMENT coordinates (Y up). Arcs and cubics are kept exact so the
 /// canvas stays smooth at any zoom; callers apply the viewport transform when drawing.

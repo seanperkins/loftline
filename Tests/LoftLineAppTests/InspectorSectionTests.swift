@@ -1,5 +1,6 @@
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Collapsible inspector sections remember whether they are open, per section title.
 @Suite struct InspectorSectionTests {

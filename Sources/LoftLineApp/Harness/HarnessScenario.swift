@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import LoftLineKit
 
 struct HarnessError: Error, CustomStringConvertible {
     var message: String

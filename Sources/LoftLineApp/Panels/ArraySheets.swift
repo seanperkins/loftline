@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 struct VectorTextureSheet: View {
     @ObservedObject var document: LoftLineDocument

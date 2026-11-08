@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct IconTests {
     @Test func theToolPaletteIsGroupedByKindOfTool() {

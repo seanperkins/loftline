@@ -2,6 +2,7 @@ import CADCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// A copier that fails until told not to.
 private final class FlakyCopy {

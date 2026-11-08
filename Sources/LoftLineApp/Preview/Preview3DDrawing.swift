@@ -1,6 +1,7 @@
 // Drawing polylines and picking vectors in the 3D preview. Owned by preview.
 import CADCore
 import Foundation
+import LoftLineKit
 
 /// What a plain click on the 3D view does.
 enum Preview3DTool: String, CaseIterable, Identifiable {

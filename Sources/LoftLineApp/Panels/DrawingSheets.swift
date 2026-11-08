@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Shows the dialog for a `DrawingSheet`.
 struct DrawingSheetHost: View {

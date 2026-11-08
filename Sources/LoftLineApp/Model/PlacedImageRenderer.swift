@@ -1,5 +1,6 @@
 import AppKit
 import CADCore
+import LoftLineKit
 
 /// Draws placed tracing images (cropped, faded). Decoded images are cached by id + data size.
 enum PlacedImageRenderer {

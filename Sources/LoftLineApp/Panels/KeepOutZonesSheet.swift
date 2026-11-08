@@ -2,6 +2,7 @@ import AppKit
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Keep-out zones made from closed vectors (toolpaths-2d).
 enum KeepOutEditing {

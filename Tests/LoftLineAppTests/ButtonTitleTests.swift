@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// HIG, Buttons: use a verb that says what the button does ("Apply", "Save"); "OK" is for acknowledging a
 /// message, not for committing a dialog.

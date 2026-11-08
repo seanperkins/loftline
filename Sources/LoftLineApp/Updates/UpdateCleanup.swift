@@ -1,4 +1,5 @@
 import Foundation
+import LoftLineKit
 
 /// Housekeeping after an update.
 enum UpdateCleanup {

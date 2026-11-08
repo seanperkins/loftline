@@ -2,6 +2,7 @@ import CADCore
 import CAMCore
 import PostCore
 import SwiftUI
+import LoftLineKit
 
 // Forms for the 2D toolpaths added in the VCarve-parity work (toolpaths-2d).
 

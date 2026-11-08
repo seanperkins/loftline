@@ -2,6 +2,7 @@
 import CADCore
 import CAMCore
 import Foundation
+import LoftLineKit
 
 /// One or two picked points on the carved stock, in the material frame
 /// (x, y from the stock's lower-left corner; z = -depth below the material top).

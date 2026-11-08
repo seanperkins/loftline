@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Expressions typed into Job Setup evaluate against the form's pending values, and the link
 /// they leave behind is re-evaluated against the committed job on Apply (issue #25).

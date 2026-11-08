@@ -1,0 +1,25 @@
+{
+  "name": "loftline-desktop",
+  "private": true,
+  "version": "0.3.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "serve": "node tools/serve.mjs",
+    "shots": "node tools/shots.mjs",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.0",
+    "@tauri-apps/plugin-dialog": "^2.6.0",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.0",
+    "@types/three": "^0.187.0",
+    "playwright": "^1.64.0",
+    "typescript": "^6.0.0",
+    "vite": "^8.0.0"
+  }
+}

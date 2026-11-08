@@ -6,6 +6,7 @@ import Foundation
 import PostCore
 import SwiftUI
 import UniformTypeIdentifiers
+import LoftLineKit
 
 extension UTType {
     /// Native project file (JSON). Declared in Info.plist by scripts/bundle.sh.
@@ -870,12 +871,7 @@ final class LoftLineDocument: ReferenceFileDocument {
     }
 
     /// `operations` in program order with merged parts in place.
-    static func flattened(_ operations: [AnyOperation]) -> [AnyOperation] {
-        operations.flatMap { op -> [AnyOperation] in
-            if case .merge(let m) = op { return m.params.children }
-            return [op]
-        }
-    }
+    static func flattened(_ operations: [AnyOperation]) -> [AnyOperation] { operations.flattened }
 
     /// Generates toolpaths off the main thread; results arrive asynchronously. A request for an
     /// operation that is already calculating is queued and runs when the current one finishes.
@@ -1164,10 +1160,3 @@ final class PostProfileCatalog: ObservableObject {
     }
 }
 
-/// Thread-safe cancel flag shared with a background calculation.
-final class CancellationFlag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var cancelled = false
-    var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return cancelled }
-    func cancel() { lock.lock(); cancelled = true; lock.unlock() }
-}

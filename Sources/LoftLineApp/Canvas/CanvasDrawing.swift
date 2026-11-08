@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import CAMCore
+import LoftLineKit
 
 /// Canvas colours chosen in Preferences (with built-in fallbacks).
 enum CanvasColors {

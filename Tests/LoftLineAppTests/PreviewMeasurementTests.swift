@@ -3,6 +3,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct PreviewMeasurementTests {
     @Test func distancesAndReadout() {

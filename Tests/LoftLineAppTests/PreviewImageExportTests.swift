@@ -5,6 +5,7 @@ import Foundation
 import Metal
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct PreviewImageExportTests {
     @Test func fileName() {

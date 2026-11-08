@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 #if DEBUG
 @Suite struct HarnessCaptureTests {

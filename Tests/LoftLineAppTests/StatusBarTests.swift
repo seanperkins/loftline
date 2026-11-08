@@ -3,6 +3,7 @@ import CAMCore
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct StatusBarTests {
     @Test func cursorReadoutCarriesTheUnit() {

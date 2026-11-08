@@ -1,5 +1,6 @@
 import CADCore
 import SwiftUI
+import LoftLineKit
 
 /// "Scale of file.svg": shown when an SVG does not state its size, so its units have to be read as pixels
 /// at some number per inch. The scale the file's program is known to use is selected, and the size the

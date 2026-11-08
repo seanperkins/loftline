@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import UpdateCore
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Serves canned responses to a URLSession so the controller never touches the network.
 final class StubURL: URLProtocol {

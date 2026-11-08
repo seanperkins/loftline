@@ -1,6 +1,7 @@
 import CADCore
 import PostCore
 import SwiftUI
+import LoftLineKit
 
 /// Job Setup: material size, units, XY origin, Z zero, safe Z and home position.
 struct JobSetupSheet: View {

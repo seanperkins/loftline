@@ -1,6 +1,7 @@
 import CoreGraphics
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct WrappingLayoutTests {
     @Test func keepsEverythingOnOneLineWhenItFits() {

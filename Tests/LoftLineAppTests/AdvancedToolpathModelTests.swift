@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Shared setup: Profile (T1) on shape 0, V-Carve (T6) and Pocket (T1) on shape 1, all calculated.
 private enum Job {

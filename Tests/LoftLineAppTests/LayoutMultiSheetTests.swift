@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Suite struct LayoutMultiSheetTests {
     /// 12x12 material and one 5x5 plate with a profile toolpath; nesting 9 copies needs 3 sheets.

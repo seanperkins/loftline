@@ -2,6 +2,7 @@ import CADCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Two library tools with one T number are shown as such in the Tool Database, and new and copied tools take a
 /// number nothing else has (issue #38).

@@ -1,6 +1,7 @@
 import AppKit
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// HIG, Accessibility: text needs a 4.5:1 contrast ratio up to 17 pt. The system's orange, red and green
 /// are bright colours meant for fills and icons, and fail it as small text on a light background.

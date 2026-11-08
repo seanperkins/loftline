@@ -1,6 +1,7 @@
 // Which toolpaths the 3D preview simulates. Owned by preview.
 import CAMCore
 import Foundation
+import LoftLineKit
 
 enum PreviewScope: String, CaseIterable, Identifiable {
     /// Every enabled, calculated toolpath (what Export G-code writes).

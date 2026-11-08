@@ -1,6 +1,7 @@
 import CADCore
 import CAMCore
 import SwiftUI
+import LoftLineKit
 
 /// Design > Nest Parts…: packs the selected parts (or every editable vector) onto the material.
 struct NestingSheet: View {

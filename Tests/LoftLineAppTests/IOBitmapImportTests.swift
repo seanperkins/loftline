@@ -4,6 +4,7 @@ import CAMCore
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 enum BitmapFixture {
     /// A w×h RGB PNG (red left half, blue right half), optionally tagged with a DPI.

@@ -1,6 +1,7 @@
 import AppKit
 import CADCore
 import SwiftUI
+import LoftLineKit
 
 /// SwiftUI wrapper for the AppKit canvas.
 struct DesignCanvas: NSViewRepresentable {

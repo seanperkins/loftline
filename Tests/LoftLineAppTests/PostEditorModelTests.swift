@@ -2,6 +2,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The Post Processors sheet's model: Duplicate makes an unsaved draft, Save writes, Cancel discards, and the list is locked
 /// while a draft has unsaved changes.

@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// A program is never posted from a toolpath calculated before a later change.
 @Suite @MainActor struct CalculateUntilFreshTests {

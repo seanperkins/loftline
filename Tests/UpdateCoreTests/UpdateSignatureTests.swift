@@ -1,3 +1,5 @@
+// These run scripts/update-feed.sh and OpenSSL by their Unix paths; the Mac and Linux cover the signature code.
+#if !os(Windows)
 import Foundation
 import Testing
 import UpdateCore
@@ -21,9 +23,25 @@ private enum Sh {
         process.standardOutput = pipe
         process.standardError = pipe
         try process.run()
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let data = try readToEnd(pipe.fileHandleForReading.fileDescriptor)
         process.waitUntilExit()
         return Output(status: process.terminationStatus, text: String(decoding: data, as: UTF8.self))
+    }
+
+    /// Foundation's `readDataToEndOfFile` crashes if a signal interrupts its read off the Mac, which x86-64 emulation does.
+    private static func readToEnd(_ descriptor: Int32) throws -> Data {
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 1 << 16)
+        while true {
+            let count = read(descriptor, &buffer, buffer.count)
+            if count > 0 {
+                data.append(contentsOf: buffer[..<count])
+            } else if count == 0 {
+                return data
+            } else if errno != EINTR {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+        }
     }
 }
 
@@ -303,3 +321,4 @@ private enum Fixture {
         try git(repo, "commit", "-q", "-m", message)
     }
 }
+#endif

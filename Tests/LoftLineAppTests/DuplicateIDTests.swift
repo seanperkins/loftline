@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// Issue #123: every item in a project is found by id, so two items on one id post whichever comes first. The app no
 /// longer writes two operations on one id, repairs files that have them, and refuses any other clash.

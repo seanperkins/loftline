@@ -4,6 +4,7 @@ import Foundation
 import PostCore
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 @Test func keepOutZonesBlockExportOfToolpathsThatHitThem() throws {
     var project = AppTestSupport.project() // 2x1 rectangles at (1,1) and (5,1)

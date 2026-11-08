@@ -1,5 +1,6 @@
 import AppKit
 import UniformTypeIdentifiers
+import LoftLineKit
 
 /// Shows file panels and alerts as sheets on the frontmost window (the document window, or the sheet
 /// on it) instead of app-modal windows floating over everything. The HIG asks document-based apps for

@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import LoftLineApp
+@testable import LoftLineKit
 
 /// The one-time copy of Kerf data into LoftLine: files under Application Support and every `kerf.*` default.
 @Suite struct LegacyKerfMigrationTests {

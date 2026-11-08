@@ -1,5 +1,6 @@
 import CADCore
 import Foundation
+import LoftLineKit
 
 /// One input a gadget asks for before it runs, declared in the script header:
 ///
