@@ -4,12 +4,23 @@ import Foundation
 /// One clamp, screw or other keep-out, named the way the job sheet, the canvas and the 3D preview show it.
 public struct ClampItem: Equatable, Sendable {
     public var name: String
-    /// Closed loops, even-odd, document units, material frame.
-    public var loops: [[Vec2]]
+    /// Closed loops, even-odd, document units, material frame. Set once, since `labelPoint` is worked out from them.
+    public private(set) var loops: [[Vec2]]
     /// How far its top stands above the material top (0 = flush).
     public var height: Double
     /// The keep-out layer the shape is on; nil for a zone from Toolpaths > Keep-Out Zones.
     public var layerID: UUID?
+    /// Where its name goes: the centre when that's on the zone, else the point inside it furthest from its edges (`PartLabels`),
+    /// so an L-shaped or ring clamp's name still sits on it.
+    public let labelPoint: Vec2
+
+    public init(name: String, loops: [[Vec2]], height: Double, layerID: UUID?) {
+        self.name = name; self.loops = loops; self.height = height; self.layerID = layerID
+        let box = Rect2(points: loops.joined())
+        let centre = box.isEmpty ? .zero : box.center
+        let inside = loops.filter { $0.count > 2 && PathGeometry.contains($0, centre) }.count % 2 == 1
+        labelPoint = inside ? centre : PartLabels.labelPoint(region: loops)?.point ?? centre
+    }
 
     public var bounds: Rect2 { Rect2(points: loops.joined()) }
 }
@@ -19,12 +30,12 @@ public struct ClampItem: Equatable, Sendable {
 public enum ClampList {
     public static func items(in doc: Document) -> [ClampItem] {
         let fromLayers = Fixtures.zones(in: doc).map { ClampItem(name: $0.name, loops: $0.loops, height: $0.height, layerID: $0.layerID) }
-        let fromZones = (doc.keepOutZones ?? []).filter { $0.outline.count > 2 }
+        let fromZones = (doc.keepOutZones ?? []).filter(\.isUsable)
             .map { ClampItem(name: $0.name, loops: [$0.outline], height: max(0, $0.height), layerID: nil) }
         var items = fromLayers + fromZones
         // Several sharing a name are numbered in list order; a name used once stays as it is. A number is never one that would
         // repeat a name already in use ("Clamps 1" typed by the user), and a name that ends in a number gets it in brackets
-        // ("Clamp 1 (2)", when Clamps and Fixture Holes has been run twice).
+        // ("Clamp 1 (2)", for two shapes both named "Clamp 1").
         let counts = Dictionary(items.map { ($0.name, 1) }, uniquingKeysWith: +)
         var taken = Set(counts.filter { $0.value == 1 }.keys)
         var next: [String: Int] = [:]
@@ -64,5 +75,33 @@ public enum ClampList {
 
     public static func heightText(of item: ClampItem, units: LengthUnit) -> String {
         item.height > 0 ? "\(JobSheet.fmt(item.height, units)) above the material" : "flush with the top"
+    }
+}
+
+/// Remembers the clamp list until a keep-out changes, so a view redrawn on every mouse move doesn't flatten the zones each time.
+public struct ClampListCache {
+    private struct Key: Equatable {
+        var layers: [Layer]
+        var shapes: [Shape]
+        var zones: [KeepOutZone]?
+    }
+
+    /// How many times the list was built (for tests).
+    public private(set) var builds = 0
+    private var key: Key?
+    private var cached: [ClampItem] = []
+
+    public init() {}
+
+    public mutating func items(in doc: Document) -> [ClampItem] {
+        let ids = Fixtures.keepOutLayerIDs(in: doc)
+        let k = Key(layers: doc.layers.filter { ids.contains($0.id) }, shapes: doc.shapes.filter { ids.contains($0.layerID) },
+                    zones: doc.keepOutZones)
+        if k != key {
+            key = k
+            cached = ClampList.items(in: doc)
+            builds += 1
+        }
+        return cached
     }
 }

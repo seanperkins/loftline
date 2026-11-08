@@ -187,9 +187,14 @@ final class SimulationPreviewModel: ObservableObject {
     @Published var showToolpathLines = storedFlag(showToolpathsKey, default: true) {
         didSet { UserDefaults.standard.set(showToolpathLines, forKey: Self.showToolpathsKey); applyOverlay() }
     }
-    /// Clamps and screws standing on the stock.
-    @Published var showClamps = storedFlag(showClampsKey, default: true) {
-        didSet { UserDefaults.standard.set(showClamps, forKey: Self.showClampsKey); applyClamps() }
+    /// Clamps and screws standing on the stock: the saved preference itself, like `showVectors`, so every window reads one value.
+    var showClamps: Bool {
+        get { Self.storedFlag(Self.showClampsKey, default: true) }
+        set {
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: Self.showClampsKey)
+            applyClamps()
+        }
     }
     private var clamps: [ClampItem] = []
 
@@ -222,6 +227,7 @@ final class SimulationPreviewModel: ObservableObject {
     func preferenceChanged() {
         objectWillChange.send()
         applyOverlay()
+        applyClamps()
     }
     private var lines = ToolpathLines3D()
     private var vectors: [[Vec2]] = []

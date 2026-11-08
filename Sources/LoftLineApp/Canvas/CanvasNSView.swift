@@ -70,6 +70,8 @@ final class CanvasNSView: NSView, NSUserInterfaceValidations {
     // Caches keyed by shape id (entries are reused while the shape is unchanged).
     private var flatCache: [UUID: FlatShape] = [:]
     private var pathCache: [UUID: (shape: Shape, path: CGPath)] = [:]
+    /// Clamp names: rebuilt only when a keep-out changes (`drawClampNames`).
+    var clampCache = ClampListCache()
     private var toolpathCache: [UUID: (result: [Toolpath], job: JobSetup, cuts: CGPath, rapids: CGPath)] = [:]
 
     override var isFlipped: Bool { false }

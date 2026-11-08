@@ -1313,14 +1313,20 @@
 - **One list, `ClampList`.** The job sheet, the canvas names and the 3D blocks read the same list: closed shapes on keep-out layers, hidden layers
   included (`Fixtures.zones`), then Toolpaths > Keep-Out Zones with three or more points, which is what the export checks. Names several zones
   share are numbered in that order ("Clamps 1", "Clamps 2"), across both sources, skipping a number that would repeat a name already in
-  use; a name ending in a number gets it in brackets ("Clamp 1 (2)", after Clamps and Fixture Holes runs twice). Export messages keep
-  `Fixtures.zones`' own names, unnumbered.
+  use; a name ending in a number gets it in brackets ("Clamp 1 (2)"). Clamps and Fixture Holes run again numbers on from the layer
+  ("Clamp 7"), so it doesn't make those repeats itself. Export messages keep `Fixtures.zones`' own names, unnumbered.
+- **Labels and fill.** A name sits at the zone's centre when that's on the zone, else at the point inside it furthest from its edges
+  (`PartLabels`), so an L-shaped or ring clamp's name is on it. The canvas fills the loops the export checks, and keeps the list until a
+  keep-out changes (`ClampListCache`), since it redraws on every mouse move. `KeepOutZone.isUsable` is the one rule for which
+  Keep-Out Zones count (three or more points), shared by the check, lift-over, the footer check and the list.
 - **Positions from the material's edges, not X0 Y0.** That's what the operator can measure. A zone whose bounding box crosses exactly one edge
   is worded from that edge ("left edge, centre 12 in from the bottom, reaches 1 in onto the material"). A zone at a corner, across the whole
   material or inside it is given as ranges from the left and bottom edges; one wholly outside the material says "off the material" first.
 - **Drawn on every nesting sheet.** Keep-out layers never move with a sheet, so every sheet's picture shows the same zones, and the picture
   grows to show a clamp past the material's edge. Hatched with a dashed outline so it still reads printed in grey.
 - **3D preview.** Show ▸ Clamps and Screws, on by default and remembered (`preview3D.showClamps`), like the menu's other three toggles.
+  The stored preference is the only flag, read by every window's model, and `preferenceChanged` re-applies it, as for Vectors: a
+  copy in each model let two open windows disagree.
   A flush zone is a slab 2% of the thickness tall so it still shows.
 - **What isn't shown.** The canvas names only zones it fills, so a hidden layer's are named on the sheet alone. The 3D preview shows blocks without
   names. The G-code preview window has no project, so no clamps. On Windows and Linux only the job sheet has them (docs/PLATFORMS.md).

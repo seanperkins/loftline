@@ -17,7 +17,7 @@ public enum KeepOutAvoidance {
 
     public static func apply(_ toolpaths: [Toolpath], zones: [KeepOutZone], coords: MachineCoordinates,
                              margin: Double, tolerance: Double) -> Result {
-        let active = zones.filter { $0.liftOver == true && $0.outline.count > 2 }
+        let active = zones.filter { $0.liftOver == true && $0.isUsable }
         guard !active.isEmpty else { return Result(toolpaths: toolpaths, lifts: 0) }
         let m = max(margin, 0)
         let clearZ = max(coords.safeZ, active.map { coords.z(aboveTop: $0.height + 2 * m) }.max() ?? coords.safeZ)
@@ -52,7 +52,7 @@ public enum KeepOutAvoidance {
     /// controller may have moved), so that travel is left alone; `KeepOut.violations` does the same.
     public static func link(_ toolpaths: [Toolpath], zones: [KeepOutZone], coords: MachineCoordinates,
                             margin: Double, tolerance: Double) -> [Toolpath] {
-        let active = zones.filter { $0.liftOver == true && $0.outline.count > 2 }
+        let active = zones.filter { $0.liftOver == true && $0.isUsable }
         guard !active.isEmpty else { return toolpaths }
         let m = max(margin, 0)
         let clearZ = max(coords.safeZ, active.map { coords.z(aboveTop: $0.height + 2 * m) }.max() ?? coords.safeZ)
@@ -95,7 +95,7 @@ public enum KeepOutAvoidance {
     /// lift-over top + 2 × margin, the height `apply` and `link` travel at); nil when no zone
     /// is marked lift-over.
     public static func clearanceHeight(zones: [KeepOutZone], margin: Double) -> Double? {
-        zones.filter { $0.liftOver == true && $0.outline.count > 2 }.map { $0.height + 2 * max(margin, 0) }.max()
+        zones.filter { $0.liftOver == true && $0.isUsable }.map { $0.height + 2 * max(margin, 0) }.max()
     }
 
     /// Raises the travel after the last toolpath (the post footer's move home: `points`, in
@@ -104,7 +104,7 @@ public enum KeepOutAvoidance {
     /// footer's own moves then go nowhere; it never descends inside a zone.
     public static func linkTravel(after toolpaths: [Toolpath], through points: [Vec3], zones: [KeepOutZone],
                                   coords: MachineCoordinates, margin: Double, tolerance: Double) -> [Toolpath] {
-        let active = zones.filter { $0.liftOver == true && $0.outline.count > 2 }
+        let active = zones.filter { $0.liftOver == true && $0.isUsable }
         guard !active.isEmpty, !points.isEmpty,
               let i = toolpaths.lastIndex(where: { $0.moves.contains { $0.target != nil } }),
               let end = toolpaths[i].moves.last(where: { $0.target != nil })?.target else { return toolpaths }

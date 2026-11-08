@@ -43,8 +43,9 @@ public enum FixtureCommands {
                                         perEndEdges: max(0, o.perEndEdge), endInset: max(0, o.endInset))
         guard !rects.isEmpty, o.length > 0 else { return [] }
         let layer = keepOutLayer(named: "Clamps", height: max(0, o.height), in: &project)
+        let first = nextNumber("Clamp ", on: layer, in: project.document)
         return rects.enumerated().map { i, r in
-            let s = Shape(name: "Clamp \(i + 1)", layerID: layer, paths: [ShapeFactory.rectangle(r)],
+            let s = Shape(name: "Clamp \(first + i)", layerID: layer, paths: [ShapeFactory.rectangle(r)],
                           origin: .rectangle(width: r.width, height: r.height, cornerRadius: 0))
             project.document.add(s)
             return s.id
@@ -66,13 +67,25 @@ public enum FixtureCommands {
         } else {
             layer = project.addLayer(named: "Fixture Holes")
         }
+        let prefix = o.keepOut ? "Screw " : "Hole "
+        let first = nextNumber(prefix, on: layer, in: project.document)
         return centres.enumerated().map { i, c in
-            let s = Shape(name: (o.keepOut ? "Screw " : "Hole ") + "\(i + 1)", layerID: layer,
+            let s = Shape(name: prefix + "\(first + i)", layerID: layer,
                           paths: [ShapeFactory.circle(center: c, radius: o.diameter / 2)],
                           origin: .circle(radius: o.diameter / 2))
             project.document.add(s)
             return s.id
         }
+    }
+
+    /// One past the highest "<prefix>N" already on the layer, so running the command again numbers on ("Clamp 7") and every clamp
+    /// keeps a name of its own on the job sheet and canvas. Numbers of a billion or more are ignored: a name like
+    /// "Clamp 9223372036854775807", typed or in a file someone sent, would otherwise overflow the count and crash. If one is
+    /// ever repeated, the clamp list still tells them apart (`ClampList`).
+    static func nextNumber(_ prefix: String, on layer: UUID, in doc: Document) -> Int {
+        let used = doc.shapes.filter { $0.layerID == layer && $0.name.hasPrefix(prefix) }
+            .compactMap { Int($0.name.dropFirst(prefix.count)) }.filter { $0 < 1_000_000_000 }
+        return (used.max() ?? 0) + 1
     }
 
     /// The keep-out layer called `name` (red), created

@@ -93,7 +93,7 @@ extension CanvasNSView {
     func drawKeepOutZones(_ ctx: CGContext, _ doc: LoftLineDocument, _ vt: CGAffineTransform) {
         guard let zones = doc.document.keepOutZones, !zones.isEmpty else { return }
         let red = NSColor(srgbRed: 0.85, green: 0.15, blue: 0.1, alpha: 1)
-        for z in zones where z.outline.count > 2 {
+        for z in zones where z.isUsable {
             let path = CGMutablePath()
             path.addLines(between: z.outline.map { CGPoint(x: $0.x, y: $0.y).applying(vt) })
             path.closeSubpath()
