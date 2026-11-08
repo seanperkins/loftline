@@ -102,6 +102,8 @@ struct SimulationPreviewView: View {
     @StateObject private var model = SimulationPreviewModel()
     /// The one stored "show vectors" preference (the model reads it, never a copy of it).
     @AppStorage(SimulationPreviewModel.showVectorsKey) private var vectorsPreference = false
+    /// The one stored "show clamps" preference, read the same way.
+    @AppStorage(SimulationPreviewModel.showClampsKey) private var clampsPreference = true
     @ObservedObject private var timeStore = TimeEstimateStore.shared
     @State private var showTimeSettings = false
     @ObservedObject private var appearanceStore = PreviewAppearanceStore.shared
@@ -132,6 +134,7 @@ struct SimulationPreviewView: View {
         .onChange(of: selectedVectors) { _, v in model.setSelectedVectors(v) }
         .onChange(of: clamps) { _, c in model.setClamps(c) }
         .onChange(of: vectorsPreference) { _, _ in model.preferenceChanged() }
+        .onChange(of: clampsPreference) { _, _ in model.preferenceChanged() }
         .onChange(of: toolpaths.isEmpty) { _, empty in model.toolpathsChanged(isEmpty: empty) }
         .onChange(of: timeStore.settings) { _, _ in configure() }
         .onChange(of: appearanceStore.settings) { _, s in model.setAppearance(s.appearance) }
@@ -310,7 +313,7 @@ struct SimulationPreviewView: View {
             Toggle("Toolpath Lines", isOn: $model.showToolpathLines)
             Toggle("Rapid Moves", isOn: $model.showRapidLines).disabled(!model.showToolpathLines)
             Toggle("Vectors", isOn: $vectorsPreference)
-            Toggle("Clamps and Screws", isOn: $model.showClamps)
+            Toggle("Clamps and Screws", isOn: $clampsPreference)
         } label: {
             Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
         }

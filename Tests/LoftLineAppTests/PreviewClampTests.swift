@@ -33,6 +33,20 @@ import Testing
         #expect(abs(Double(node.position.z) - Double(depth) / 2) < 1e-9)
     }
 
+    /// The toggle is one saved preference: switching it in one window updates another that's open (as Show ▸ Vectors does).
+    @Test @MainActor func bothWindowsFollowOneClampsFlag() {
+        let a = SimulationPreviewModel(), b = SimulationPreviewModel()
+        let saved = a.showClamps
+        defer { a.showClamps = saved }
+        a.showClamps = true
+        b.setClamps([ClampItem(name: "A", loops: [square], height: 1, layerID: nil)])
+        #expect(b.stockScene.clampCount == 1)
+        a.showClamps = false
+        #expect(b.showClamps == false)
+        b.preferenceChanged()   // what the view's @AppStorage change calls in every window
+        #expect(b.stockScene.clampCount == 0)
+    }
+
     @Test @MainActor func theSceneShowsAndClearsClamps() {
         let scene = StockScene()
         scene.setClamps([ClampItem(name: "A", loops: [square], height: 1, layerID: nil),
