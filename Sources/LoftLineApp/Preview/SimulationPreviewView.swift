@@ -92,6 +92,8 @@ struct SimulationPreviewView: View {
     var vectors: [[Vec2]] = []
     /// Selected design vectors, drawn highlighted.
     var selectedVectors: [[Vec2]] = []
+    /// Clamps and screws (`ClampList`), shown as blocks unless "Show ▸ Clamps and Screws" is off.
+    var clamps: [ClampItem] = []
     /// When set, the Draw tool is offered; called with each finished polyline and whether it closed.
     var onDrawShape: (([Vec2], Bool) -> Void)? = nil
     /// When set, the Select tool is offered; called with the clicked point and a pick tolerance.
@@ -128,6 +130,7 @@ struct SimulationPreviewView: View {
         .onChange(of: rapidRate) { _, _ in configure() }
         .onChange(of: vectors) { _, v in model.setVectors(v) }
         .onChange(of: selectedVectors) { _, v in model.setSelectedVectors(v) }
+        .onChange(of: clamps) { _, c in model.setClamps(c) }
         .onChange(of: vectorsPreference) { _, _ in model.preferenceChanged() }
         .onChange(of: toolpaths.isEmpty) { _, empty in model.toolpathsChanged(isEmpty: empty) }
         .onChange(of: timeStore.settings) { _, _ in configure() }
@@ -144,6 +147,7 @@ struct SimulationPreviewView: View {
         model.setAppearance(appearanceStore.settings.appearance)
         model.setVectors(vectors)
         model.setSelectedVectors(selectedVectors)
+        model.setClamps(clamps)
         model.onDrawShape = onDrawShape
         model.onSelectAt = onSelectAt
         model.configure(job: job, toolpaths: toolpaths, rapidRate: rapidRate, units: units,
@@ -306,12 +310,13 @@ struct SimulationPreviewView: View {
             Toggle("Toolpath Lines", isOn: $model.showToolpathLines)
             Toggle("Rapid Moves", isOn: $model.showRapidLines).disabled(!model.showToolpathLines)
             Toggle("Vectors", isOn: $vectorsPreference)
+            Toggle("Clamps and Screws", isOn: $model.showClamps)
         } label: {
             Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
         }
         .menuIndicator(.visible)
         .fixedSize()
-        .help("Show toolpath lines, rapids and design vectors in the 3D view")
+        .help("Show toolpath lines, rapids, design vectors, and clamps and screws in the 3D view")
                 .accessibilityLabel("Show in the 3D view")
     }
 
@@ -373,7 +378,8 @@ struct ToolpathPreviewPanel: View {
             case .threeD:
                 SimulationPreviewView(
                     job: document.job, units: document.units, toolpaths: toolpaths,
-                    rapidRate: SimulationPreviewView.rapidRate(for: postProfile, units: document.units))
+                    rapidRate: SimulationPreviewView.rapidRate(for: postProfile, units: document.units),
+                    clamps: ClampList.items(in: document))
             }
         }
     }

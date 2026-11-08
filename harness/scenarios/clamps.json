@@ -3,6 +3,12 @@
   "window": [1280, 820],
   "steps": [
     {"op": "project", "name": "harness/projects/sign-clamps.loftline"},
-    {"op": "capture", "name": "canvas"}
+    {"op": "capture", "name": "canvas"},
+    {"op": "tab", "value": "toolpaths"},
+    {"op": "calculate"},
+    {"op": "mode", "value": "3d"},
+    {"op": "view", "value": "threeQuarter"},
+    {"op": "wait", "seconds": 3},
+    {"op": "capture", "name": "preview"}
   ]
 }
