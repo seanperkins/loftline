@@ -31,20 +31,20 @@ import Testing
     @Test func aHiddenClampLayerIsListedAndDrawn() {
         let (p, _) = project(clampsVisible: false)
         let js = sheet(p)
-        #expect(js.clamps == [JobSheet.Clamp(name: "Clamps", position: "left edge, centre 12 in from the bottom, reaches 1 in onto the material",
+        #expect(js.clamps == [JobSheet.Clamp(name: "Clamp", position: "left edge, centre 12 in from the bottom, reaches 1 in onto the material",
                                              height: "1.5 in above the material")])
         let html = JobSheetHTML.render(js)
         #expect(html.contains("<h2>Clamps and screws</h2>"))
-        #expect(html.contains("<td><input type=\"checkbox\"></td><td>Clamps</td><td>left edge, centre 12 in from the bottom, reaches 1 in onto the material</td><td>1.5 in above the material</td>"))
+        #expect(html.contains("<td><input type=\"checkbox\"></td><td>Clamp</td><td>left edge, centre 12 in from the bottom, reaches 1 in onto the material</td><td>1.5 in above the material</td>"))
         #expect(svgs(html).count == 1)
-        #expect(svgs(html)[0].contains(">Clamps</text>"))
+        #expect(svgs(html)[0].contains(">Clamp</text>"))
     }
 
     @Test func keepOutZonesAreListedAndDrawn() {
         var (p, _) = project()
         p.document.keepOutZones = [KeepOutZone(name: "Vise <A>", outline: [Vec2(14, 2), Vec2(18, 2), Vec2(18, 5), Vec2(14, 5)], height: 0)]
         let js = sheet(p)
-        #expect(js.clamps.map(\.name) == ["Clamps", "Vise <A>"])
+        #expect(js.clamps.map(\.name) == ["Clamp", "Vise <A>"])
         #expect(js.clamps[1].position == "14 in to 18 in from the left edge, 2 in to 5 in from the bottom edge")
         #expect(js.clamps[1].height == "flush with the top")
         let html = JobSheetHTML.render(js)
@@ -61,7 +61,7 @@ import Testing
         #expect(js.sheets.count == 2)
         let pictures = svgs(JobSheetHTML.render(js))
         #expect(pictures.count == 2)
-        #expect(pictures.allSatisfy { $0.contains(">Clamps</text>") })
+        #expect(pictures.allSatisfy { $0.contains(">Clamp</text>") })
     }
 
     @Test func aVisibleClampLayerIsDrawnAsAZoneNotAlsoAsAPart() {
@@ -88,7 +88,7 @@ import Testing
         d.layers.append(clamps)
         d.add(Shape(layerID: clamps.id, paths: [ShapeFactory.rectangle(Rect2(x: 100, y: -50, width: 50, height: 75))]))
         let js = sheet(LoftLineProject(document: d))
-        #expect(js.clamps == [JobSheet.Clamp(name: "Clamps", position: "bottom edge, centre 125 mm from the left, reaches 25 mm onto the material",
+        #expect(js.clamps == [JobSheet.Clamp(name: "Clamp", position: "bottom edge, centre 125 mm from the left, reaches 25 mm onto the material",
                                              height: "30 mm above the material")])
     }
 

@@ -1312,7 +1312,7 @@
 
 - **One list, `ClampList`.** The job sheet, the canvas names and the 3D blocks read the same list: closed shapes on keep-out layers, hidden layers
   included (`Fixtures.zones`), then Toolpaths > Keep-Out Zones with three or more points, which is what the export checks. Names several zones
-  share are numbered in that order ("Clamps 1", "Clamps 2"), across both sources, skipping a number that would repeat a name already in
+  share are numbered in that order ("Clamp 1", "Clamp 2"), across both sources, skipping a number that would repeat a name already in
   use; a name ending in a number gets it in brackets ("Clamp 1 (2)"). Clamps and Fixture Holes run again numbers on from the layer
   ("Clamp 7"), so it doesn't make those repeats itself. Export messages keep `Fixtures.zones`' own names, unnumbered.
 - **Labels and fill.** A name sits at the zone's centre when that's on the zone, else at the point inside it furthest from its edges
@@ -1324,6 +1324,9 @@
   material or inside it is given as ranges from the left and bottom edges; one wholly outside the material says "off the material" first.
 - **Drawn on every nesting sheet.** Keep-out layers never move with a sheet, so every sheet's picture shows the same zones, and the picture
   grows to show a clamp past the material's edge. Hatched with a dashed outline so it still reads printed in grey.
+- **Singular names.** An unnamed shape takes its layer's name, made singular: a layer names a set, so one shape on "Clamps" is
+  "Clamp 2", on "Screws" "Screw 1". Only plain English endings change ("Fixture Holes", "Boxes", "Supplies"); a name a shape or
+  zone was given is never changed.
 - **3D preview.** Show ▸ Clamps and Screws, on by default and remembered (`preview3D.showClamps`), like the menu's other three toggles.
   The stored preference is the only flag, read by every window's model, and `preferenceChanged` re-applies it, as for Vectors: a
   copy in each model let two open windows disagree.
