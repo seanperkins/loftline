@@ -11,17 +11,20 @@ extension CanvasNSView {
         drawSheetSlots(ctx, doc, vt)
     }
 
-    /// Clamp / keep-out zones: translucent red fill under their outlines.
+    /// Clamp / keep-out zones: translucent red fill under their outlines. The fill is the closed loops the export checks
+    /// (`ClampList`), so a shape mixing closed and open paths fills its closed ones, and every named clamp has its fill.
     private func drawClampZones(_ ctx: CGContext, _ doc: LoftLineDocument, _ vt: CGAffineTransform) {
         let d = doc.document
-        let layers = d.layers.filter { $0.keepOut != nil && $0.isVisible }
-        guard !layers.isEmpty else { return }
-        let ids = Set(layers.map(\.id))
+        let items = clampCache.items(in: d).filter { item in item.layerID.map { d.layer(id: $0)?.isVisible ?? false } ?? false }
+        guard !items.isEmpty else { return }
         ctx.saveGState()
         ctx.setFillColor(NSColor.systemRed.withAlphaComponent(0.18).cgColor)
-        for s in d.shapes where ids.contains(s.layerID) && s.isClosed {
-            var t = vt
-            guard let p = cgPath(s).copy(using: &t) else { continue }
+        for item in items {
+            let p = CGMutablePath()
+            for loop in item.loops {
+                p.addLines(between: loop.map { CGPoint(x: $0.x, y: $0.y).applying(vt) })
+                p.closeSubpath()
+            }
             ctx.addPath(p)
             ctx.fillPath(using: .evenOdd)
         }
@@ -36,7 +39,7 @@ extension CanvasNSView {
         guard !items.isEmpty else { return }
         let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: 10), .foregroundColor: NSColor.systemRed]
         for item in items {
-            let c = CGPoint(x: item.bounds.center.x, y: item.bounds.center.y).applying(vt)
+            let c = CGPoint(x: item.labelPoint.x, y: item.labelPoint.y).applying(vt)
             let text = item.name as NSString
             let size = text.size(withAttributes: attrs)
             let box = CGRect(x: c.x - size.width / 2 - 3, y: c.y - size.height / 2 - 1, width: size.width + 6, height: size.height + 2)
