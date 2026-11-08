@@ -37,6 +37,7 @@ extension CanvasNSView {
         drawShapes(ctx, doc, vt)
         if doc.showToolpaths { drawToolpaths(ctx, doc, vt) }
         drawTabs(ctx, doc, vt)
+        drawClampNames(ctx, doc, vt)
         drawOrigin(ctx, doc)
         drawInteraction(ctx, doc, vt)
         drawEditingOverlay(ctx, doc, vt)

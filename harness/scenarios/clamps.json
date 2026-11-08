@@ -1,0 +1,8 @@
+{
+  "name": "clamps and screws named on the canvas and shown in the 3D preview (issue #134)",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "project", "name": "harness/projects/sign-clamps.loftline"},
+    {"op": "capture", "name": "canvas"}
+  ]
+}

@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-/// The UI harness and the README reels open five variants of the sample sign. Each is the sample with one small change, so
+/// The UI harness and the README reels open six variants of the sample sign. Each is the sample with one small change, so
 /// when the sample is regenerated the variants are regenerated from it and cannot drift:
 /// `LOFTLINE_WRITE_SAMPLES=1 scripts/test.sh --filter HarnessProjects` (after `--filter SampleFiles`; both write fresh ids).
 @Suite("Harness projects", .serialized)
@@ -62,7 +62,7 @@ struct HarnessProjectsTests {
         [.key("operations"), .index(operation), .key("profile"), .key("_0"), .key("params"), .key("tabs"), .key("isEnabled")]
     }
 
-    /// The five variants, by JSON path into the decoded sample.
+    /// The six variants, by JSON path into the decoded sample.
     static var patches: [(file: String, apply: (inout [String: Any]) -> Void)] {
         let dropDrill: (inout [String: Any]) -> Void = { edit(&$0, [.key("operations"), .index(2)], to: nil) }
         return [
@@ -77,6 +77,25 @@ struct HarnessProjectsTests {
             ("sign-pause", {
                 edit(&$0, [.key("operations"), .index(0), .key("pocket"), .key("_0"), .key("setup"), .key("pauseAfter")],
                      to: ["isOptionalStop": false, "message": "Flip the part and clamp the far edge"] as [String: Any])
+            }),
+            ("sign-clamps", { p in
+                // Issue #134: two edge clamps on a visible keep-out layer, a named stop, and a screw from Keep-Out Zones.
+                var doc = p["document"] as! [String: Any]
+                let layer = "C1A4F000-0000-4000-8000-000000000134"
+                doc["layers"] = (doc["layers"] as! [Any]) + [["colorHex": "#E5484D", "id": layer, "isLocked": false, "isVisible": true,
+                                                              "name": "Clamps", "keepOut": ["height": 1.5]] as [String: Any]]
+                func box(_ n: Int, _ x: Double, _ y: Double, _ w: Double, _ h: Double, _ name: String) -> [String: Any] {
+                    let corners = [(x + w, y), (x + w, y + h), (x, y + h), (x, y)]
+                    return ["id": "C1A4F000-0000-4000-8000-00000000013\(n)", "isLocked": false, "layerID": layer, "name": name,
+                            "origin": ["drawn": [String: Any]()],
+                            "paths": [["isClosed": true, "start": ["x": x, "y": y],
+                                       "segments": corners.map { ["line": ["to": ["x": $0.0, "y": $0.1]]] }] as [String: Any]]]
+                }
+                doc["shapes"] = (doc["shapes"] as! [Any]) + [box(5, -1.5, 4.5, 2, 1.5, ""), box(6, 22.5, 4.5, 2, 1.5, ""),
+                                                             box(7, 11, -1, 2, 1.4, "Front stop")]
+                doc["keepOutZones"] = [["id": "C1A4F000-0000-4000-8000-000000000138", "name": "Screw", "height": 0,
+                                        "outline": [["x": 5, "y": 0.3], ["x": 5.4, "y": 0.3], ["x": 5.4, "y": 0.7], ["x": 5, "y": 0.7]]]]
+                p["document"] = doc
             }),
             ("reel-sign", dropDrill),
             ("reel-loose", { dropDrill(&$0); edit(&$0, tabs(of: 2), to: false) }),

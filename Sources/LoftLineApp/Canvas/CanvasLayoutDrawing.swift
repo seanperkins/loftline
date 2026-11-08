@@ -28,6 +28,27 @@ extension CanvasNSView {
         ctx.restoreGState()
     }
 
+    /// Each drawn clamp's name at its centre, numbered as the job sheet and the 3D preview number it (`ClampList`, issue #134).
+    /// Zones on hidden keep-out layers aren't drawn, so they aren't named here; the job sheet still lists them.
+    func drawClampNames(_ ctx: CGContext, _ doc: LoftLineDocument, _ vt: CGAffineTransform) {
+        let d = doc.document
+        let items = ClampList.items(in: d).filter { item in item.layerID.map { d.layer(id: $0)?.isVisible ?? false } ?? true }
+        guard !items.isEmpty else { return }
+        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: 10), .foregroundColor: NSColor.systemRed]
+        for item in items {
+            let c = CGPoint(x: item.bounds.center.x, y: item.bounds.center.y).applying(vt)
+            let text = item.name as NSString
+            let size = text.size(withAttributes: attrs)
+            let box = CGRect(x: c.x - size.width / 2 - 3, y: c.y - size.height / 2 - 1, width: size.width + 6, height: size.height + 2)
+            ctx.saveGState()
+            ctx.setFillColor(NSColor.textBackgroundColor.withAlphaComponent(0.85).cgColor)
+            ctx.addPath(CGPath(roundedRect: box, cornerWidth: 3, cornerHeight: 3, transform: nil))
+            ctx.fillPath()
+            ctx.restoreGState()
+            text.draw(at: CGPoint(x: box.minX + 3, y: box.minY + 1), withAttributes: attrs)
+        }
+    }
+
     private func drawSheetSlots(_ ctx: CGContext, _ doc: LoftLineDocument, _ vt: CGAffineTransform) {
         let d = doc.document
         guard NestSheets.hasSheets(d) else { return }
