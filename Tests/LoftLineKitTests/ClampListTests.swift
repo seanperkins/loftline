@@ -68,6 +68,20 @@ import Testing
         #expect(ClampList.items(in: d).map(\.name) == ["Clamp 1 (1)", "Clamp 1 (2)"])
     }
 
+    /// The name goes inside the zone: an L-shaped clamp's bounding-box centre is off it.
+    @Test func theLabelPointIsInsideTheZone() throws {
+        var (d, clamps) = doc()
+        let l = [Vec2(0, 0), Vec2(4, 0), Vec2(4, 1), Vec2(1, 1), Vec2(1, 4), Vec2(0, 4)]
+        d.keepOutZones = [KeepOutZone(name: "Angle", outline: l, height: 0)]
+        d.add(box(10, 10, 2, 1, layer: clamps))
+        let items = ClampList.items(in: d)
+        let angle = try #require(items.first { $0.name == "Angle" })
+        #expect(!PathGeometry.contains(l, angle.bounds.center))
+        #expect(PathGeometry.contains(l, angle.labelPoint))
+        let block = try #require(items.first { $0.name == "Clamps" })
+        #expect(block.labelPoint.distance(to: Vec2(11, 10.5)) < 1e-6)
+    }
+
     @Test func aClampAtTheLeftEdgeIsWordedFromThatEdge() throws {
         var (d, clamps) = doc()
         d.add(box(-2, 11, 3, 2, layer: clamps))   // 2 in outside, reaches 1 in on, centre 12 in up

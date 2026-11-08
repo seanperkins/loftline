@@ -10,6 +10,16 @@ public struct ClampItem: Equatable, Sendable {
     public var height: Double
     /// The keep-out layer the shape is on; nil for a zone from Toolpaths > Keep-Out Zones.
     public var layerID: UUID?
+    /// Where its name goes: the centre when that's on the zone, else the point inside it furthest from its edges (`PartLabels`),
+    /// so an L-shaped or ring clamp's name still sits on it.
+    public let labelPoint: Vec2
+
+    public init(name: String, loops: [[Vec2]], height: Double, layerID: UUID?) {
+        self.name = name; self.loops = loops; self.height = height; self.layerID = layerID
+        let centre = Rect2(points: loops.joined()).center
+        let inside = loops.filter { $0.count > 2 && PathGeometry.contains($0, centre) }.count % 2 == 1
+        labelPoint = inside ? centre : PartLabels.labelPoint(region: loops)?.point ?? centre
+    }
 
     public var bounds: Rect2 { Rect2(points: loops.joined()) }
 }

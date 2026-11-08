@@ -338,7 +338,7 @@ public enum JobSheetHTML {
                     + "stroke-dasharray=\"\(num(stroke * 8)) \(num(stroke * 4))\"/>"
             }
             for z in js.zones {
-                let c = z.bounds.center
+                let c = z.labelPoint
                 s += "<text x=\"\(num(c.x))\" y=\"\(num(hgt - c.y))\" font-size=\"\(num(pad * 0.45))\" text-anchor=\"middle\" "
                     + "dominant-baseline=\"middle\" font-weight=\"bold\" fill=\"#800\" stroke=\"#fff\" stroke-width=\"\(num(pad * 0.14))\" "
                     + "paint-order=\"stroke\">\(escape(z.name))</text>"
