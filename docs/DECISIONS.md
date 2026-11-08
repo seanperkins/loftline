@@ -1313,8 +1313,12 @@
 - **One list, `ClampList`.** The job sheet, the canvas names and the 3D blocks read the same list: closed shapes on keep-out layers, hidden layers
   included (`Fixtures.zones`), then Toolpaths > Keep-Out Zones with three or more points, which is what the export checks. Names several zones
   share are numbered in that order ("Clamps 1", "Clamps 2"), across both sources, skipping a number that would repeat a name already in
-  use; a name ending in a number gets it in brackets ("Clamp 1 (2)", after Clamps and Fixture Holes runs twice). Export messages keep
-  `Fixtures.zones`' own names, unnumbered.
+  use; a name ending in a number gets it in brackets ("Clamp 1 (2)"). Clamps and Fixture Holes run again numbers on from the layer
+  ("Clamp 7"), so it doesn't make those repeats itself. Export messages keep `Fixtures.zones`' own names, unnumbered.
+- **Labels and fill.** A name sits at the zone's centre when that's on the zone, else at the point inside it furthest from its edges
+  (`PartLabels`), so an L-shaped or ring clamp's name is on it. The canvas fills the loops the export checks, and keeps the list until a
+  keep-out changes (`ClampListCache`), since it redraws on every mouse move. `KeepOutZone.isUsable` is the one rule for which
+  Keep-Out Zones count (three or more points), shared by the check, lift-over, the footer check and the list.
 - **Positions from the material's edges, not X0 Y0.** That's what the operator can measure. A zone whose bounding box crosses exactly one edge
   is worded from that edge ("left edge, centre 12 in from the bottom, reaches 1 in onto the material"). A zone at a corner, across the whole
   material or inside it is given as ranges from the left and bottom edges; one wholly outside the material says "off the material" first.
