@@ -11,7 +11,7 @@
   "bundle": {
     "active": true,
     "targets": ["deb", "appimage", "nsis", "msi"],
-    "externalBin": ["binaries/loftline-core"],
+    "externalBin": ["binaries/loftline-core", "binaries/loftline-mcp"],
     "icon": ["icons/icon.png", "icons/icon.ico"],
     "fileAssociations": [{ "ext": ["loftline"], "name": "LoftLine Project", "role": "Editor", "mimeType": "application/x-loftline" }]
   }

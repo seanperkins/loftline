@@ -30,7 +30,10 @@ BUILD_VERSION="${LOFTLINE_VERSION:-dev-$(git describe --always 2>/dev/null || ec
 
 source scripts/swiftpm-env.sh
 swift build "${SWIFTPM_FLAGS[@]}" -c $CONFIG --product LoftLine
+# The MCP server for AI assistants rides beside the app's executable (Help > Connect an AI Assistant… shows its path).
+swift build "${SWIFTPM_FLAGS[@]}" -c $CONFIG --product loftline-mcp
 BIN="$(swift build "${SWIFTPM_FLAGS[@]}" -c $CONFIG --show-bin-path)/LoftLine"
+MCP_BIN="$(swift build "${SWIFTPM_FLAGS[@]}" -c $CONFIG --show-bin-path)/loftline-mcp"
 # Assembled and signed in a staging folder, then swapped in: a step that fails leaves the last good dist/LoftLine.app
 # as it was, not a half-built, unsigned one.
 FINAL=dist/LoftLine.app
@@ -40,6 +43,7 @@ rm -rf $STAGE
 trap 'rm -rf $STAGE' EXIT
 mkdir -p $APP/Contents/MacOS $APP/Contents/Resources
 cp "$BIN" $APP/Contents/MacOS/LoftLine
+cp "$MCP_BIN" $APP/Contents/MacOS/loftline-mcp
 cp Resources/AppIcon.icns $APP/Contents/Resources/AppIcon.icns
 # The update helper rides inside the bundle, and before any codesign: the signature and notarisation cover the whole
 # bundle, so a helper copied in afterwards would break both.
@@ -118,6 +122,8 @@ if [[ -z "${LOFTLINE_NO_QL_EXTENSION:-}" ]]; then
     Extensions/QuickLookThumbnail/Info.plist > $APPEX/Contents/Info.plist
   sign $APPEX --entitlements Extensions/QuickLookThumbnail/LoftLineThumbnail.entitlements
 fi
+# The MCP server is nested code: signed on its own, before the app (never --deep).
+sign $APP/Contents/MacOS/loftline-mcp
 app_entitlements=()
 # Only a real identity gets the app's own entitlements (the hardened runtime is what makes them necessary), and only once
 # a build has proven one is needed.

@@ -90,11 +90,13 @@ jobs:
         shell: bash
         run: |
           swift build -c release --product loftline-core
+          swift build -c release --product loftline-mcp
           triple="$(rustc -vV | sed -n 's/^host: //p')"
           bin="$(swift build -c release --show-bin-path)"
           ext=""; [ "$RUNNER_OS" = "Windows" ] && ext=".exe"
           mkdir -p desktop/src-tauri/binaries
           cp "$bin/loftline-core$ext" "desktop/src-tauri/binaries/loftline-core-$triple$ext"
+          cp "$bin/loftline-mcp$ext" "desktop/src-tauri/binaries/loftline-mcp-$triple$ext"
       - name: Build the app
         working-directory: desktop
         run: |
