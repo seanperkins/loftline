@@ -365,6 +365,10 @@ final class UIHarness {
         case "searchTools":
             NotificationCenter.default.post(name: .harnessSearchTools, object: step.value ?? "")
             await settle(0.8)
+        case "openWindow":
+            guard step.value == "assistant" else { throw HarnessError(message: "openWindow: unknown window \(step.value ?? "")") }
+            AssistantSetupView.show()
+            await settle(0.8)
         case "captureWindow":
             let title = step.value ?? ""
             try await waitUntil("the \(title) window") { NSApp.windows.contains { $0.title == title && $0.isVisible } }

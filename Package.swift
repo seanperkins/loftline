@@ -77,10 +77,10 @@ products.append(.executable(name: "LoftLine", targets: ["LoftLineApp"]))
 targets += [
     .executableTarget(
         name: "LoftLineApp",
-        dependencies: ["CADCore", "CAMCore", "LoftLineKit", "PostCore", "UpdateCore"],
+        dependencies: ["CADCore", "CAMCore", "LoftLineKit", "LoftLineMCP", "PostCore", "UpdateCore"],
         swiftSettings: swift5
     ),
-    .testTarget(name: "LoftLineAppTests", dependencies: ["LoftLineApp", "LoftLineKit", "PostCore", "CAMCore", "CADCore", "UpdateCore"],
+    .testTarget(name: "LoftLineAppTests", dependencies: ["LoftLineApp", "LoftLineKit", "LoftLineMCP", "PostCore", "CAMCore", "CADCore", "UpdateCore"],
                 swiftSettings: swift5),
 ]
 #endif
