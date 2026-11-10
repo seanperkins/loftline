@@ -416,7 +416,7 @@ public final class CoreService {
         // Save All: the planned files as the Mac's sheet plans them, written together or not at all (GCodeFileSet).
         case "saveAll":
             struct P: Decodable { var mode: String; var postID: String?; var groupByTool: Bool?; var folder: String?; var replacing: Bool? }
-            struct FileRow: Encodable { var fileName: String; var title: String; var posted: Bool; var issues: [IssueRow] }
+            struct FileRow: Encodable { var fileName: String; var title: String; var posted: Bool; var errorMessage: String?; var issues: [IssueRow] }
             struct Saved: Encodable { var files: [FileRow]; var existing: [String]; var invalidNames: [String]; var unposted: [String]; var written: Bool; var hasErrors: Bool }
             let p = try params(line, P.self)
             guard let mode = SaveAllMode(rawValue: p.mode) else { throw UnknownMethod(method: "save mode \(p.mode)") }
@@ -425,8 +425,21 @@ public final class CoreService {
             s.calculateStale(output.operations.filter(\.setup.isEnabled).map(\.id))
             let files = GCodeBatchExport.plan(mode: mode, operations: output.operations, results: s.results, jobName: s.project.document.name,
                                               profile: profile, groupByTool: p.groupByTool ?? false)
-            let posted = GCodeBatchExport.post(files, project: output, profile: profile, jobName: s.project.document.name,
-                                               expected: .operations(output.operations.filter(\.setup.isEnabled), results: s.results))
+            // As the Mac's Save All: a touch-plate post checks the spot against every toolpath on the sheet, and a project whose
+            // own post is not installed is refused rather than written with the fallback post.
+            let sheet = GCodeExporter.sheetToolpathsIfProbing(project: s.project, results: s.results, scope: .all, profile: profile)
+            var posted = GCodeBatchExport.post(files, project: output, profile: profile, jobName: s.project.document.name,
+                                               expected: .operations(output.operations.filter(\.setup.isEnabled), results: s.results),
+                                               sheetToolpaths: sheet)
+            let postIssues = ProjectPost.issues(for: s.project, profiles: s.profiles, machines: s.machines,
+                                                includingPost: profile.id == s.resolved.post.id)
+            if !postIssues.isEmpty {
+                posted = posted.map { item in
+                    var r = item.result
+                    r.issues.insert(contentsOf: postIssues, at: 0)
+                    return (item.file, r)
+                }
+            }
             let set = GCodeFileSet(posted: posted)
             let hasErrors = posted.contains { $0.result.hasErrors || !$0.result.missingSteps.isEmpty }
             var written = false
@@ -439,7 +452,7 @@ public final class CoreService {
                     written = true
                 }
             }
-            return try reply(id, Saved(files: posted.map { FileRow(fileName: $0.file.fileName, title: $0.file.title, posted: $0.result.text != nil, issues: $0.result.issues.map(Self.row)) },
+            return try reply(id, Saved(files: posted.map { FileRow(fileName: $0.file.fileName, title: $0.file.title, posted: $0.result.text != nil, errorMessage: $0.result.errorMessage, issues: $0.result.issues.map(Self.row)) },
                                        existing: existing, invalidNames: set.invalidNames, unposted: set.unposted, written: written, hasErrors: hasErrors))
         case "jobSheet":
             let p = try params(line, PathParam.self)
