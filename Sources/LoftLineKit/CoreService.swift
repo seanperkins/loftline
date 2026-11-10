@@ -500,17 +500,27 @@ public final class CoreService {
             return try reply(id, Report(sections: r.sections.map { Row(title: $0.title, issues: $0.issues.map(Self.row)) },
                                         errorCount: r.errorCount, warningCount: r.warningCount))
         // Help > Connect an AI Assistant… in the desktop app: the MCP server beside this one, the settings to paste, the folders.
-        case "assistantSetup", "setAssistantFolders":
-            struct P: Decodable { var folders: [String] }
-            struct Setup: Encodable { var serverPath: String; var config: String; var claudeCodeLine: String; var allowedFolders: [String] }
+        case "assistantSetup", "setAssistantFolders", "setAssistantLink":
+            struct Folders: Decodable { var folders: [String] }
+            struct Link: Decodable { var on: Bool }
+            struct Setup: Encodable {
+                var serverPath: String; var config: String; var claudeCodeLine: String; var allowedFolders: [String]; var liveLink: Bool
+            }
+            // Each change loads the file and changes one field, so setting folders never turns the switch off.
             if method == "setAssistantFolders" {
-                let folders = try params(line, P.self).folders
-                try AssistantSettings(allowedFolders: folders).save(to: assistantSettingsURL)
+                var settings = AssistantSettings.load(from: assistantSettingsURL)
+                settings.allowedFolders = try params(line, Folders.self).folders
+                try settings.save(to: assistantSettingsURL)
+            } else if method == "setAssistantLink" {
+                var settings = AssistantSettings.load(from: assistantSettingsURL)
+                settings.liveLink = try params(line, Link.self).on
+                try settings.save(to: assistantSettingsURL)
             }
             let server = AssistantSetup.serverPath(besideExecutable: Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0]))
             return try reply(id, Setup(serverPath: server, config: AssistantSetup.config(serverPath: server),
                                        claudeCodeLine: AssistantSetup.claudeCodeLine(serverPath: server),
-                                       allowedFolders: AssistantSettings.load(from: assistantSettingsURL).allowedFolders))
+                                       allowedFolders: AssistantSettings.load(from: assistantSettingsURL).allowedFolders,
+                                       liveLink: AssistantSettings.load(from: assistantSettingsURL).liveLink))
         case "help":
             struct Topic: Encodable { var id: String; var title: String; var body: String; var related: [String] }
             return try reply(id, HelpTopic.allCases.map { Topic(id: $0.rawValue, title: $0.title, body: $0.body, related: $0.related.map(\.rawValue)) })

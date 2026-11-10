@@ -88,8 +88,9 @@ struct AssistantSetupView: View {
         change { s in if !s.allowedFolders.contains(url.path) { s.allowedFolders.append(url.path) } }
     }
 
+    /// Loads the file first, so a change here never writes back a stale switch or folder list.
     private func change(_ edit: (inout AssistantSettings) -> Void) {
-        var s = settings
+        var s = AssistantSettings.load()
         edit(&s)
         do {
             try s.save()
