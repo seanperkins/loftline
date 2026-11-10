@@ -237,6 +237,52 @@ public final class CoreService {
             let shape = try TextOutliner().shape(for: spec, layerID: s.project.document.defaultLayerID)
             s.perform("Add Text") { $0.document.add(shape) }
             return try reply(id, state())
+        // Several shapes as one change: every item is built first, so a bad one adds nothing (the MCP server's add_shapes).
+        case "addShapes":
+            struct Item: Decodable {
+                var kind: String; var tool: String?; var from: Vec2?; var to: Vec2?; var options: ShapeOptions?
+                var points: [Vec2]?; var closed: Bool?; var spec: TextSpec?; var layerID: UUID?
+            }
+            struct P: Decodable { var shapes: [Item] }
+            struct Added: Encodable { var state: State; var ids: [UUID] }
+            let items = try params(line, P.self).shapes
+            let doc = s.project.document
+            let shapes: [Shape] = try items.enumerated().map { i, item in
+                let n = i + 1
+                let layer = item.layerID ?? doc.defaultLayerID
+                guard doc.layer(id: layer) != nil else { throw CoreFailure("Shape \(n): no layer with id \(layer).") }
+                switch item.kind {
+                case "tool":
+                    guard let name = item.tool, let tool = CanvasTool(rawValue: name) else { throw CoreFailure("Shape \(n): unknown tool \"\(item.tool ?? "")\".") }
+                    guard let from = item.from, let to = item.to else { throw CoreFailure("Shape \(n): a \(name) needs from and to.") }
+                    var options = DrawingOptions()
+                    if let v = item.options?.cornerRadius { options.cornerRadius = v }
+                    if let v = item.options?.polygonSides { options.polygonSides = v }
+                    if let v = item.options?.starPoints { options.starPoints = v }
+                    if let v = item.options?.starInnerRatio { options.starInnerRatio = v }
+                    if let v = item.options?.constrain { options.constrain = v }
+                    guard let shape = DrawingTools.shape(for: tool, from: from, to: to, options: options, layerID: layer) else {
+                        throw CoreFailure("Shape \(n): a \(name) from \(from) to \(to) has no size.")
+                    }
+                    return shape
+                case "polyline":
+                    let pts = item.points ?? []
+                    let closed = item.closed ?? false
+                    guard let shape = DrawingTools.polyline(points: closed && pts.count >= 3 ? pts + [pts[0]] : pts,
+                                                            closeTolerance: closed ? 1e-9 : -1, layerID: layer) else {
+                        throw CoreFailure("Shape \(n): a polyline needs at least two different points.")
+                    }
+                    return shape
+                case "text":
+                    guard let spec = item.spec else { throw CoreFailure("Shape \(n): text needs a spec.") }
+                    do { return try TextOutliner().shape(for: spec, layerID: layer) }
+                    catch { throw CoreFailure("Shape \(n): \(Self.describe(error))") }
+                default:
+                    throw CoreFailure("Shape \(n): unknown kind \"\(item.kind)\" (tool, polyline or text).")
+                }
+            }
+            if !shapes.isEmpty { s.perform(shapes.count == 1 ? "Add Shape" : "Add \(shapes.count) Shapes") { p in shapes.forEach { p.document.add($0) } } }
+            return try reply(id, Added(state: state(), ids: shapes.map(\.id)))
         case "updateText":
             struct P: Decodable { var id: UUID; var spec: TextSpec }
             let p = try params(line, P.self)
