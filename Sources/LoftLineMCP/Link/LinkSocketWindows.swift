@@ -126,7 +126,7 @@ public enum LinkSocketWindows {
             _ = GetSecurityDescriptorControl(sd, &control, &revision)
             var present: WindowsBool = false
             var acl: PACL? = nil
-            guard GetSecurityDescriptorDacl(sd, &present, &acl, &defaulted), present, let acl else {
+            guard GetSecurityDescriptorDacl(sd, &present, &acl, &defaulted), present.boolValue, let acl else {
                 throw Failure(message: "The link folder has no access list.", code: 0)
             }
             var allowed: [String] = []
