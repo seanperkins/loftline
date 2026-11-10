@@ -1338,3 +1338,24 @@
   A flush zone is a slab 2% of the thickness tall so it still shows.
 - **What isn't shown.** The canvas names only zones it fills, so a hidden layer's are named on the sheet alone. The 3D preview shows blocks without
   names. The G-code preview window has no project, so no clamps. On Windows and Linux only the job sheet has them (docs/PLATFORMS.md).
+
+## The MCP server for AI assistants (2026-11-10)
+
+- **In process, on the same engine.** `loftline-mcp` runs the tools on `CoreService`/`CoreSession`, the engine `loftline-core` and the desktop app
+  use, so a program posted through an assistant is the app's program (a test holds the sign to `samples/expected` for every built-in post). The
+  protocol is written out in Swift: no package dependency, as the project requires. Both generations are answered: 2026-07-28 (no handshake,
+  the version in `_meta`, `server/discover`) and the `initialize` handshake of 2025-11-25 back to 2024-11-05, chosen per request, with no state.
+- **About 20 task-level tools**, not one per engine request (too many for an assistant to choose among) nor one generic call (it can't see what
+  a request takes). Each edit is one undoable change: a batch is checked whole first, and a toolpath's settings are merged and decoded before
+  anything is applied.
+- **Allowed folders.** Reads and writes only inside folders listed in `assistant.json` (Documents/LoftLine by default), edited from Help ▸
+  Connect an AI Assistant…. Paths are resolved through links, `..` is refused, and every write goes through `GCodeFileSet`'s writer with the
+  folder checked again by the real path it opened, so a folder swapped for a link after the check can't redirect it. Replacing a file needs
+  `replace: true`.
+- **No force option.** `post_gcode` writes nothing when a program has an error, a missing step or didn't post; there is no way to skip a check.
+  Every post answers with what the operator must check and writes the job sheet beside the program, from the same posting context (post,
+  grouping, side) as the program.
+- **Engine changes it needed**, in LoftLineKit so the desktop app has them too: a posting context with Save All, the job sheet and Check
+  Toolpaths' report built from it; `addShapes` in one change; a pluggable writer for saving; Save All's missing-post and touch-plate checks
+  (fixed first, as a desktop bug).
+

@@ -180,6 +180,12 @@ minute or two. Use `samples/sign.loftline` (or a new document) unless a step say
     in the 3D preview they stand as red blocks, and Show ▸ Clamps and Screws hides them. Hide the Clamps layer and export
     again: the sheet still lists and draws all four, while the canvas now names only the Screw.
 
+12. **AI assistant.** Help ▸ Connect an AI Assistant…: copy the Claude Code command and run it, then in Claude Code ask
+    it to make a 12 x 8 in sign with a 4 x 3 in rectangle, profile it and post it into Documents/LoftLine. Check the
+    reply lists machine, post, material, Z zero, deepest cut and time, and that a job sheet sits beside the program.
+    Make the same rectangle and profile in the app and export: the two programs are the same apart from the date line.
+    Ask it to save into a folder that isn't listed: it is refused, and says how to allow it.
+
 Every toolpath in steps 1–8 should calculate without an error, and Check Toolpaths… (⇧⌘K) should
 report no errors for the sample. The status of every VCarve Pro feature is in `docs/PARITY.md`.
 
