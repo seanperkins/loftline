@@ -11,7 +11,11 @@ import LoftLineKit
         let object = try #require(try JSONSerialization.jsonObject(with: Data(config.utf8)) as? [String: Any])
         let server = ((object["mcpServers"] as? [String: Any])?["loftline"] as? [String: Any])
         #expect(server?["command"] as? String == path)
+        #if os(Windows)
+        #expect(AssistantSetup.claudeCodeLine(serverPath: path) == "claude mcp add loftline -- \"\(path)\"")
+        #else
         #expect(AssistantSetup.claudeCodeLine(serverPath: path) == "claude mcp add loftline -- '/Applications/LoftLine.app/Contents/MacOS/loftline-mcp'")
+        #endif
     }
 
     @Test func aWindowsPathIsEscapedInTheConfig() throws {
@@ -22,6 +26,11 @@ import LoftLineKit
 
     @Test func theServerSitsBesideTheAppsExecutable() {
         let exe = URL(fileURLWithPath: "/Applications/LoftLine.app/Contents/MacOS/LoftLine")
-        #expect(AssistantSetup.serverPath(besideExecutable: exe) == "/Applications/LoftLine.app/Contents/MacOS/loftline-mcp")
+        let server = AssistantSetup.serverPath(besideExecutable: exe)
+        #if os(Windows)
+        #expect(server.hasSuffix("loftline-mcp.exe"), "\(server)")
+        #else
+        #expect(server == "/Applications/LoftLine.app/Contents/MacOS/loftline-mcp")
+        #endif
     }
 }

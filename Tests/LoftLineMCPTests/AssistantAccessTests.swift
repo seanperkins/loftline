@@ -18,7 +18,9 @@ import Testing
         let url = try access.resolve(allowed.appendingPathComponent("jobs/sign.loftline").path)
         #expect(url.path.hasSuffix("/LoftLine/jobs/sign.loftline"))
         // A relative path is taken inside the first allowed folder.
-        #expect(try access.resolve("sign.tap").deletingLastPathComponent().standardizedFileURL == allowed.standardizedFileURL)
+        let folder = try access.resolve("sign.tap").deletingLastPathComponent().standardizedFileURL.path
+        let trimmed = { (p: String) in p.hasSuffix("/") ? String(p.dropLast()) : p }
+        #expect(trimmed(folder) == trimmed(allowed.standardizedFileURL.path), "\(folder) is not \(allowed.path)")
     }
 
     @Test func dotDotIsRefused() throws {
