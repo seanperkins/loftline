@@ -12,6 +12,9 @@ public final class CoreSession {
     public private(set) var results: [UUID: ToolpathResult] = [:]
     /// The side of a two-sided job on show, which is the side that posts (`LoftLineDocument.activeSide`).
     public private(set) var activeSide: JobSide = .top
+    /// Bumped by every change a window's view is built from: an edit, undo, redo, new, open, save, or a result. The desktop's front
+    /// end sends the one it last saw, so the core can refuse a change built on an older view (spec 2, "The desktop host").
+    public private(set) var changeRevision = 0
     public var library: ToolLibrary
     public let toolStore: ToolLibraryStore
     public let postStore: PostProfileStore
@@ -40,6 +43,30 @@ public final class CoreSession {
         savedProject = project
     }
 
+    /// A session over a copy of a window, for one assistant tool (spec 2): nothing is read from disk.
+    public init(snapshot: CoreSnapshot, toolStore: ToolLibraryStore = ToolLibraryStore(), postStore: PostProfileStore = PostProfileStore(),
+                machineStore: MachineStore = MachineStore()) {
+        self.toolStore = toolStore
+        self.postStore = postStore
+        self.machineStore = machineStore
+        library = snapshot.library
+        profiles = snapshot.profiles
+        skippedPosts = []
+        machines = snapshot.machines
+        project = snapshot.project
+        savedProject = snapshot.savedProject
+        fileURL = snapshot.fileURL
+        activeSide = snapshot.activeSide
+        designRevision = snapshot.designRevision
+        results = snapshot.results
+    }
+
+    /// This session as a snapshot, carrying only fresh results.
+    public func snapshot() -> CoreSnapshot {
+        CoreSnapshot(project: project, savedProject: savedProject, fileURL: fileURL, activeSide: activeSide, designRevision: designRevision,
+                     library: library, profiles: profiles, machines: machines, results: results.filter { !isStale($0.key) })
+    }
+
     public var isDirty: Bool { project != savedProject }
     public var undoAction: String? { undoStack.last?.action }
     public var redoAction: String? { redoStack.last?.action }
@@ -65,6 +92,7 @@ public final class CoreSession {
         project = p
         savedProject = p
         fileURL = url
+        changeRevision += 1
     }
 
     private func reset(fileURL: URL?) {
@@ -75,6 +103,7 @@ public final class CoreSession {
         results = [:]
         activeSide = .top
         designRevision += 1
+        changeRevision += 1
     }
 
     // MARK: Edits
@@ -117,6 +146,7 @@ public final class CoreSession {
         })
         results = results.filter { live.contains($0.key) }
         if !new.document.job.isTwoSided { activeSide = .top }
+        changeRevision += 1
     }
 
     // MARK: What posts
@@ -177,6 +207,7 @@ public final class CoreSession {
             guard let op = project.operations.first(where: { $0.id == id }) else { continue }
             let r = ToolpathCalculator.calculate(op, project: project, library: library, designRevision: designRevision, rapidRate: rapid)
             results[id] = r.renamingTools(from: project.mergedTools(with: library)) ?? r
+            changeRevision += 1
         }
     }
 

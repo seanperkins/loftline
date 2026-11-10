@@ -106,24 +106,35 @@ enum ToolpathTools {
                 let args = Args(raw)
                 let ids = try args.uuids("ids")
                 try core.call("calculate", ids.isEmpty ? [:] : ["ids": ids.map(\.uuidString)])
-                let settings = TimeEstimateSettings.load()
-                let u = session.project.document.units
-                let rows = session.project.operations.filter { ids.isEmpty ? $0.setup.isEnabled : ids.contains($0.id) }.map { op -> [String: Any] in
-                    var row: [String: Any] = ["id": op.id.uuidString, "name": op.setup.name]
-                    guard let r = session.results[op.id] else { row["status"] = "not calculated"; return row }
-                    if let e = r.error { row["status"] = "error"; row["error"] = e; return row }
-                    row["status"] = session.isStale(op.id) ? "stale" : "calculated"
-                    row["time"] = ToolpathCalculator.formatDuration(settings.estimate(r.toolpaths, rapidRate: session.rapidRate, units: u, toolChanges: false))
-                    let warnings = r.toolpaths.compactMap { $0.metadata["warning"] }
-                    if !warnings.isEmpty { row["warnings"] = warnings }
-                    return row
-                }
-                let failed = rows.filter { $0["status"] as? String == "error" }.count
-                return Reply.output("Calculated \(rows.count) toolpath\(rows.count == 1 ? "" : "s")\(failed > 0 ? ", \(failed) with errors" : "").",
-                                    ["toolpaths": rows])
+                return calculationReply(session: session, ids: ids)
             }
 
         return [listLibrary, addToolpath, updateToolpath, deleteToolpath, calculate]
+    }
+
+    /// `calculate`'s answer from a session's results: each toolpath's state, time and warnings. File mode and a window share it
+    /// (the Mac builds it over a snapshot taken after its own calculation).
+    static func calculationReply(session: CoreSession, ids: [UUID]) -> ToolOutput {
+        let rows = calculationRows(session: session, ids: ids)
+        let failed = rows.filter { $0["status"] as? String == "error" }.count
+        return Reply.output("Calculated \(rows.count) toolpath\(rows.count == 1 ? "" : "s")\(failed > 0 ? ", \(failed) with errors" : "").",
+                            ["toolpaths": rows])
+    }
+
+    /// One row per toolpath: the given ids, or every enabled one.
+    static func calculationRows(session: CoreSession, ids: [UUID]) -> [[String: Any]] {
+        let settings = TimeEstimateSettings.load()
+        let u = session.project.document.units
+        return session.project.operations.filter { ids.isEmpty ? $0.setup.isEnabled : ids.contains($0.id) }.map { op -> [String: Any] in
+            var row: [String: Any] = ["id": op.id.uuidString, "name": op.setup.name]
+            guard let r = session.results[op.id] else { row["status"] = "not calculated"; return row }
+            if let e = r.error { row["status"] = "error"; row["error"] = e; return row }
+            row["status"] = session.isStale(op.id) ? "stale" : "calculated"
+            row["time"] = ToolpathCalculator.formatDuration(settings.estimate(r.toolpaths, rapidRate: session.rapidRate, units: u, toolChanges: false))
+            let warnings = r.toolpaths.compactMap { $0.metadata["warning"] }
+            if !warnings.isEmpty { row["warnings"] = warnings }
+            return row
+        }
     }
 
     static func operation(_ s: CoreSession, _ id: UUID?) throws -> AnyOperation {
