@@ -12,6 +12,7 @@ public enum LinkError: Error, LocalizedError, Equatable {
     case notPrivate(String)
     case alreadyListening
     case wrongPeer
+    case timedOut
     case system(String)
 
     public var errorDescription: String? {
@@ -20,6 +21,7 @@ public enum LinkError: Error, LocalizedError, Equatable {
         case .notPrivate(let path): return "\(path) must be a folder only you can open (mode 0700)."
         case .alreadyListening: return "Another LoftLine is already listening."
         case .wrongPeer: return "The other end of the link belongs to another user."
+        case .timedOut: return "Nothing arrived on the link in time."
         case .system(let text): return text
         }
     }
@@ -146,12 +148,29 @@ public enum LinkSocket {
         while true {
             let n = Glibc_or_Darwin_read(fd, &buffer, max)
             if n < 0 && errno == EINTR { continue }
+            if n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK) { throw LinkError.timedOut }
             guard n >= 0 else { throw failure("Reading the link") }
             return Data(buffer[0..<n])
         }
     }
 
     public static func close(_ fd: LinkHandle) { _ = Glibc_or_Darwin_close(fd) }
+
+    /// Ends both directions, so a thread blocked reading `fd` wakes with the end of the stream.
+    public static func shutdown(_ fd: LinkHandle) {
+        #if canImport(Glibc)
+        _ = Glibc.shutdown(fd, Int32(SHUT_RDWR))
+        #else
+        _ = Darwin.shutdown(fd, SHUT_RDWR)
+        #endif
+    }
+
+    /// How long a read waits before `LinkError.timedOut`; nil waits for ever.
+    public static func setReceiveTimeout(_ fd: LinkHandle, _ seconds: TimeInterval?) {
+        let s = seconds ?? 0
+        var tv = timeval(tv_sec: Int(s), tv_usec: Int32((s - Double(Int(s))) * 1_000_000))
+        _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
+    }
 
     /// A connected pair, for tests.
     static func pair() throws -> (LinkHandle, LinkHandle) {
@@ -200,7 +219,10 @@ public final class LinkReader {
             }
             if buffer.count > max { skipping = true; buffer.removeAll() }
             #if os(Windows)
-            let chunk = try LinkSocketWindows.receive(fd)
+            let chunk: Data
+            do { chunk = try LinkSocketWindows.receive(fd) } catch let e as LinkSocketWindows.Failure where e.code == 10060 {
+                throw LinkError.timedOut   // WSAETIMEDOUT
+            }
             #else
             let chunk = try LinkSocket.read(fd, max: 65536)
             #endif
