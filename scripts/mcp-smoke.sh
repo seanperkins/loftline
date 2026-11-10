@@ -19,23 +19,26 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/mcp-smoke.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/allowed"
 allowed="${work:A}/allowed"
+# The settings are written by json.dump, not by interpolating a path into JSON text; before the app starts, which reads the switch.
+python3 -c 'import json, sys; json.dump({"allowedFolders": [sys.argv[1]], "liveLink": sys.argv[2] == "1"}, open(sys.argv[3], "w"))' \
+  "$allowed" "$live" "$work/assistant.json"
 ui=""
 if (( live )); then
   [[ "$(uname)" == Darwin ]] || { print -u2 "mcp-smoke: --live needs the Mac app"; exit 1 }
-  print -r -- "{\"allowedFolders\":[\"$allowed\"],\"liveLink\":true}" > "$work/assistant.json"
   LOFTLINE_ASSISTANT_SETTINGS="$work/assistant.json" scripts/ui.sh assistant-smoke > "$work/ui.log" 2>&1 &
   ui=$!
-else
-  print -r -- "{\"allowedFolders\":[\"$allowed\"]}" > "$work/assistant.json"
 fi
 LOFTLINE_ASSISTANT_SETTINGS="$work/assistant.json" python3 - "$bin" "$allowed" "$live" <<'PY'
-import json, os, subprocess, sys, time
+import json, os, select, subprocess, sys, time
 binary, allowed, live = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 p = subprocess.Popen([binary], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
 meta = {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}}
 def send(message, reply=True):
     p.stdin.write(json.dumps(message) + "\n"); p.stdin.flush()
     if not reply: return None
+    # One reply per request: when none comes within a minute the server has hung, so fail rather than wait forever.
+    if not select.select([p.stdout], [], [], 60)[0]:
+        p.kill(); sys.exit("mcp-smoke: no reply within 60 s to " + message["method"])
     r = json.loads(p.stdout.readline())
     assert "error" not in r, r
     assert not r["result"].get("isError"), r["result"]

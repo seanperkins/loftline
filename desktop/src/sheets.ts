@@ -1,3 +1,4 @@
+import { getVersion } from "@tauri-apps/api/app";
 import { message as nativeMessage, open as nativeOpen, save as nativeSave } from "@tauri-apps/plugin-dialog";
 import { call, inShell } from "./core";
 import { h, replace } from "./dom";
@@ -218,7 +219,9 @@ interface AssistantSetup { serverPath: string; config: string; claudeCodeLine: s
 /** Help > Connect an AI Assistant…: the bundled MCP server, the settings to paste into an assistant, and the folders it may use.
  *  Nothing here writes an assistant's own settings. */
 export async function openAssistant() {
-  const setup = await call<AssistantSetup>("assistantSetup");
+  // Off the Mac the server can't read the app's version itself, so the settings to paste pass it on.
+  const version = inShell() ? await getVersion().catch(() => undefined) : undefined;
+  const setup = await call<AssistantSetup>("assistantSetup", version ? { version } : undefined);
   const copy = (label: string, text: string) => h("button", {
     class: "button", "aria-label": label,
     onclick: async (e: Event) => {
@@ -228,7 +231,7 @@ export async function openAssistant() {
   }, label);
   const block = (title: string, text: string, label: string) =>
     h("div", { class: "assistant-block" }, h("h3", {}, title), h("pre", { class: "code" }, text), copy(label, text));
-  const setFolders = async (folders: string[]) => { await call<AssistantSetup>("setAssistantFolders", { folders }); await openAssistant(); };
+  const setFolders = async (folders: string[]) => { await call<AssistantSetup>("setAssistantFolders", { folders, version }); await openAssistant(); };
   const addFolder = async () => {
     const folder = inShell() ? await nativeOpen({ title: "Allow a folder for the assistant", directory: true }) as string | null : await askPath("Folder");
     if (folder && !setup.allowedFolders.includes(folder)) await setFolders([...setup.allowedFolders, folder]);

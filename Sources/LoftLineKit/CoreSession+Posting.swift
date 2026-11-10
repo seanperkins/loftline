@@ -17,7 +17,7 @@ public struct PostingContext: Equatable {
 
 extension CoreSession {
     /// The project as one side posts it, or as one toolpath posts alone (its own sheet's and side's job).
-    func outputProject(scope: GCodeExportScope = .all, side: JobSide?) -> LoftLineProject {
+    func postingProject(scope: GCodeExportScope = .all, side: JobSide?) -> LoftLineProject {
         project.exportProject(for: scope, side: side ?? activeSide)
     }
 
@@ -36,7 +36,7 @@ extension CoreSession {
     /// the sheet, and a project whose own post is not installed gets that error rather than the fallback post's program.
     public func postAll(mode: SaveAllMode, context: PostingContext) throws -> [(file: PlannedGCodeFile, result: GCodeExportResult)] {
         let profile = try profile(postID: context.postID)
-        let output = outputProject(side: context.side)
+        let output = postingProject(side: context.side)
         calculateForPosting(output, scope: .all, profile: profile)
         let files = GCodeBatchExport.plan(mode: mode, operations: output.operations, results: results, jobName: project.document.name,
                                           profile: profile, groupByTool: context.groupByTool)
@@ -60,7 +60,7 @@ extension CoreSession {
     /// scope, for that toolpath posted alone, with its own sheet's and side's job.
     public func jobSheet(context: PostingContext, scope: GCodeExportScope = .all) throws -> JobSheet {
         let profile = try profile(postID: context.postID)
-        let output = outputProject(scope: scope, side: context.side)
+        let output = postingProject(scope: scope, side: context.side)
         calculateForPosting(output, scope: scope, profile: profile)
         var sheet = JobSheet.make(project: output, results: results, profile: profile, groupByTool: context.groupByTool,
                                   rapidRate: rapidRate(of: profile), sheets: JobSheet.sheets(of: project),
@@ -75,7 +75,7 @@ extension CoreSession {
     /// What Toolpaths > Check Toolpaths… reports for this context, with the project's post problems first.
     public func checkReport(context: PostingContext) throws -> ValidationReport {
         let profile = try profile(postID: context.postID)
-        let output = outputProject(side: context.side)
+        let output = postingProject(side: context.side)
         calculateForPosting(output, scope: .all, profile: profile)
         let sheet = GCodeExporter.sheetToolpathsIfProbing(project: project, results: results, scope: .all, profile: profile)
         var report = ValidationReport.make(project: output, results: results, profile: profile, groupByTool: context.groupByTool,

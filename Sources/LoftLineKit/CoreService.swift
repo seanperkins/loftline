@@ -25,6 +25,7 @@ public final class CoreService {
     }
 
     private struct Wrapped<P: Decodable>: Decodable { var params: P }
+    private struct MaybeWrapped<P: Decodable>: Decodable { var params: P? }
     private struct Reply<R: Encodable>: Encodable { var id: Int?; var result: R }
     private struct Failure: Encodable { var id: Int?; var error: String; var code: String? }
     struct Nothing: Codable {}
@@ -60,6 +61,11 @@ public final class CoreService {
 
     private func params<P: Decodable>(_ line: Data, _ type: P.Type = P.self) throws -> P {
         try JSONDecoder().decode(Wrapped<P>.self, from: line).params
+    }
+
+    /// Parameters that may be left out entirely: none gives `fallback`, but parameters that are there and wrong are an error.
+    private func optionalParams<P: Decodable>(_ line: Data, _ fallback: P) throws -> P {
+        try JSONDecoder().decode(MaybeWrapped<P>.self, from: line).params ?? fallback
     }
 
     private func reply<R: Encodable>(_ id: Int?, _ value: R) throws -> Data {
@@ -309,6 +315,7 @@ public final class CoreService {
                 case "polyline":
                     let pts = item.points ?? []
                     let closed = item.closed ?? false
+                    if closed && pts.count < 3 { throw CoreFailure("Shape \(n): a closed polyline needs at least three points.") }
                     guard let shape = DrawingTools.polyline(points: closed && pts.count >= 3 ? pts + [pts[0]] : pts,
                                                             closeTolerance: closed ? 1e-9 : -1, layerID: layer) else {
                         throw CoreFailure("Shape \(n): a polyline needs at least two different points.")
@@ -533,35 +540,38 @@ public final class CoreService {
             struct P: Decodable { var postID: String?; var groupByTool: Bool?; var side: JobSide? }
             struct Row: Encodable { var title: String; var issues: [IssueRow] }
             struct Report: Encodable { var sections: [Row]; var errorCount: Int; var warningCount: Int }
-            let p = (try? params(line, P.self)) ?? P()
+            let p = try optionalParams(line, P())
             let r = try s.checkReport(context: PostingContext(postID: p.postID, groupByTool: p.groupByTool ?? false, side: p.side))
             return try reply(id, Report(sections: r.sections.map { Row(title: $0.title, issues: $0.issues.map(Self.row)) },
                                         errorCount: r.errorCount, warningCount: r.warningCount))
         // Help > Connect an AI Assistant… in the desktop app: the MCP server beside this one, the settings to paste, the folders.
         case "assistantSetup", "setAssistantFolders", "setAssistantLink":
-            struct Folders: Decodable { var folders: [String] }
-            struct Link: Decodable { var on: Bool }
+            // `version`: the desktop app's own, since off the Mac the server has no Info.plist to read it from.
+            struct P: Decodable { var folders: [String]?; var on: Bool?; var version: String? }
             struct Setup: Encodable {
                 var serverPath: String; var config: String; var claudeCodeLine: String; var allowedFolders: [String]; var liveLink: Bool
                 var socketPath: String
             }
+            let p = try optionalParams(line, P())
             // Each change loads the file and changes one field, so setting folders never turns the switch off.
             if method == "setAssistantFolders" {
+                guard let folders = p.folders else { throw CoreFailure("setAssistantFolders needs \"folders\".") }
                 var settings = AssistantSettings.load(from: assistantSettingsURL)
-                settings.allowedFolders = try params(line, Folders.self).folders
+                settings.allowedFolders = folders
                 try settings.save(to: assistantSettingsURL)
             } else if method == "setAssistantLink" {
+                guard let on = p.on else { throw CoreFailure("setAssistantLink needs \"on\".") }
                 var settings = AssistantSettings.load(from: assistantSettingsURL)
-                settings.liveLink = try params(line, Link.self).on
+                settings.liveLink = on
                 // Listening first: a switch that can't listen isn't saved as on.
                 try assistantLink?.switchChanged(settings.liveLink)
                 try settings.save(to: assistantSettingsURL)
             }
             let server = AssistantSetup.serverPath(besideExecutable: Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0]))
-            return try reply(id, Setup(serverPath: server, config: AssistantSetup.config(serverPath: server),
-                                       claudeCodeLine: AssistantSetup.claudeCodeLine(serverPath: server),
-                                       allowedFolders: AssistantSettings.load(from: assistantSettingsURL).allowedFolders,
-                                       liveLink: AssistantSettings.load(from: assistantSettingsURL).liveLink,
+            let saved = AssistantSettings.load(from: assistantSettingsURL)
+            return try reply(id, Setup(serverPath: server, config: AssistantSetup.config(serverPath: server, version: p.version),
+                                       claudeCodeLine: AssistantSetup.claudeCodeLine(serverPath: server, version: p.version),
+                                       allowedFolders: saved.allowedFolders, liveLink: saved.liveLink,
                                        socketPath: AssistantSettings.linkFolder(for: assistantSettingsURL).appendingPathComponent("assistant.sock").path))
         case "help":
             struct Topic: Encodable { var id: String; var title: String; var body: String; var related: [String] }
