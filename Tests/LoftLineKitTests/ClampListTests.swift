@@ -23,7 +23,7 @@ import Testing
         var (d, clamps) = doc(hidden: true)
         d.add(box(2, 2, 1, 1, layer: clamps))
         let items = ClampList.items(in: d)
-        #expect(items.map(\.name) == ["Clamps"])
+        #expect(items.map(\.name) == ["Clamp"])   // one shape on the "Clamps" layer is one clamp
         #expect(items[0].layerID == clamps)
         #expect(items[0].height == 1.5)
     }
@@ -45,8 +45,8 @@ import Testing
         d.add(box(2, 2, 1, 1, layer: clamps))
         d.add(box(8, 2, 1, 1, layer: clamps, name: "Screw"))
         d.add(box(14, 2, 1, 1, layer: clamps))
-        d.keepOutZones = [KeepOutZone(name: "Clamps", outline: [Vec2(4, 4), Vec2(6, 4), Vec2(6, 6)], height: 0)]
-        #expect(ClampList.items(in: d).map(\.name) == ["Clamps 1", "Screw", "Clamps 2", "Clamps 3"])
+        d.keepOutZones = [KeepOutZone(name: "Clamp", outline: [Vec2(4, 4), Vec2(6, 4), Vec2(6, 6)], height: 0)]
+        #expect(ClampList.items(in: d).map(\.name) == ["Clamp 1", "Screw", "Clamp 2", "Clamp 3"])
     }
 
     /// Review finding: a number handed out must not be a name a zone already has, or two clamps share a label.
@@ -54,9 +54,9 @@ import Testing
         var (d, clamps) = doc()
         d.add(box(2, 2, 1, 1, layer: clamps))
         d.add(box(8, 2, 1, 1, layer: clamps))
-        d.keepOutZones = [KeepOutZone(name: "Clamps 1", outline: [Vec2(4, 4), Vec2(6, 4), Vec2(6, 6)], height: 0)]
+        d.keepOutZones = [KeepOutZone(name: "Clamp 1", outline: [Vec2(4, 4), Vec2(6, 4), Vec2(6, 6)], height: 0)]
         let names = ClampList.items(in: d).map(\.name)
-        #expect(names == ["Clamps 2", "Clamps 3", "Clamps 1"])
+        #expect(names == ["Clamp 2", "Clamp 3", "Clamp 1"])
         #expect(Set(names).count == names.count)
     }
 
@@ -78,7 +78,7 @@ import Testing
         let angle = try #require(items.first { $0.name == "Angle" })
         #expect(!PathGeometry.contains(l, angle.bounds.center))
         #expect(PathGeometry.contains(l, angle.labelPoint))
-        let block = try #require(items.first { $0.name == "Clamps" })
+        let block = try #require(items.first { $0.name == "Clamp" })
         #expect(block.labelPoint.distance(to: Vec2(11, 10.5)) < 1e-6)
     }
 
@@ -86,6 +86,21 @@ import Testing
     @Test func anItemWithNoLoopsHasAFiniteLabelPoint() {
         let item = ClampItem(name: "Empty", loops: [], height: 0, layerID: nil)
         #expect(item.labelPoint.x.isFinite && item.labelPoint.y.isFinite)
+    }
+
+    /// A layer names a set; one unnamed shape on it is one of them. A name the user gave a shape or a zone is left alone.
+    @Test func aNameTakenFromTheLayerIsSingular() {
+        var d = Document()
+        for name in ["Clamps", "Screws", "Fixture Holes", "Vises", "Boxes", "Supplies", "Glass", "Hold-down"] {
+            let layer = Layer(name: name, keepOut: LayerKeepOut(height: 0))
+            d.layers.append(layer)
+            d.add(box(2, 2, 1, 1, layer: layer.id))
+        }
+        let clamps = d.layers.first { $0.name == "Clamps" }!.id
+        d.add(box(8, 2, 1, 1, layer: clamps, name: "Corner clamps"))
+        d.keepOutZones = [KeepOutZone(name: "Stops", outline: [Vec2(4, 4), Vec2(6, 4), Vec2(6, 6)], height: 0)]
+        #expect(ClampList.items(in: d).map(\.name)
+            == ["Clamp", "Corner clamps", "Screw", "Fixture Hole", "Vise", "Box", "Supply", "Glass", "Hold-down", "Stops"])
     }
 
     @Test func aClampAtTheLeftEdgeIsWordedFromThatEdge() throws {

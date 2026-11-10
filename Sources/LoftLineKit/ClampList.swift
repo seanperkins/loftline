@@ -29,12 +29,17 @@ public struct ClampItem: Equatable, Sendable {
 /// Toolpaths > Keep-Out Zones. Names the operator can tell apart, and positions they can measure (issue #134).
 public enum ClampList {
     public static func items(in doc: Document) -> [ClampItem] {
-        let fromLayers = Fixtures.zones(in: doc).map { ClampItem(name: $0.name, loops: $0.loops, height: $0.height, layerID: $0.layerID) }
+        // An unnamed shape takes its layer's name, and a layer names a set: one shape on "Clamps" is one clamp, "Clamp 2".
+        let layerNames = Dictionary(doc.layers.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+        let fromLayers = Fixtures.zones(in: doc).map { z in
+            let fromLayer = z.layerID.map { layerNames[$0] == z.name } ?? false
+            return ClampItem(name: fromLayer ? singular(z.name) : z.name, loops: z.loops, height: z.height, layerID: z.layerID)
+        }
         let fromZones = (doc.keepOutZones ?? []).filter(\.isUsable)
             .map { ClampItem(name: $0.name, loops: [$0.outline], height: max(0, $0.height), layerID: nil) }
         var items = fromLayers + fromZones
         // Several sharing a name are numbered in list order; a name used once stays as it is. A number is never one that would
-        // repeat a name already in use ("Clamps 1" typed by the user), and a name that ends in a number gets it in brackets
+        // repeat a name already in use ("Clamp 1" typed by the user), and a name that ends in a number gets it in brackets
         // ("Clamp 1 (2)", for two shapes both named "Clamp 1").
         let counts = Dictionary(items.map { ($0.name, 1) }, uniquingKeysWith: +)
         var taken = Set(counts.filter { $0.value == 1 }.keys)
@@ -52,6 +57,17 @@ public enum ClampList {
             items[i].name = candidate
         }
         return items
+    }
+
+    /// "Clamps" → "Clamp", "Fixture Holes" → "Fixture Hole", "Boxes" → "Box", "Supplies" → "Supply". Only the last word, and
+    /// only the plain English endings; a name that doesn't end in one ("Glass", "Hold-down") is left as it is.
+    static func singular(_ name: String) -> String {
+        let lower = name.lowercased()
+        guard name.count > 3 else { return name }
+        if lower.hasSuffix("ies") { return String(name.dropLast(3)) + (name.last!.isUppercase ? "Y" : "y") }
+        if ["ches", "shes", "xes", "sses"].contains(where: { lower.hasSuffix($0) }) { return String(name.dropLast(2)) }
+        if lower.hasSuffix("s"), !["ss", "us", "is"].contains(where: { lower.hasSuffix($0) }) { return String(name.dropLast()) }
+        return name
     }
 
     /// Where the item is, measured from the material's edges (what the operator can measure, whatever the XY origin). A clamp over
