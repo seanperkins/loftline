@@ -8,7 +8,7 @@ public enum HelpTopic: String, CaseIterable, Identifiable {
     case toolpathsOverview, profile, pocket, drilling, vcarve, inlay, fluting, texture, relief3D, tabs
     case engrave, chamfer, holeMill, prism, mergeToolpaths, straightInlay, moulding, photoVCarve, facing
     case toolDatabase, preview, checkToolpaths, exportGCode, saveAllToolpaths, airCut
-    case preferences, recovery, shortcuts
+    case preferences, recovery, shortcuts, assistant
 
     public var id: String { rawValue }
 
@@ -49,6 +49,7 @@ public enum HelpTopic: String, CaseIterable, Identifiable {
         case .preferences: return "Preferences"
         case .recovery: return "Autosave and Recovery"
         case .shortcuts: return "Keyboard Shortcuts"
+        case .assistant: return "Connecting an AI Assistant"
         }
     }
 
@@ -89,6 +90,7 @@ public enum HelpTopic: String, CaseIterable, Identifiable {
         case .preferences: return "gearshape"
         case .recovery: return "clock.arrow.circlepath"
         case .shortcuts: return "keyboard"
+        case .assistant: return "sparkles"
         }
     }
 
@@ -145,6 +147,7 @@ public enum HelpTopic: String, CaseIterable, Identifiable {
         case .preferences: return [.machines, .recovery]
         case .recovery: return [.preferences]
         case .shortcuts: return [.drawing]
+        case .assistant: return [.checkToolpaths, .airCut]
         }
     }
 
@@ -419,6 +422,16 @@ public enum HelpTopic: String, CaseIterable, Identifiable {
             LoftLine saves documents through macOS (File ▸ Save, Revert To, and Browse All Versions). In addition, every open document with unsaved changes is copied to a recovery folder on a timer (Preferences ▸ General).
 
             If LoftLine quits unexpectedly, the next launch offers to recover those documents; they open as new, untitled windows that you then save. File ▸ Recover Unsaved Work… shows them again. Recovered and discarded copies are kept in Recovery/Archive.
+            """
+        case .assistant:
+            return """
+            An AI assistant such as Claude can work in LoftLine for you through its MCP server: open and save projects, draw and edit vectors, add and calculate toolpaths, check them, and save G-code with its job sheet. Help ▸ Connect an AI Assistant… shows the server's location and the settings to paste into the assistant, with a Copy button. LoftLine never changes the assistant's own settings.
+
+            **What it can reach.** The assistant reads and writes files only in the allowed folders listed in that window (Documents/LoftLine to begin with). Add a folder there to let it work in another. It has no network access through LoftLine and never controls the machine.
+
+            **What it can't do.** LoftLine checks every program the assistant posts exactly as it checks your own, and never writes a program with an error: a cut through a clamp, past the machine's travel or deeper than the tool can reach is refused, with the reason. There is no way for an assistant to skip a check.
+
+            **Before you cut.** Every post comes back with what to check: machine, post, material, Z zero, deepest cut, time, tool changes and pauses, and a job sheet beside the program. Read the job sheet, check the clamps and screws it lists against the machine, and do an air cut (Running a Safe Air Cut) before the first real cut.
             """
         case .shortcuts:
             return """

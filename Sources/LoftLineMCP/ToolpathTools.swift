@@ -92,7 +92,7 @@ enum ToolpathTools {
             }
 
         let deleteToolpath = AssistantTool(
-            name: "delete_toolpath", description: "Deletes a toolpath.",
+            name: "delete_toolpath", description: "Deletes a toolpath from the project, as one change (undo brings it back).",
             inputSchema: Schema.object(["id": Schema.string("The toolpath.")], required: ["id"])) { raw in
                 let op = try operation(session, try Args(raw).uuid("id"))
                 session.perform("Delete Toolpath") { $0.deleteOperation(op.id) }
