@@ -6,6 +6,7 @@ let swift5: [SwiftSetting] = [.swiftLanguageMode(.v5)]
 var products: [Product] = [
     .executable(name: "loftline-cli", targets: ["loftline-cli"]),
     .executable(name: "loftline-core", targets: ["loftline-core"]),
+    .executable(name: "loftline-mcp", targets: ["loftline-mcp"]),
     .library(name: "CADCore", targets: ["CADCore"]),
     .library(name: "CAMCore", targets: ["CAMCore"]),
     .library(name: "PostCore", targets: ["PostCore"]),
@@ -59,6 +60,7 @@ var targets: [Target] = [
     .executableTarget(name: "loftline-core", dependencies: ["LoftLineKit"], swiftSettings: swift5),
     // The MCP server for AI assistants: protocol, tools, allowed folders, the 2D picture (docs/superpowers/specs/2026-11-10-loftline-mcp-design.md).
     .target(name: "LoftLineMCP", dependencies: ["LoftLineKit", "CADCore", "CAMCore", "PostCore"], swiftSettings: swift5),
+    .executableTarget(name: "loftline-mcp", dependencies: ["LoftLineMCP", "LoftLineKit"], swiftSettings: swift5),
     .testTarget(name: "UpdateCoreTests", dependencies: ["UpdateCore"], swiftSettings: swift5),
     .testTarget(name: "CGeomTests", dependencies: ["CGeom"], swiftSettings: swift5),
     .testTarget(name: "CADCoreTests", dependencies: ["CADCore"], swiftSettings: swift5),
