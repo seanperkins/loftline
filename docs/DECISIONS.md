@@ -1314,7 +1314,12 @@
   included (`Fixtures.zones`), then Toolpaths > Keep-Out Zones with three or more points, which is what the export checks. Names several zones
   share are numbered in that order ("Clamp 1", "Clamp 2"), across both sources, skipping a number that would repeat a name already in
   use; a name ending in a number gets it in brackets ("Clamp 1 (2)"). Clamps and Fixture Holes run again numbers on from the layer
-  ("Clamp 7"), so it doesn't make those repeats itself. Export messages keep `Fixtures.zones`' own names, unnumbered.
+  ("Clamp 7"), so it doesn't make those repeats itself. Export errors and the touch-plate check quote the same numbered names (#138): the
+  checks get their own zone lists renamed in place by `ClampList.numbered` (which `ClampList.items` is built from), with
+  geometry, ids and order untouched, so they accept and refuse the same programs. Each zone takes its name from one list built
+  from those same arrays, so no change to the list's order can put one clamp's name on another. The touch-plate check still
+  looks at Keep-Out Zones before layer clamps. Two clamps that used to share a name over one cut now give two errors, one each,
+  where the identical messages used to merge into one.
 - **Labels and fill.** A name sits at the zone's centre when that's on the zone, else at the point inside it furthest from its edges
   (`PartLabels`), so an L-shaped or ring clamp's name is on it. The canvas fills the loops the export checks, and keeps the list until a
   keep-out changes (`ClampListCache`), since it redraws on every mouse move. `KeepOutZone.isUsable` is the one rule for which

@@ -29,23 +29,41 @@ public struct ClampItem: Equatable, Sendable {
 /// Toolpaths > Keep-Out Zones. Names the operator can tell apart, and positions they can measure (issue #134).
 public enum ClampList {
     public static func items(in doc: Document) -> [ClampItem] {
+        let n = numbered(in: doc)
+        return n.layerZones.map { ClampItem(name: $0.name, loops: $0.loops, height: $0.height, layerID: $0.layerID) }
+            + (n.keepOutZones ?? []).filter(\.isUsable)
+                .map { ClampItem(name: $0.name, loops: [$0.outline], height: max(0, $0.height), layerID: nil) }
+    }
+
+    /// The export's own zone lists under the names the job sheet gives them, so an error quotes "Clamp 2" (issue #138), and the
+    /// source of `items`. The same zones, in the same order and with the same geometry and ids, as `Fixtures.zones` and
+    /// `Document.keepOutZones`: only `name` changes, and only on a layer zone or a Keep-Out Zone that counts (`isUsable`), so
+    /// what the checks accept and refuse is unchanged. Each zone is renamed in place from one list of names built from these
+    /// same arrays, so no zone can be given another's name.
+    public static func numbered(in doc: Document) -> (layerZones: [Fixtures.Zone], keepOutZones: [KeepOutZone]?) {
+        var layerZones = Fixtures.zones(in: doc)
+        var zones = doc.keepOutZones
         // An unnamed shape takes its layer's name, and a layer names a set: one shape on "Clamps" is one clamp, "Clamp 2".
         let layerNames = Dictionary(doc.layers.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
-        let fromLayers = Fixtures.zones(in: doc).map { z in
-            let fromLayer = z.layerID.map { layerNames[$0] == z.name } ?? false
-            return ClampItem(name: fromLayer ? singular(z.name) : z.name, loops: z.loops, height: z.height, layerID: z.layerID)
+        for i in layerZones.indices where layerZones[i].layerID.map({ layerNames[$0] == layerZones[i].name }) ?? false {
+            layerZones[i].name = singular(layerZones[i].name)
         }
-        let fromZones = (doc.keepOutZones ?? []).filter(\.isUsable)
-            .map { ClampItem(name: $0.name, loops: [$0.outline], height: max(0, $0.height), layerID: nil) }
-        var items = fromLayers + fromZones
-        // Several sharing a name are numbered in list order; a name used once stays as it is. A number is never one that would
-        // repeat a name already in use ("Clamp 1" typed by the user), and a name that ends in a number gets it in brackets
-        // ("Clamp 1 (2)", for two shapes both named "Clamp 1").
-        let counts = Dictionary(items.map { ($0.name, 1) }, uniquingKeysWith: +)
+        let usable = zones?.indices.filter { zones![$0].isUsable } ?? []
+        let names = numberedNames(layerZones.map(\.name) + usable.map { zones![$0].name })
+        for i in layerZones.indices { layerZones[i].name = names[i] }
+        for (k, i) in usable.enumerated() { zones![i].name = names[layerZones.count + k] }
+        return (layerZones, zones)
+    }
+
+    /// The names in list order, with several sharing a name numbered; a name used once stays as it is. A number is never one
+    /// that would repeat a name already in use ("Clamp 1" typed by the user), and a name that ends in a number gets it in
+    /// brackets ("Clamp 1 (2)", for two shapes both named "Clamp 1").
+    static func numberedNames(_ names: [String]) -> [String] {
+        let counts = Dictionary(names.map { ($0, 1) }, uniquingKeysWith: +)
         var taken = Set(counts.filter { $0.value == 1 }.keys)
         var next: [String: Int] = [:]
-        for i in items.indices where counts[items[i].name, default: 0] > 1 {
-            let name = items[i].name
+        return names.map { name in
+            guard counts[name, default: 0] > 1 else { return name }
             let bracketed = name.last?.isNumber == true
             var n = next[name, default: 1], candidate: String
             repeat {
@@ -54,9 +72,8 @@ public enum ClampList {
             } while taken.contains(candidate)
             next[name] = n
             taken.insert(candidate)
-            items[i].name = candidate
+            return candidate
         }
-        return items
     }
 
     /// "Clamps" → "Clamp", "Fixture Holes" → "Fixture Hole", "Boxes" → "Box", "Supplies" → "Supply". Only the last word, and

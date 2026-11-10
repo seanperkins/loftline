@@ -36,8 +36,10 @@ public enum TouchOffSpotCheck {
             return "The touch plate at the touch-off spot would hang over the edge of the material: keep the spot at least "
                 + "\(sizeText) (the plate's size) from every edge."
         }
-        let zones = (doc.keepOutZones ?? []).map { (name: $0.name, loops: [$0.outline]) }
-            + Fixtures.zones(in: doc).map { (name: $0.name, loops: $0.loops) }
+        // Named as the job sheet names them ("Clamp 2"); Keep-Out Zones first, then the clamps on keep-out layers, as before.
+        let named = ClampList.numbered(in: doc)
+        let zones = (named.keepOutZones ?? []).map { (name: $0.name, loops: [$0.outline]) }
+            + named.layerZones.map { (name: $0.name, loops: $0.loops) }
         for zone in zones {
             let overlap = GeomKernel.boolean(.intersection, subject: [plate], clip: zone.loops, fillRule: .evenOdd)
             if !overlap.isEmpty {
