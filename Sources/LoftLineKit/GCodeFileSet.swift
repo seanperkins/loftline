@@ -21,6 +21,10 @@ public struct GCodeFileSet {
         public var title: String
         /// The program; nil when its post failed.
         public var text: String?
+
+        public init(fileName: String, title: String, text: String?) {
+            self.fileName = fileName; self.title = title; self.text = text
+        }
     }
 
     #if !os(Windows)
