@@ -59,6 +59,22 @@ public enum ClampList {
         return items
     }
 
+    /// The export's own zone lists under the names the job sheet gives them, so an error quotes "Clamp 2" (issue #138). The
+    /// same zones, in the same order and with the same geometry, as `Fixtures.zones` and `Document.keepOutZones`: only `name`
+    /// changes, so what the checks accept and refuse is unchanged.
+    public static func numbered(in doc: Document) -> (layerZones: [Fixtures.Zone], keepOutZones: [KeepOutZone]?) {
+        let items = items(in: doc)
+        var layerZones = Fixtures.zones(in: doc)
+        for i in layerZones.indices { layerZones[i].name = items[i].name }
+        guard var zones = doc.keepOutZones else { return (layerZones, nil) }
+        var k = layerZones.count   // `items` lists the usable Keep-Out Zones after the layer zones, in their order
+        for i in zones.indices where zones[i].isUsable {
+            zones[i].name = items[k].name
+            k += 1
+        }
+        return (layerZones, zones)
+    }
+
     /// "Clamps" → "Clamp", "Fixture Holes" → "Fixture Hole", "Boxes" → "Box", "Supplies" → "Supply". Only the last word, and
     /// only the plain English endings; a name that doesn't end in one ("Glass", "Hold-down") is left as it is.
     static func singular(_ name: String) -> String {

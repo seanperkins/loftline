@@ -91,9 +91,10 @@ public enum GCodeExporter {
         }
     }
 
-    /// Errors for toolpaths that come over a keep-out zone below its top (+ clearance margin).
+    /// Errors for toolpaths that come over a keep-out zone below its top (+ clearance margin). Zones are named as the job sheet
+    /// names them ("Clamp 2", `ClampList.numbered`).
     public static func keepOutIssues(_ toolpaths: [Toolpath], document doc: Document) -> [GCodeIssue] {
-        guard let zones = doc.keepOutZones, !zones.isEmpty else { return [] }
+        guard let zones = ClampList.numbered(in: doc).keepOutZones, !zones.isEmpty else { return [] }
         let margin = doc.units == .inch ? 0.05 : 1.0
         let tol = doc.units == .inch ? 0.0005 : 0.01
         return KeepOut.violations(toolpaths, zones: zones, coords: MachineCoordinates(job: doc.job), margin: margin,
@@ -234,7 +235,8 @@ public enum GCodeExporter {
         issues += [ToolChangeZ.warning(toolpaths: toolpaths, profile: profile)].compactMap { $0 }
         issues += DialectChecks.issues(toolpaths: toolpaths, profile: profile)
         issues += OthermillSetup.issues(job: doc.job, units: doc.units, profile: profile)
-        issues += LayoutChecks.keepOut(checked, zones: Fixtures.zones(in: doc), job: doc.job, units: doc.units).map { i in
+        // The clamps under the job sheet's names, so the error says which one ("Clamp 2", #138); the geometry is `Fixtures.zones`'.
+        issues += LayoutChecks.keepOut(checked, zones: ClampList.numbered(in: doc).layerZones, job: doc.job, units: doc.units).map { i in
             guard i.message.contains(homeMoveName) else { return i }
             var fixed = i
             fixed.message = i.message.replacingOccurrences(of: "raise safe Z", with: "raise Home Z or change the post's footer")
