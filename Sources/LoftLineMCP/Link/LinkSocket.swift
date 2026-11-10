@@ -137,9 +137,11 @@ public enum LinkSocket {
     /// The uid at the other end of a connected socket.
     public static func peerUID(_ fd: LinkHandle) throws -> uid_t {
         #if canImport(Glibc)
-        var cred = ucred()
-        var size = socklen_t(MemoryLayout<ucred>.size)
-        guard getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &size) == 0 else { throw failure("Checking the link's other end") }
+        // struct ucred (pid, uid, gid) and SO_PEERCRED (17), which Glibc only declares under _GNU_SOURCE.
+        struct PeerCredentials { var pid: Int32 = 0; var uid: UInt32 = 0; var gid: UInt32 = 0 }
+        var cred = PeerCredentials()
+        var size = socklen_t(MemoryLayout<PeerCredentials>.size)
+        guard getsockopt(fd, SOL_SOCKET, 17, &cred, &size) == 0 else { throw failure("Checking the link's other end") }
         return cred.uid
         #else
         var uid: uid_t = 0, gid: gid_t = 0
@@ -185,7 +187,9 @@ public enum LinkSocket {
     /// How long a read waits before `LinkError.timedOut`; nil waits for ever.
     public static func setReceiveTimeout(_ fd: LinkHandle, _ seconds: TimeInterval?) {
         let s = seconds ?? 0
-        var tv = timeval(tv_sec: Int(s), tv_usec: Int32((s - Double(Int(s))) * 1_000_000))
+        var tv = timeval()
+        tv.tv_sec = numericCast(Int(s))
+        tv.tv_usec = numericCast(Int((s - Double(Int(s))) * 1_000_000))
         _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, socklen_t(MemoryLayout<timeval>.size))
     }
 

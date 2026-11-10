@@ -36,12 +36,14 @@ public final class LinkClient {
         guard line.count < maxRequest else {
             throw LinkClientError(code: "too_large", message: "That call is larger than the \(maxRequest / (1 << 20)) MiB LoftLine takes over the link; split it up.")
         }
-        do { try LinkTransport.writeLine(fd, line) } catch { throw LinkClientError.closed }
+        // A write can fail because LoftLine ended the claim and closed: its reason may already be waiting to be read.
+        let wrote = (try? LinkTransport.writeLine(fd, line)) != nil
         guard case .line(let data)? = try? reader.next(),
               let reply = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw LinkClientError.closed }
         if let error = reply["error"] as? [String: Any] {
             throw LinkClientError(code: error["code"] as? String ?? "error", message: error["message"] as? String ?? "LoftLine refused that.")
         }
+        guard wrote else { throw LinkClientError.closed }
         return reply
     }
 
