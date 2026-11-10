@@ -1355,7 +1355,16 @@
 - **No force option.** `post_gcode` writes nothing when a program has an error, a missing step or didn't post; there is no way to skip a check.
   Every post answers with what the operator must check and writes the job sheet beside the program, from the same posting context (post,
   grouping, side) as the program.
-- **Engine changes it needed**, in LoftLineKit so the desktop app has them too: a posting context with Save All, the job sheet and Check
-  Toolpaths' report built from it; `addShapes` in one change; a pluggable writer for saving; Save All's missing-post and touch-plate checks
-  (fixed first, as a desktop bug).
+- **Engine changes it needed**, in LoftLineKit: a posting context with Save All, the job sheet and a check report built from it (the
+  desktop's Save All and job sheet use it; its Check Toolpaths still posts through `export`); `addShapes` in one change; a pluggable writer
+  for saving; Save All's missing-post and touch-plate checks (fixed first, as a desktop bug). Posting and checking calculate what the
+  touch-plate check reads (`calculationTargets`: the sheet's switched-off toolpaths and a rest pass's source too), as the Mac does.
+- **Two ways in, on purpose.** Tools use LoftLineKit's typed API (`CoreSession`, `JobSetupForm`, `ClampList`) and go through
+  `CoreService`'s JSON handlers (`CoreClient`) only where the handler holds the logic or the app's wording (`open`, `import`, the Design
+  commands). Spec 2's live link will need a proxy for both; that's accepted rather than routing every call through JSON in process.
+- **Review fixes (debate 86da8cce).** The folder list is read again on every call (a running server follows the user's changes), compared
+  as the volume compares names (exactly on a case-sensitive one), and a damaged `assistant.json` allows nothing; the default folder is made
+  through a linked Documents (iCloud); the job sheet's name is made file-safe as the program's is; one toolpath posted alone gets a sheet
+  and summary for that toolpath and its side; the Claude Code command single-quotes the path; a preview of out-of-range coordinates is
+  an error, not a crash.
 

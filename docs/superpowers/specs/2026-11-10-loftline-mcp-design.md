@@ -129,7 +129,7 @@ changes, and `post_gcode`'s and `check`'s descriptions carry the safety text bel
   before the check, and the write itself goes through the folder-anchored writer (engine change 4), so a folder swapped for a
   link after the check can't redirect it. An existing file is replaced only with `replace: true`. Save All's set is all or nothing.
 - **Allowed folders** are a list in `assistant.json` in LoftLine's support folder (where `ToolLibraryStore` keeps `tools.json`),
-  default `Documents/LoftLine` (created on first use). The Mac Preferences and the desktop app's settings edit it. A refusal says
+  default `Documents/LoftLine` (created on first use). Help ▸ Connect an AI Assistant… edits it, on the Mac and the desktop. A refusal says
   which folder was asked for and how to allow it.
 - **Never**: network access, controlling a machine, running anything a project contains (gadgets stay in the app).
 - **Limits** per call: 200 shapes, 10,000 points per polyline, 1,000 characters of text, 50 MB import, and a preview of at most

@@ -56,6 +56,7 @@ enum OutputTools {
                 let ctx = try context(args)
                 let folder = try access.resolve(try args.requireString("folder"))
                 var posted: [(fileName: String, title: String, result: GCodeExportResult)]
+                var scope = GCodeExportScope.all
                 let profile = try session.profile(postID: ctx.postID)
                 switch try args.requireString("mode") {
                 case "one_file": posted = try session.postAll(mode: .oneFile, context: ctx).map { ($0.file.fileName, $0.file.title, $0.result) }
@@ -68,6 +69,7 @@ enum OutputTools {
                     let (r, p) = try session.post(scope: .operation(id), postID: ctx.postID, side: ctx.side, groupByTool: ctx.groupByTool)
                     let name = GCodeExporter.suggestedFileName(jobName: session.project.document.name, operationName: op.setup.name, profile: p)
                     posted = [(name, op.setup.name, r)]
+                    scope = .operation(id)
                 case let other: throw ToolError("Unknown mode \"\(other)\".")
                 }
                 // Nothing is written with an error, a missing step, or a file that didn't post.
@@ -83,10 +85,12 @@ enum OutputTools {
                         + Array(NSOrderedSet(array: problems)).compactMap { $0 as? String }.joined(separator: "\n"))
                 }
                 var files = posted.map { GCodeFileSet.File(fileName: $0.fileName, title: $0.title, text: $0.result.fileText) }
-                let sheet = try session.jobSheet(context: ctx)
+                // The sheet and the summary describe the program written: one toolpath posted alone gets its own sheet.
+                let sheet = try session.jobSheet(context: ctx, scope: scope)
                 var sheetName: String?
                 if args.raw["job_sheet"] == nil || args.bool("job_sheet") {
-                    let name = (session.project.document.name.isEmpty ? "Untitled" : session.project.document.name) + " job sheet.html"
+                    let name = GCodeExporter.fileSafeName(session.project.document.name.isEmpty ? "Untitled" : session.project.document.name)
+                        + " job sheet.html"
                     files.append(GCodeFileSet.File(fileName: name, title: "the job sheet", text: JobSheetHTML.render(sheet)))
                     sheetName = name
                 }

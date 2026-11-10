@@ -1,7 +1,7 @@
 import Foundation
 
-/// The folders an AI assistant may read and write through LoftLine. Kept in `assistant.json` in LoftLine's support folder, where
-/// the Mac's Preferences and the desktop app's settings edit it; with no file, `Documents/LoftLine` (MCP spec, "Safety").
+/// The folders an AI assistant may read and write through LoftLine. Kept in `assistant.json` in LoftLine's support folder and
+/// edited from Help > Connect an AI Assistant… (Mac and desktop); with no file, `Documents/LoftLine` (MCP spec, "Safety").
 public struct AssistantSettings: Codable, Equatable {
     public var allowedFolders: [String]
 
@@ -25,10 +25,12 @@ public struct AssistantSettings: Codable, Equatable {
         return base.appendingPathComponent("LoftLine/assistant.json")
     }
 
-    /// The saved settings; a missing or unreadable file gives the default folder alone.
+    /// The saved settings. No file gives the default folder alone; a file that is there but can't be read or decoded allows
+    /// nothing, so a damaged list never widens what an assistant can reach.
     public static func load(from url: URL = fileURL) -> AssistantSettings {
+        guard FileManager.default.fileExists(atPath: url.path) else { return AssistantSettings(allowedFolders: [defaultFolder.path]) }
         guard let data = try? Data(contentsOf: url), let s = try? JSONDecoder().decode(AssistantSettings.self, from: data) else {
-            return AssistantSettings(allowedFolders: [defaultFolder.path])
+            return AssistantSettings(allowedFolders: [])
         }
         return s
     }

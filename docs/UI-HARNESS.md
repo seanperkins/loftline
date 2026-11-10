@@ -80,6 +80,7 @@ minimum is 1000 x 640). Steps run in order and the run stops at the first error,
 | `calculate` | | calculates all toolpaths and waits |
 | `editTool` | `value`: `diameter`, `rename`, `number`, `describe` or `rpm` | edits the tool of the first toolpath in the Tool Database, as that window does while a sheet is open: `diameter` makes the toolpaths stale, `rename` only relabels them, `number` gives it another library tool's T number, `describe` gives it a description, `rpm` gives it a spindle speed no post runs |
 | `editToolpath` | `value`: `deeper` or `tabs`; `name`: the toolpath (default the first) | `deeper` cuts a profile or pocket 0.5 below the material bottom, `tabs` turns on tabs as tall as a profile's cut; the toolpath form shows its warnings |
+| `openWindow` | `value`: `assistant` | opens Help ▸ Connect an AI Assistant… without a menu click; capture it with `captureWindow` (`"value": "Connect an AI Assistant"`) |
 | `captureWindow` | `value`: a window's title (`Tool Database`), `name` | window PNG and accessibility tree of a window other than the document's; open it first with `press` on its toolbar button (`"name": "Tool Database", "value": "AXButton"`) |
 | `selectTool` | `name`: a tool's name | selects that tool in the open Tool Database window (its list rows cannot be clicked) |
 | `searchTools` | `value`: text | puts that text in the open Tool Database window's search field (empty clears it) |

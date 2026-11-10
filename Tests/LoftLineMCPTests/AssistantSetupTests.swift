@@ -11,7 +11,7 @@ import LoftLineKit
         let object = try #require(try JSONSerialization.jsonObject(with: Data(config.utf8)) as? [String: Any])
         let server = ((object["mcpServers"] as? [String: Any])?["loftline"] as? [String: Any])
         #expect(server?["command"] as? String == path)
-        #expect(AssistantSetup.claudeCodeLine(serverPath: path) == #"claude mcp add loftline -- "/Applications/LoftLine.app/Contents/MacOS/loftline-mcp""#)
+        #expect(AssistantSetup.claudeCodeLine(serverPath: path) == "claude mcp add loftline -- '/Applications/LoftLine.app/Contents/MacOS/loftline-mcp'")
     }
 
     @Test func aWindowsPathIsEscapedInTheConfig() throws {

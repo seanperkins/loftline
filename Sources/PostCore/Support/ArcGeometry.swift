@@ -1,7 +1,8 @@
 import CADCore
 import Foundation
 
-/// Arc helpers shared by the post (linearisation, time estimate) and the validator.
+/// Arc helpers shared by the post (linearisation, time estimate) and the validator. Public for `points` alone, which the MCP
+/// server's 2D picture draws arcs with.
 public enum ArcGeometry {
     /// Signed XY sweep in radians (negative = clockwise); start == end is a full circle.
     static func sweep(from start: Vec2, to end: Vec2, center: Vec2, clockwise: Bool) -> Double {

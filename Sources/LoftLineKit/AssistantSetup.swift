@@ -12,8 +12,15 @@ public enum AssistantSetup {
         return String(decoding: data, as: UTF8.self)
     }
 
-    /// For Claude Code: one command to paste into a terminal.
-    public static func claudeCodeLine(serverPath: String) -> String { "claude mcp add loftline -- \"\(serverPath)\"" }
+    /// For Claude Code: one command to paste into a terminal. The path is quoted so the shell runs nothing in it: single quotes
+    /// for a Mac or Linux shell (a quote inside becomes '\''), double quotes on Windows, where paths can't hold one.
+    public static func claudeCodeLine(serverPath: String) -> String {
+        #if os(Windows)
+        return "claude mcp add loftline -- \"\(serverPath)\""
+        #else
+        return "claude mcp add loftline -- '" + serverPath.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        #endif
+    }
 
     /// The server beside the app's own executable (`loftline-mcp`, or `.exe` on Windows).
     public static func serverPath(besideExecutable executable: URL) -> String {

@@ -45,6 +45,7 @@ public enum DesignPreview {
 
         mutating func line(_ a: Vec2, _ b: Vec2, _ c: RGB) {
             let p = pixel(a), q = pixel(b)
+            guard p.x.isFinite, p.y.isFinite, q.x.isFinite, q.y.isFinite else { return }
             var x0 = Int(p.x.rounded()), y0 = Int(p.y.rounded())
             let x1 = Int(q.x.rounded()), y1 = Int(q.y.rounded())
             guard abs(x1 - x0) < 4 * (width + height), abs(y1 - y0) < 4 * (width + height) else { return }
@@ -63,7 +64,7 @@ public enum DesignPreview {
         mutating func fill(_ loops: [[Vec2]], _ c: RGB, hatch: Int = 0, hatchColor: RGB? = nil) {
             let edges = loops.flatMap { loop in loop.indices.map { (pixel(loop[$0]), pixel(loop[($0 + 1) % loop.count])) } }
             let ys = edges.flatMap { [$0.0.y, $0.1.y] }
-            guard let lo = ys.min(), let hi = ys.max() else { return }
+            guard let lo = ys.min(), let hi = ys.max(), lo.isFinite, hi.isFinite, edges.allSatisfy({ $0.0.x.isFinite && $0.1.x.isFinite }) else { return }
             for y in max(0, Int(lo.rounded(.down)))...min(height - 1, Int(hi.rounded(.up))) where y >= 0 {
                 let cy = Double(y) + 0.5
                 var xs: [Double] = []
@@ -106,6 +107,9 @@ public enum DesignPreview {
         for s in visible { area = area.union(s.bounds()) }
         let pad = max(area.width, area.height) * 0.04
         let scale = min(Double(width) / (area.width + 2 * pad), Double(height) / (area.height + 2 * pad))
+        guard area.width.isFinite, area.height.isFinite, pad.isFinite, scale.isFinite, scale > 0 else {
+            throw ToolError("The design reaches too far to draw (its coordinates are out of range).")
+        }
         // Centre the drawing in the picture.
         let origin = Vec2(area.min.x - pad - (Double(width) / scale - area.width - 2 * pad) / 2,
                           area.min.y - pad - (Double(height) / scale - area.height - 2 * pad) / 2)
