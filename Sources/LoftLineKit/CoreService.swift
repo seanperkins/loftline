@@ -420,26 +420,7 @@ public final class CoreService {
             struct Saved: Encodable { var files: [FileRow]; var existing: [String]; var invalidNames: [String]; var unposted: [String]; var written: Bool; var hasErrors: Bool }
             let p = try params(line, P.self)
             guard let mode = SaveAllMode(rawValue: p.mode) else { throw UnknownMethod(method: "save mode \(p.mode)") }
-            let profile = try s.profile(postID: p.postID)
-            let output = s.outputProject
-            s.calculateStale(output.operations.filter(\.setup.isEnabled).map(\.id))
-            let files = GCodeBatchExport.plan(mode: mode, operations: output.operations, results: s.results, jobName: s.project.document.name,
-                                              profile: profile, groupByTool: p.groupByTool ?? false)
-            // As the Mac's Save All: a touch-plate post checks the spot against every toolpath on the sheet, and a project whose
-            // own post is not installed is refused rather than written with the fallback post.
-            let sheet = GCodeExporter.sheetToolpathsIfProbing(project: s.project, results: s.results, scope: .all, profile: profile)
-            var posted = GCodeBatchExport.post(files, project: output, profile: profile, jobName: s.project.document.name,
-                                               expected: .operations(output.operations.filter(\.setup.isEnabled), results: s.results),
-                                               sheetToolpaths: sheet)
-            let postIssues = ProjectPost.issues(for: s.project, profiles: s.profiles, machines: s.machines,
-                                                includingPost: profile.id == s.resolved.post.id)
-            if !postIssues.isEmpty {
-                posted = posted.map { item in
-                    var r = item.result
-                    r.issues.insert(contentsOf: postIssues, at: 0)
-                    return (item.file, r)
-                }
-            }
+            let posted = try s.postAll(mode: mode, context: PostingContext(postID: p.postID, groupByTool: p.groupByTool ?? false))
             let set = GCodeFileSet(posted: posted)
             let hasErrors = posted.contains { $0.result.hasErrors || !$0.result.missingSteps.isEmpty }
             var written = false
@@ -455,17 +436,20 @@ public final class CoreService {
             return try reply(id, Saved(files: posted.map { FileRow(fileName: $0.file.fileName, title: $0.file.title, posted: $0.result.text != nil, errorMessage: $0.result.errorMessage, issues: $0.result.issues.map(Self.row)) },
                                        existing: existing, invalidNames: set.invalidNames, unposted: set.unposted, written: written, hasErrors: hasErrors))
         case "jobSheet":
-            let p = try params(line, PathParam.self)
-            let own = s.resolved
-            let output = s.outputProject
-            s.calculateStale(output.operations.filter(\.setup.isEnabled).map(\.id))
-            var sheet = JobSheet.make(project: output, results: s.results, profile: own.post, groupByTool: false, rapidRate: s.rapidRate,
-                                      sheets: JobSheet.sheets(of: s.project), settings: TimeEstimateSettings.load())
-            // As the Mac's: which material sheet and side this sheet is for.
-            let doc = s.project.document
-            sheet.jobName = doc.name + (doc.isMultiSheet ? " – \(doc.currentSheetName)" : "") + (doc.job.isTwoSided ? " (\(s.activeSide.displayName) side)" : "")
-            try Data(JobSheetHTML.render(sheet).utf8).write(to: URL(fileURLWithPath: p.path), options: .atomic)
+            struct P: Decodable { var path: String; var postID: String?; var groupByTool: Bool?; var side: JobSide? }
+            let p = try params(line, P.self)
+            let html = try s.jobSheetHTML(context: PostingContext(postID: p.postID, groupByTool: p.groupByTool ?? false, side: p.side))
+            try Data(html.utf8).write(to: URL(fileURLWithPath: p.path), options: .atomic)
             return try reply(id, Nothing())
+        // Toolpaths > Check Toolpaths…, for the posting context (the MCP server's `check`).
+        case "checkReport":
+            struct P: Decodable { var postID: String?; var groupByTool: Bool?; var side: JobSide? }
+            struct Row: Encodable { var title: String; var issues: [IssueRow] }
+            struct Report: Encodable { var sections: [Row]; var errorCount: Int; var warningCount: Int }
+            let p = (try? params(line, P.self)) ?? P()
+            let r = try s.checkReport(context: PostingContext(postID: p.postID, groupByTool: p.groupByTool ?? false, side: p.side))
+            return try reply(id, Report(sections: r.sections.map { Row(title: $0.title, issues: $0.issues.map(Self.row)) },
+                                        errorCount: r.errorCount, warningCount: r.warningCount))
         case "help":
             struct Topic: Encodable { var id: String; var title: String; var body: String; var related: [String] }
             return try reply(id, HelpTopic.allCases.map { Topic(id: $0.rawValue, title: $0.title, body: $0.body, related: $0.related.map(\.rawValue)) })
