@@ -296,12 +296,18 @@ public enum GCodeExporter {
     public static func suggestedFileName(jobName: String, operationName: String?, profile: PostProfile) -> String {
         var base = jobName.isEmpty ? "Untitled" : jobName
         if let op = operationName { base += "_" + op }
-        var clean = String(base.unicodeScalars.map { fileNameCharacters.contains($0) ? Character($0) : "_" })
+        return fileSafeName(base) + "." + fileExtension(for: profile)
+    }
+
+    /// A name safe as a file name on every platform: letters, digits, "-", "_" and "." kept, anything else (a "/" or a
+    /// Windows "\\" or ":") "_", no leading dot, and on Windows no reserved device name.
+    public static func fileSafeName(_ name: String) -> String {
+        var clean = String(name.unicodeScalars.map { fileNameCharacters.contains($0) ? Character($0) : "_" })
         if clean.hasPrefix(".") { clean = "_" + clean.dropFirst() }
         #if os(Windows)
         clean = windowsSafeName(clean)
         #endif
-        return clean + "." + fileExtension(for: profile)
+        return clean
     }
 
     /// `name` with a Windows device name (CON, PRN, AUX, NUL, COM1–9, LPT1–9, in any case) made safe, and without the trailing dots and

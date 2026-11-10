@@ -49,11 +49,12 @@ built PATH="$work/bin:$PATH" CODESIGN_LOG="$work/codesign.log" \
   LOFTLINE_VERSION=0.2.0 LOFTLINE_CHANNEL=rehearsal "LOFTLINE_SIGN_IDENTITY=$identity"
 expect "rehearsal channel" "$(plist LoftLineChannel)" rehearsal
 signs=("${(@f)$(< "$work/codesign.log")}")
-(( ${#signs} == 2 )) || fail "expected two codesign calls (extension, app), got ${#signs}"
+(( ${#signs} == 3 )) || fail "expected three codesign calls (extension, MCP server, app), got ${#signs}"
 [[ "$signs[1]" == *LoftLineThumbnail.appex ]] || fail "the extension must be signed first: $signs[1]"
 [[ "$signs[1]" == *"--entitlements Extensions/QuickLookThumbnail/LoftLineThumbnail.entitlements"* ]] || fail "the extension needs its entitlements: $signs[1]"
 # bundle.sh signs the app in its staging folder, then moves it to $APP.
-[[ "$signs[2]" == *"/LoftLine.app" ]] || fail "the app must be signed second: $signs[2]"
+[[ "$signs[2]" == *"/Contents/MacOS/loftline-mcp" ]] || fail "the MCP server must be signed before the app: $signs[2]"
+[[ "$signs[3]" == *"/LoftLine.app" ]] || fail "the app must be signed last: $signs[3]"
 for call in $signs; do
   [[ "$call" == *"--options runtime"* && "$call" == *"--timestamp"* ]] || fail "hardened runtime and a timestamp are required: $call"
   [[ "$call" == *"--sign $identity"* ]] || fail "the identity is not used: $call"
@@ -79,5 +80,7 @@ entitlements="$(codesign -d --entitlements - "$APP/Contents/PlugIns/LoftLineThum
 [[ "$entitlements" == *com.apple.security.app-sandbox* ]] || fail "the Quick Look extension lost its sandbox entitlement"
 # The real bundled executable, not a stand-in: it must post the sample sign to the committed golden program.
 scripts/release-smoke.sh "$APP" || fail "the bundled executable does not post the sample sign to the golden program"
+# The bundled MCP server answers both protocol generations and posts a job.
+scripts/mcp-smoke.sh "$APP/Contents/MacOS/loftline-mcp" > /dev/null || fail "the bundled MCP server failed its smoke test"
 
 print "bundle checks passed"

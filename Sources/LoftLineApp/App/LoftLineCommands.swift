@@ -184,6 +184,7 @@ struct LoftLineCommands: Commands {
             Button("Keyboard Shortcuts") { showHelp(.shortcuts) }
             Button("Running a Safe Air Cut") { showHelp(.airCut) }
             Divider()
+            Button("Connect an AI Assistant…") { AssistantSetupView.show() }
             Button("Welcome to LoftLine") { WelcomeView.show() }
         }
         CommandMenu("Toolpaths") {

@@ -56,7 +56,8 @@ inheritance, and each item below is one that hasn't been rebuilt yet.
 and text tools; layers; position and size; undo and redo; the Design menu's align, distribute, group, combine, boolean, offset, join, close, fillet,
 chamfer, rotate, mirror and array commands; copy and paste; toolpath list, new toolpath, reorder, enable, calculate; forms for Profile, Pocket,
 Drilling and V-Carve; the 3D material-removal preview with playback; Export G-code; Save All; Check Toolpaths; Job Setup; Tool Database; Job Sheet;
-Help; light and dark.
+Help; Connect an AI Assistant… (the MCP server `loftline-mcp` ships beside `loftline-core`; its tests run in the Linux and Windows CI jobs,
+but the server process itself is only smoke-tested on the Mac, by `scripts/check-bundle.sh`); light and dark.
 
 **Different on purpose**
 

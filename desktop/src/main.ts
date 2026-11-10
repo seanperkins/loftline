@@ -205,6 +205,7 @@ const menus: [string, Item[]][] = [
     { label: "LoftLine Help", keys: "F1", run: () => void sheets.openHelp() },
     { label: "Keyboard Shortcuts", run: () => void sheets.openHelp("shortcuts") },
     { label: "Running a Safe Air Cut", run: () => void sheets.openHelp("airCut") }, "-",
+    { label: "Connect an AI Assistant…", run: () => void sheets.openAssistant() },
     { label: "About LoftLine", run: () => sheets.openAbout(info.platform) },
   ]],
 ];

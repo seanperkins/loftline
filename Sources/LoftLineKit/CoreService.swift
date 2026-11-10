@@ -9,6 +9,9 @@ public final class CoreService {
     public let session: CoreSession
     private var simulation: CoreSimulation?
 
+    /// Where Help > Connect an AI Assistant… keeps the allowed folders (tests point it elsewhere).
+    public var assistantSettingsURL = AssistantSettings.fileURL
+
     public init(session: CoreSession = CoreSession()) { self.session = session }
 
     private struct Envelope: Decodable {
@@ -237,6 +240,52 @@ public final class CoreService {
             let shape = try TextOutliner().shape(for: spec, layerID: s.project.document.defaultLayerID)
             s.perform("Add Text") { $0.document.add(shape) }
             return try reply(id, state())
+        // Several shapes as one change: every item is built first, so a bad one adds nothing (the MCP server's add_shapes).
+        case "addShapes":
+            struct Item: Decodable {
+                var kind: String; var tool: String?; var from: Vec2?; var to: Vec2?; var options: ShapeOptions?
+                var points: [Vec2]?; var closed: Bool?; var spec: TextSpec?; var layerID: UUID?
+            }
+            struct P: Decodable { var shapes: [Item] }
+            struct Added: Encodable { var state: State; var ids: [UUID] }
+            let items = try params(line, P.self).shapes
+            let doc = s.project.document
+            let shapes: [Shape] = try items.enumerated().map { i, item in
+                let n = i + 1
+                let layer = item.layerID ?? doc.defaultLayerID
+                guard doc.layer(id: layer) != nil else { throw CoreFailure("Shape \(n): no layer with id \(layer).") }
+                switch item.kind {
+                case "tool":
+                    guard let name = item.tool, let tool = CanvasTool(rawValue: name) else { throw CoreFailure("Shape \(n): unknown tool \"\(item.tool ?? "")\".") }
+                    guard let from = item.from, let to = item.to else { throw CoreFailure("Shape \(n): a \(name) needs from and to.") }
+                    var options = DrawingOptions()
+                    if let v = item.options?.cornerRadius { options.cornerRadius = v }
+                    if let v = item.options?.polygonSides { options.polygonSides = v }
+                    if let v = item.options?.starPoints { options.starPoints = v }
+                    if let v = item.options?.starInnerRatio { options.starInnerRatio = v }
+                    if let v = item.options?.constrain { options.constrain = v }
+                    guard let shape = DrawingTools.shape(for: tool, from: from, to: to, options: options, layerID: layer) else {
+                        throw CoreFailure("Shape \(n): a \(name) from \(from) to \(to) has no size.")
+                    }
+                    return shape
+                case "polyline":
+                    let pts = item.points ?? []
+                    let closed = item.closed ?? false
+                    guard let shape = DrawingTools.polyline(points: closed && pts.count >= 3 ? pts + [pts[0]] : pts,
+                                                            closeTolerance: closed ? 1e-9 : -1, layerID: layer) else {
+                        throw CoreFailure("Shape \(n): a polyline needs at least two different points.")
+                    }
+                    return shape
+                case "text":
+                    guard let spec = item.spec else { throw CoreFailure("Shape \(n): text needs a spec.") }
+                    do { return try TextOutliner().shape(for: spec, layerID: layer) }
+                    catch { throw CoreFailure("Shape \(n): \(Self.describe(error))") }
+                default:
+                    throw CoreFailure("Shape \(n): unknown kind \"\(item.kind)\" (tool, polyline or text).")
+                }
+            }
+            if !shapes.isEmpty { s.perform(shapes.count == 1 ? "Add Shape" : "Add \(shapes.count) Shapes") { p in shapes.forEach { p.document.add($0) } } }
+            return try reply(id, Added(state: state(), ids: shapes.map(\.id)))
         case "updateText":
             struct P: Decodable { var id: UUID; var spec: TextSpec }
             let p = try params(line, P.self)
@@ -420,26 +469,7 @@ public final class CoreService {
             struct Saved: Encodable { var files: [FileRow]; var existing: [String]; var invalidNames: [String]; var unposted: [String]; var written: Bool; var hasErrors: Bool }
             let p = try params(line, P.self)
             guard let mode = SaveAllMode(rawValue: p.mode) else { throw UnknownMethod(method: "save mode \(p.mode)") }
-            let profile = try s.profile(postID: p.postID)
-            let output = s.outputProject
-            s.calculateStale(output.operations.filter(\.setup.isEnabled).map(\.id))
-            let files = GCodeBatchExport.plan(mode: mode, operations: output.operations, results: s.results, jobName: s.project.document.name,
-                                              profile: profile, groupByTool: p.groupByTool ?? false)
-            // As the Mac's Save All: a touch-plate post checks the spot against every toolpath on the sheet, and a project whose
-            // own post is not installed is refused rather than written with the fallback post.
-            let sheet = GCodeExporter.sheetToolpathsIfProbing(project: s.project, results: s.results, scope: .all, profile: profile)
-            var posted = GCodeBatchExport.post(files, project: output, profile: profile, jobName: s.project.document.name,
-                                               expected: .operations(output.operations.filter(\.setup.isEnabled), results: s.results),
-                                               sheetToolpaths: sheet)
-            let postIssues = ProjectPost.issues(for: s.project, profiles: s.profiles, machines: s.machines,
-                                                includingPost: profile.id == s.resolved.post.id)
-            if !postIssues.isEmpty {
-                posted = posted.map { item in
-                    var r = item.result
-                    r.issues.insert(contentsOf: postIssues, at: 0)
-                    return (item.file, r)
-                }
-            }
+            let posted = try s.postAll(mode: mode, context: PostingContext(postID: p.postID, groupByTool: p.groupByTool ?? false))
             let set = GCodeFileSet(posted: posted)
             let hasErrors = posted.contains { $0.result.hasErrors || !$0.result.missingSteps.isEmpty }
             var written = false
@@ -455,17 +485,32 @@ public final class CoreService {
             return try reply(id, Saved(files: posted.map { FileRow(fileName: $0.file.fileName, title: $0.file.title, posted: $0.result.text != nil, errorMessage: $0.result.errorMessage, issues: $0.result.issues.map(Self.row)) },
                                        existing: existing, invalidNames: set.invalidNames, unposted: set.unposted, written: written, hasErrors: hasErrors))
         case "jobSheet":
-            let p = try params(line, PathParam.self)
-            let own = s.resolved
-            let output = s.outputProject
-            s.calculateStale(output.operations.filter(\.setup.isEnabled).map(\.id))
-            var sheet = JobSheet.make(project: output, results: s.results, profile: own.post, groupByTool: false, rapidRate: s.rapidRate,
-                                      sheets: JobSheet.sheets(of: s.project), settings: TimeEstimateSettings.load())
-            // As the Mac's: which material sheet and side this sheet is for.
-            let doc = s.project.document
-            sheet.jobName = doc.name + (doc.isMultiSheet ? " – \(doc.currentSheetName)" : "") + (doc.job.isTwoSided ? " (\(s.activeSide.displayName) side)" : "")
-            try Data(JobSheetHTML.render(sheet).utf8).write(to: URL(fileURLWithPath: p.path), options: .atomic)
+            struct P: Decodable { var path: String; var postID: String?; var groupByTool: Bool?; var side: JobSide? }
+            let p = try params(line, P.self)
+            let html = try s.jobSheetHTML(context: PostingContext(postID: p.postID, groupByTool: p.groupByTool ?? false, side: p.side))
+            try Data(html.utf8).write(to: URL(fileURLWithPath: p.path), options: .atomic)
             return try reply(id, Nothing())
+        // Toolpaths > Check Toolpaths…, for the posting context (the MCP server's `check`).
+        case "checkReport":
+            struct P: Decodable { var postID: String?; var groupByTool: Bool?; var side: JobSide? }
+            struct Row: Encodable { var title: String; var issues: [IssueRow] }
+            struct Report: Encodable { var sections: [Row]; var errorCount: Int; var warningCount: Int }
+            let p = (try? params(line, P.self)) ?? P()
+            let r = try s.checkReport(context: PostingContext(postID: p.postID, groupByTool: p.groupByTool ?? false, side: p.side))
+            return try reply(id, Report(sections: r.sections.map { Row(title: $0.title, issues: $0.issues.map(Self.row)) },
+                                        errorCount: r.errorCount, warningCount: r.warningCount))
+        // Help > Connect an AI Assistant… in the desktop app: the MCP server beside this one, the settings to paste, the folders.
+        case "assistantSetup", "setAssistantFolders":
+            struct P: Decodable { var folders: [String] }
+            struct Setup: Encodable { var serverPath: String; var config: String; var claudeCodeLine: String; var allowedFolders: [String] }
+            if method == "setAssistantFolders" {
+                let folders = try params(line, P.self).folders
+                try AssistantSettings(allowedFolders: folders).save(to: assistantSettingsURL)
+            }
+            let server = AssistantSetup.serverPath(besideExecutable: Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0]))
+            return try reply(id, Setup(serverPath: server, config: AssistantSetup.config(serverPath: server),
+                                       claudeCodeLine: AssistantSetup.claudeCodeLine(serverPath: server),
+                                       allowedFolders: AssistantSettings.load(from: assistantSettingsURL).allowedFolders))
         case "help":
             struct Topic: Encodable { var id: String; var title: String; var body: String; var related: [String] }
             return try reply(id, HelpTopic.allCases.map { Topic(id: $0.rawValue, title: $0.title, body: $0.body, related: $0.related.map(\.rawValue)) })

@@ -190,6 +190,48 @@ export async function openHelp(topicID?: string) {
   present("LoftLine Help", h("div", { class: "tools-layout" }, side, text), h("button", { class: "button primary", onclick: close }, "Close"), true);
 }
 
+// MARK: Connect an AI Assistant
+
+interface AssistantSetup { serverPath: string; config: string; claudeCodeLine: string; allowedFolders: string[] }
+
+/** Help > Connect an AI Assistant…: the bundled MCP server, the settings to paste into an assistant, and the folders it may use.
+ *  Nothing here writes an assistant's own settings. */
+export async function openAssistant() {
+  const setup = await call<AssistantSetup>("assistantSetup");
+  const copy = (label: string, text: string) => h("button", {
+    class: "button", "aria-label": label,
+    onclick: async (e: Event) => {
+      try { await navigator.clipboard.writeText(text); (e.target as HTMLElement).textContent = "Copied"; }
+      catch { (e.target as HTMLElement).textContent = "Select the text and copy it"; }
+    },
+  }, label);
+  const block = (title: string, text: string, label: string) =>
+    h("div", { class: "assistant-block" }, h("h3", {}, title), h("pre", { class: "code" }, text), copy(label, text));
+  const setFolders = async (folders: string[]) => { await call<AssistantSetup>("setAssistantFolders", { folders }); await openAssistant(); };
+  const addFolder = async () => {
+    const folder = inShell() ? await nativeOpen({ title: "Allow a folder for the assistant", directory: true }) as string | null : await askPath("Folder");
+    if (folder && !setup.allowedFolders.includes(folder)) await setFolders([...setup.allowedFolders, folder]);
+    else await openAssistant();
+  };
+  present("Connect an AI Assistant", h("div", { class: "assistant" },
+    h("p", {}, "An AI assistant such as Claude can open, edit, check and post LoftLine projects through LoftLine's MCP server. "
+      + "Add it to the assistant with one of the settings below. LoftLine checks every program as it checks yours and never writes one with an error."),
+    block("The server", setup.serverPath, "Copy Path"),
+    block("Claude Desktop and most assistants (their mcpServers setting)", setup.config, "Copy Settings"),
+    block("Claude Code (paste into a terminal)", setup.claudeCodeLine, "Copy Command"),
+    h("h3", {}, "Folders the assistant may use"),
+    h("p", { class: "small" }, "It reads and writes files only here."),
+    setup.allowedFolders.length
+      ? setup.allowedFolders.map((f) => h("div", { class: "folder-row" }, h("span", {}, f),
+          h("button", { class: "button", "aria-label": `Remove ${f}`, onclick: () => void setFolders(setup.allowedFolders.filter((x) => x !== f)) }, "Remove")))
+      : h("p", { class: "small" }, "No folders: the assistant can't open or save anything."),
+    h("button", { class: "button", onclick: () => void addFolder() }, "Add Folder…")),
+  [
+    h("button", { class: "button", onclick: () => void openHelp("assistant") }, "About Connecting an Assistant"),
+    h("button", { class: "button primary", onclick: close }, "Close"),
+  ], true);
+}
+
 // MARK: Export
 
 /** Posts through the core, shows what it made and what the validator said, and writes only what the core posted. */

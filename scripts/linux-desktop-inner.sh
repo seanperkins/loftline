@@ -3,10 +3,13 @@
 set -euo pipefail
 scratch=.build-linux
 swift build --scratch-path "$scratch" -c release --product loftline-core >&2
+swift build --scratch-path "$scratch" -c release --product loftline-mcp >&2
 core="$(swift build --scratch-path "$scratch" -c release --show-bin-path)/loftline-core"
+mcp="$(swift build --scratch-path "$scratch" -c release --show-bin-path)/loftline-mcp"
 triple="$(rustc -vV | sed -n 's/^host: //p')"
 mkdir -p desktop/src-tauri/binaries
 cp "$core" "desktop/src-tauri/binaries/loftline-core-$triple"
+cp "$mcp" "desktop/src-tauri/binaries/loftline-mcp-$triple"
 cd desktop
 npm install --no-audit --no-fund >&2
 npx tauri build --no-bundle >&2

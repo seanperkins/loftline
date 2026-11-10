@@ -181,3 +181,9 @@ input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent);
 .help-text p { margin: 8px 0; line-height: 1.45; }
 .help-text code { font: 12px ui-monospace, Consolas, "Liberation Mono", monospace; background: var(--surface); padding: 0 3px; border-radius: 3px; }
 .no-webgl { color: #ddd; padding: 40px 24px; text-align: center; }
+
+/* Help > Connect an AI Assistant… */
+.assistant pre.code { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-all;
+  background: var(--field, rgba(127,127,127,.08)); border: 1px solid var(--line, rgba(127,127,127,.3)); border-radius: 6px; padding: 8px; margin: 4px 0 6px; }
+.assistant .folder-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 4px 0; }
+.assistant .folder-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

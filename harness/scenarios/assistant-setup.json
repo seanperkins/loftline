@@ -1,0 +1,9 @@
+{
+  "name": "Help > Connect an AI Assistant…: the bundled server, the settings to paste, the allowed folders",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "openWindow", "value": "assistant"},
+    {"op": "captureWindow", "name": "assistant-setup", "value": "Connect an AI Assistant"}
+  ]
+}

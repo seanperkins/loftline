@@ -186,6 +186,23 @@ the result is the same on every Mac; `--name` sets the job name in the header (t
 committed ones in `samples/expected/` (`--update` after an intended change). The same code answers to
 `LoftLine export …`; `loftline-cli` is a second product of the app's target, so it starts the command line whatever it is given.
 
+## AI assistants
+
+LoftLine has an MCP server, `loftline-mcp`, so an AI assistant such as Claude can open, edit, check and post projects for
+you. It ships inside the app (`LoftLine.app/Contents/MacOS/loftline-mcp`, and beside the Windows and Linux app), and
+Help ▸ Connect an AI Assistant… shows its path and the settings to paste:
+
+```json
+{ "mcpServers": { "loftline": { "command": "/Applications/LoftLine.app/Contents/MacOS/loftline-mcp" } } }
+```
+
+or, for Claude Code, `claude mcp add loftline -- "/Applications/LoftLine.app/Contents/MacOS/loftline-mcp"`.
+
+It reads and writes only in the folders listed in that window (Documents/LoftLine to begin with), and every program is
+checked exactly as the app checks it: one with an error is never written, and nothing skips a check. It never talks to the
+machine. Each post comes back with what to check and a job sheet; do an air cut before the first real cut.
+`scripts/mcp-smoke.sh` runs a short session against a built server. Design: `docs/superpowers/specs/2026-11-10-loftline-mcp-design.md`.
+
 ## How it's built
 
 - **Coding agents in parallel workstreams.** Each workstream owned its own folders

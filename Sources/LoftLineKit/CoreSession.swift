@@ -57,10 +57,11 @@ public final class CoreSession {
         reset(fileURL: url)
     }
 
-    public func save(to url: URL) throws {
+    /// Saves the project; `writer` does the write (the MCP server writes through its allowed-folder writer).
+    public func save(to url: URL, writer: (Data, URL) throws -> Void = { try $0.write(to: $1, options: .atomic) }) throws {
         var p = project
         p.refreshToolSnapshot(from: library)
-        try p.encoded().write(to: url, options: .atomic)
+        try writer(p.encoded(), url)
         project = p
         savedProject = p
         fileURL = url

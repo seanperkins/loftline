@@ -1,8 +1,9 @@
 import CADCore
 import Foundation
 
-/// Arc helpers shared by the post (linearisation, time estimate) and the validator.
-enum ArcGeometry {
+/// Arc helpers shared by the post (linearisation, time estimate) and the validator. Public for `points` alone, which the MCP
+/// server's 2D picture draws arcs with.
+public enum ArcGeometry {
     /// Signed XY sweep in radians (negative = clockwise); start == end is a full circle.
     static func sweep(from start: Vec2, to end: Vec2, center: Vec2, clockwise: Bool) -> Double {
         Flattening.arcSweep(from: start, to: end, center: center, clockwise: clockwise)
@@ -18,7 +19,7 @@ enum ArcGeometry {
 
     /// Points along the arc (excluding `start`, including `end`) with chordal error <= `tolerance`.
     /// Z is interpolated linearly with the angle (helix).
-    static func points(from start: Vec3, to end: Vec3, center: Vec2, clockwise: Bool,
+    public static func points(from start: Vec3, to end: Vec3, center: Vec2, clockwise: Bool,
                        tolerance: Double) -> [Vec3] {
         let r = start.xy.distance(to: center)
         guard r > 1e-12 else { return [end] }
