@@ -365,6 +365,7 @@ clicks Allow) and read, edit, calculate, post and save it, each edit one Undo st
   - `calculateCoversEveryEnabledToolpath`.
   - `saveOutsideAllowedFolderRefused`, plus `saveAsAndUntitledRefused`.
   - `markerSurvivesAutosaveAndTick`.
+  - `untitledCountReachesTheRecordOnFirstSave`.
 - [ ] **Step 2:** Run `scripts/test.sh --filter MacLinkHostTests`. Expected: FAIL.
 - [ ] **Step 3:** Implement per the spec.
   - `groupsByEvent` is off only around the apply.
