@@ -95,6 +95,30 @@ final class UIHarness {
         }
     }
 
+    /// The spike behind the assistant's Mac save (plan Task 2): give an Untitled window a file through its `NSDocument`, edit it,
+    /// save it as the assistant would, then save it as ⌘S does and compare the bytes.
+    private func assistantSave(_ doc: LoftLineDocument, path: String) async throws {
+        let located = DocumentLocator.nsDocument(for: doc)
+        guard let document = located else { say("assistantSave: located=false"); return }
+        if doc.fileURL == nil {
+            let url = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(path)
+            try await DocumentLocator.write(document, to: url, type: document.fileType ?? "com.loftline.project", operation: .saveAsOperation)
+            await settle(0.5)
+            doc.fileURL = doc.fileURL ?? document.fileURL
+            doc.confirmSave()
+        }
+        doc.perform("Spike edit") { $0.document.name += " (edited)" }
+        let confirmed = try await DocumentLocator.save(doc)
+        await settle(0.3)
+        let dirty = document.isDocumentEdited
+        let recovery = doc.needsRecovery
+        guard let url = doc.fileURL ?? document.fileURL else { say("assistantSave: no file"); return }
+        let assistantBytes = try Data(contentsOf: url)
+        try await DocumentLocator.write(document, to: url, type: document.fileType ?? "com.loftline.project", operation: .saveOperation)
+        let commandSBytes = try Data(contentsOf: url)
+        say("assistantSave: located=true confirmed=\(confirmed) dirty=\(dirty) recovery=\(recovery) sameAsCommandS=\(assistantBytes == commandSBytes)")
+    }
+
     private func say(_ text: String) {
         log.append(text)
         print("[harness] \(text)")
@@ -365,6 +389,8 @@ final class UIHarness {
         case "searchTools":
             NotificationCenter.default.post(name: .harnessSearchTools, object: step.value ?? "")
             await settle(0.8)
+        case "assistantSave":
+            try await assistantSave(doc, path: step.name ?? "")
         case "openWindow":
             guard step.value == "assistant" else { throw HarnessError(message: "openWindow: unknown window \(step.value ?? "")") }
             AssistantSetupView.show()

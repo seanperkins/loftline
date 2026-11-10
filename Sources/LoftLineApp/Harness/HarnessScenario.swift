@@ -60,6 +60,7 @@ struct HarnessScenario: Decodable {
         "select": "names: shapes to select by name",
         "selectToolpath": "name: a toolpath to select (also shows the Toolpaths tab)",
         "calculate": "calculate all toolpaths and wait",
+        "assistantSave": "name: a file under the harness HOME; gives the window that file, edits it, saves it as the assistant does and logs located, confirmed, dirty, recovery and sameAsCommandS",
         "openWindow": "value: assistant (Help > Connect an AI Assistant…), opened without a menu click; capture it with captureWindow",
         "captureWindow": "value: the title of a window other than the document's (Tool Database), opened first with press on its toolbar button; name: file stem, as <name>.png and <name>.ax.txt",
         "selectTool": "name: a tool to select in the open Tool Database window (by its name)",
@@ -134,6 +135,8 @@ struct HarnessScenario: Decodable {
             guard let v = step.value, ["diameter", "rename", "number", "describe", "rpm"].contains(v) else { throw fail("value must be diameter, rename, number, describe or rpm") }
         case "editToolpath":
             guard let v = step.value, ["deeper", "tabs"].contains(v) else { throw fail("value must be deeper or tabs") }
+        case "assistantSave":
+            guard step.name?.isEmpty == false else { throw fail("name must be a file under the harness HOME") }
         case "openWindow":
             guard step.value == "assistant" else { throw fail("value must be assistant") }
         case "captureWindow":
