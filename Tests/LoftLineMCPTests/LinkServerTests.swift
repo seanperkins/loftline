@@ -10,9 +10,14 @@ final class FakeHost: LinkHost, @unchecked Sendable {
     private var _calls: [LinkCall] = []
     var calls: [LinkCall] { lock.lock(); defer { lock.unlock() }; return _calls }
 
-    init(timeout: Duration = .seconds(5)) { claims = ClaimBook(timeout: timeout) { } }
+    let docs: [LinkDocument]
 
-    func documents() -> [LinkDocument] { [LinkDocument(id: "w1", name: "Sign", unsaved: false)] }
+    init(timeout: Duration = .seconds(5), docs: [LinkDocument] = [LinkDocument(id: "w1", name: "Sign", unsaved: false)]) {
+        claims = ClaimBook(timeout: timeout) { }
+        self.docs = docs
+    }
+
+    func documents() -> [LinkDocument] { docs }
 
     func run(_ call: LinkCall) async throws -> ToolOutput {
         lock.lock(); _calls.append(call); lock.unlock()
@@ -21,7 +26,7 @@ final class FakeHost: LinkHost, @unchecked Sendable {
 }
 
 /// The link's protocol over a real socket (spec 2, "The link protocol").
-@Suite struct LinkServerTests {
+@Suite(.serialized) struct LinkServerTests {
     struct Rig {
         let folder: URL
         let host: FakeHost

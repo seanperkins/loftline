@@ -35,6 +35,20 @@ public typealias LinkHandle = Int32
 public enum LinkSocket {
     public static let maxPathBytes = 103
 
+    /// A write to a connection the other end closed fails with EPIPE instead of killing the process with SIGPIPE.
+    static func noSigPipe(_ fd: LinkHandle) {
+        #if canImport(Darwin)
+        var on: Int32 = 1
+        _ = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
+        #endif
+    }
+
+    #if canImport(Glibc)
+    static let sendFlags = Int32(MSG_NOSIGNAL)
+    #else
+    static let sendFlags: Int32 = 0
+    #endif
+
     static func failure(_ what: String) -> LinkError { .system("\(what) failed: \(String(cString: strerror(errno))).") }
 
     #if canImport(Glibc)
@@ -81,6 +95,7 @@ public enum LinkSocket {
         if FileManager.default.fileExists(atPath: url.path) { unlink(url.path) }
         let fd = socket(AF_UNIX, stream, 0)
         guard fd >= 0 else { throw failure("Making the link socket") }
+        noSigPipe(fd)
         let old = umask(0o077)
         let bound = try withAddress(url) { bind(fd, $0, $1) }
         umask(old)
@@ -92,6 +107,7 @@ public enum LinkSocket {
     static func rawConnect(_ url: URL) throws -> LinkHandle {
         let fd = socket(AF_UNIX, stream, 0)
         guard fd >= 0 else { throw failure("Making the link socket") }
+        noSigPipe(fd)
         let r = try withAddress(url) { Glibc_or_Darwin_connect(fd, $0, $1) }
         guard r == 0 else { let e = failure("Connecting to \(url.path)"); close(fd); throw e }
         return fd
@@ -109,6 +125,7 @@ public enum LinkSocket {
     public static func accept(_ listener: LinkHandle) throws -> LinkHandle {
         let fd = Glibc_or_Darwin_accept(listener, nil, nil)
         guard fd >= 0 else { throw failure("Accepting a link connection") }
+        noSigPipe(fd)
         return fd
     }
 
@@ -136,7 +153,7 @@ public enum LinkSocket {
         bytes.append(0x0A)
         var offset = 0
         while offset < bytes.count {
-            let n = bytes.withUnsafeBytes { raw in write(fd, raw.baseAddress!.advanced(by: offset), bytes.count - offset) }
+            let n = bytes.withUnsafeBytes { raw in send(fd, raw.baseAddress!.advanced(by: offset), bytes.count - offset, sendFlags) }
             if n < 0 && errno == EINTR { continue }
             guard n > 0 else { throw failure("Writing to the link") }
             offset += n
@@ -176,6 +193,7 @@ public enum LinkSocket {
     static func pair() throws -> (LinkHandle, LinkHandle) {
         var fds: [Int32] = [0, 0]
         guard socketpair(AF_UNIX, stream, 0, &fds) == 0 else { throw failure("Making a socket pair") }
+        fds.forEach(noSigPipe)
         return (fds[0], fds[1])
     }
 }

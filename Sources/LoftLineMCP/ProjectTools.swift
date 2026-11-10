@@ -59,7 +59,8 @@ enum ProjectTools {
 
         let saveProject = AssistantTool(
             name: "save_project",
-            description: "Saves the project, to its own file or to a new .loftline path in an allowed folder. An existing file other than its own is replaced only with replace: true.",
+            description: "Saves the project, to its own file or to a new .loftline path in an allowed folder. An existing file other than its own is replaced only with replace: true. "
+                + "On a document open in LoftLine, its own file must be in an allowed folder, and a new path works only in the desktop app (on the Mac, Save As is the user's).",
             inputSchema: Schema.object([
                 "path": Schema.string("Where to save; leave out to save to the project's own file. \".loftline\" is added when missing."),
                 "replace": Schema.boolean("Overwrite a file already at that path."),
@@ -100,7 +101,7 @@ enum ProjectTools {
 
         let undo = AssistantTool(
             name: "undo",
-            description: "Takes back the last change to the open project.",
+            description: "Takes back the last change to the project. On a document open in LoftLine, undo is the user's: Edit ▸ Undo there.",
             inputSchema: Schema.object([:])) { _ in
                 guard let action = session.undoAction else { throw ToolError("There is nothing to undo.") }
                 session.undo()
