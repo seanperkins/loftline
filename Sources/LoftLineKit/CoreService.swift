@@ -9,6 +9,9 @@ public final class CoreService {
     public let session: CoreSession
     private var simulation: CoreSimulation?
 
+    /// Where Help > Connect an AI Assistant… keeps the allowed folders (tests point it elsewhere).
+    public var assistantSettingsURL = AssistantSettings.fileURL
+
     public init(session: CoreSession = CoreSession()) { self.session = session }
 
     private struct Envelope: Decodable {
@@ -496,6 +499,18 @@ public final class CoreService {
             let r = try s.checkReport(context: PostingContext(postID: p.postID, groupByTool: p.groupByTool ?? false, side: p.side))
             return try reply(id, Report(sections: r.sections.map { Row(title: $0.title, issues: $0.issues.map(Self.row)) },
                                         errorCount: r.errorCount, warningCount: r.warningCount))
+        // Help > Connect an AI Assistant… in the desktop app: the MCP server beside this one, the settings to paste, the folders.
+        case "assistantSetup", "setAssistantFolders":
+            struct P: Decodable { var folders: [String] }
+            struct Setup: Encodable { var serverPath: String; var config: String; var claudeCodeLine: String; var allowedFolders: [String] }
+            if method == "setAssistantFolders" {
+                let folders = try params(line, P.self).folders
+                try AssistantSettings(allowedFolders: folders).save(to: assistantSettingsURL)
+            }
+            let server = AssistantSetup.serverPath(besideExecutable: Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0]))
+            return try reply(id, Setup(serverPath: server, config: AssistantSetup.config(serverPath: server),
+                                       claudeCodeLine: AssistantSetup.claudeCodeLine(serverPath: server),
+                                       allowedFolders: AssistantSettings.load(from: assistantSettingsURL).allowedFolders))
         case "help":
             struct Topic: Encodable { var id: String; var title: String; var body: String; var related: [String] }
             return try reply(id, HelpTopic.allCases.map { Topic(id: $0.rawValue, title: $0.title, body: $0.body, related: $0.related.map(\.rawValue)) })

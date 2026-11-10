@@ -221,6 +221,16 @@ await section("test server", async () => {
   check(await probe({ host: "evil.example" }) === 403, "and another host's name");
 });
 
+// Help > Connect an AI Assistant… shows the bundled MCP server and the settings to paste (nothing is clicked that writes).
+await section("assistant", async () => {
+  await menu("Help", /^Connect an AI Assistant/);
+  await until(() => document.querySelector(".sheet pre.code"));
+  const text = await page.locator(".sheet").textContent();
+  check(text.includes("loftline-mcp") && text.includes("mcpServers") && text.includes("claude mcp add loftline"), "Connect an AI Assistant shows the server and its settings");
+  check(await page.getByRole("button", { name: /^Copy/ }).count() === 3, "with three Copy buttons");
+  await page.getByRole("button", { name: "Close" }).click();
+});
+
 // Help comes from the core, and a bad open is shown, not swallowed.
 await page.evaluate(() => window.loftline.sheets.openHelp());
 await page.waitForSelector(".help-text p");

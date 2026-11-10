@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import LoftLineKit
 @testable import LoftLineMCP
 
 /// What Help > Connect an AI Assistant… shows: the same text on the Mac and in the desktop app.
