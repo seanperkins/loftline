@@ -104,6 +104,55 @@ public enum LinkSocketWindows {
         return String(decodingCString: text, as: UTF16.self)
     }
 
+    /// The folder's owner, whether its DACL is protected, and the SIDs its allow entries name, read through the SID API rather
+    /// than SDDL text (which writes well-known accounts as aliases such as LA or SY).
+    public static func folderAccess(_ url: URL) throws -> (owner: String, protected: Bool, allowed: [String]) {
+        let info = DWORD(OWNER_SECURITY_INFORMATION) | DWORD(DACL_SECURITY_INFORMATION)
+        var needed: DWORD = 0
+        _ = url.path.withCString(encodedAs: UTF16.self) { GetFileSecurityW($0, info, nil, 0, &needed) }
+        var buffer = [UInt8](repeating: 0, count: Int(needed))
+        return try buffer.withUnsafeMutableBytes { raw in
+            let sd = raw.baseAddress
+            guard url.path.withCString(encodedAs: UTF16.self, { GetFileSecurityW($0, info, sd, needed, &needed) }) else {
+                throw Failure(message: "Couldn't read the link folder's permissions.", code: Int32(GetLastError()))
+            }
+            var ownerSID: PSID? = nil
+            var defaulted: WindowsBool = false
+            guard GetSecurityDescriptorOwner(sd, &ownerSID, &defaulted), let ownerSID else {
+                throw Failure(message: "The link folder has no owner.", code: 0)
+            }
+            var control: SECURITY_DESCRIPTOR_CONTROL = 0
+            var revision: DWORD = 0
+            _ = GetSecurityDescriptorControl(sd, &control, &revision)
+            var present: WindowsBool = false
+            var acl: PACL? = nil
+            guard GetSecurityDescriptorDacl(sd, &present, &acl, &defaulted), present, let acl else {
+                throw Failure(message: "The link folder has no access list.", code: 0)
+            }
+            var allowed: [String] = []
+            for i in 0..<DWORD(acl.pointee.AceCount) {
+                var ace: LPVOID? = nil
+                guard GetAce(acl, i, &ace), let ace else { continue }
+                let header = ace.assumingMemoryBound(to: ACE_HEADER.self).pointee
+                guard header.AceType == 0 else { continue }   // ACCESS_ALLOWED_ACE_TYPE
+                // ACCESS_ALLOWED_ACE: ACE_HEADER, ACCESS_MASK, then the SID.
+                let sid = UnsafeMutableRawPointer(ace).advanced(by: MemoryLayout<ACE_HEADER>.size + MemoryLayout<DWORD>.size)
+                allowed.append(try sidString(sid))
+            }
+            return (try sidString(ownerSID), (control & 0x1000) != 0, allowed)   // SE_DACL_PROTECTED
+        }
+    }
+
+    static func sidString(_ sid: PSID) throws -> String {
+        var text: LPWSTR? = nil
+        guard ConvertSidToStringSidW(sid, &text), let text else { throw Failure(message: "Couldn't describe an account.", code: 0) }
+        defer { LocalFree(text) }
+        return String(decodingCString: text, as: UTF16.self)
+    }
+
+    /// Whether the system answers `SIO_AF_UNIX_GETPEERPID` (Windows Server 2022 doesn't: WSAEOPNOTSUPP).
+    public static let operationNotSupported: Int32 = 10045
+
     public static func listen(at url: URL) throws -> LinkHandle {
         try startup()
         let s = socket(afUnix, sockStream, 0)
