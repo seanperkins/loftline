@@ -103,7 +103,7 @@ const coverageNote = () => app.state?.coverage ? h("p", { class: "small coverage
 
 // MARK: Save All
 
-interface SaveAllFile { fileName: string; title: string; posted: boolean; issues: Issue[] }
+interface SaveAllFile { fileName: string; title: string; posted: boolean; errorMessage?: string | null; issues: Issue[] }
 interface SaveAllReply { files: SaveAllFile[]; existing: string[]; invalidNames: string[]; unposted: string[]; written: boolean; hasErrors: boolean }
 
 export async function openSaveAll() {
@@ -116,7 +116,7 @@ export async function openSaveAll() {
       h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "File"), h("th", {}, "Holds"), h("th", {}, "State"))),
         h("tbody", {}, r.files.map((f) => {
           const errors = f.issues.filter((i) => i.severity === "error").length, warnings = f.issues.filter((i) => i.severity === "warning").length;
-          return h("tr", {}, h("td", {}, f.fileName), h("td", {}, f.title), h("td", { class: !f.posted || errors ? "error-text" : "" }, !f.posted ? "Failed to post" : errors ? `${errors} error${errors === 1 ? "" : "s"}` : warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}` : "OK"));
+          return h("tr", {}, h("td", {}, f.fileName), h("td", {}, f.title), h("td", { class: !f.posted || errors ? "error-text" : "" }, !f.posted ? (f.errorMessage ? `Not posted: ${f.errorMessage}` : "Failed to post") : errors ? `${errors} error${errors === 1 ? "" : "s"}` : warnings ? `${warnings} warning${warnings === 1 ? "" : "s"}` : "OK"));
         }))),
       r.hasErrors ? h("p", { class: "error-text" }, "A program has errors or a missing step, so nothing can be saved. Fix it in Check Toolpaths.") : null,
       r.invalidNames.length ? h("p", { class: "error-text" }, `These names clash: ${r.invalidNames.join(", ")}`) : null);
