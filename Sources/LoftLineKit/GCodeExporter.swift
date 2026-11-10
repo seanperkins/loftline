@@ -94,7 +94,7 @@ public enum GCodeExporter {
     /// Errors for toolpaths that come over a keep-out zone below its top (+ clearance margin). Zones are named as the job sheet
     /// names them ("Clamp 2", `ClampList.numbered`).
     public static func keepOutIssues(_ toolpaths: [Toolpath], document doc: Document) -> [GCodeIssue] {
-        guard let zones = ClampList.numbered(in: doc).keepOutZones, !zones.isEmpty else { return [] }
+        guard let raw = doc.keepOutZones, !raw.isEmpty, let zones = ClampList.numbered(in: doc).keepOutZones else { return [] }
         let margin = doc.units == .inch ? 0.05 : 1.0
         let tol = doc.units == .inch ? 0.0005 : 0.01
         return KeepOut.violations(toolpaths, zones: zones, coords: MachineCoordinates(job: doc.job), margin: margin,

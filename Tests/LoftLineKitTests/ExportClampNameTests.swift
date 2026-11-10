@@ -60,6 +60,36 @@ import Testing
         let problem = try #require(TouchOffSpotCheck.problem(project: p, sheet: [], probe: probe, postUnits: .inch))
         #expect(problem.contains("\"Clamp 2\""), "\(problem)")
     }
+
+    /// Review finding: each zone gets its own name in the same pass, so a zone that doesn't count (two points) in the middle
+    /// can't shift the names onto the wrong clamps. Geometry and ids are the zone's own.
+    @Test func numberedNamesEachZoneInPlace() throws {
+        var (p, clamps, _) = try project()
+        p.document.add(AppTestSupport.rect(20, 14, 2, 2, layer: clamps).named("Vise"))
+        let a = KeepOutZone(name: "Vise", outline: [Vec2(1, 1), Vec2(2, 1), Vec2(2, 2)], height: 0)
+        let line = KeepOutZone(name: "Line", outline: [Vec2(0, 0), Vec2(1, 1)], height: 0)
+        let b = KeepOutZone(name: "Vise", outline: [Vec2(8, 8), Vec2(9, 8), Vec2(9, 9)], height: 0)
+        p.document.keepOutZones = [a, line, b]
+        let n = ClampList.numbered(in: p.document)
+        #expect(n.layerZones.map(\.name) == ["Vise 1"])
+        let zones = try #require(n.keepOutZones)
+        #expect(zones.map(\.name) == ["Vise 2", "Line", "Vise 3"])
+        #expect(zones.map(\.id) == [a.id, line.id, b.id])
+        #expect(zones.map(\.outline) == [a.outline, line.outline, b.outline])
+        #expect(n.layerZones.map(\.loops) == Fixtures.zones(in: p.document).map(\.loops))
+    }
+
+    /// The touch-plate check looks at Keep-Out Zones before layer clamps, as it did before #138: under both, it names the zone.
+    @Test func theTouchPlateCheckStillNamesAKeepOutZoneFirst() throws {
+        var (p, clamps, _) = try project()
+        p.document.job.touchOffSpot = Vec2(15, 10)
+        p.document.add(AppTestSupport.rect(14, 9, 2, 2, layer: clamps).named(""))
+        p.document.keepOutZones = [KeepOutZone(name: "Hold-down", outline: [Vec2(14.5, 9.5), Vec2(15.5, 9.5), Vec2(15.5, 10.5), Vec2(14.5, 10.5)],
+                                               height: 0)]
+        let probe = ToolChangeProbe.defaults(for: BuiltInMachines.avidPRO6096)
+        let problem = try #require(TouchOffSpotCheck.problem(project: p, sheet: [], probe: probe, postUnits: .inch))
+        #expect(problem.contains("\"Hold-down\""), "\(problem)")
+    }
 }
 
 private extension Shape {
