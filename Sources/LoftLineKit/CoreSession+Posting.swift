@@ -44,7 +44,10 @@ extension CoreSession {
     }
 
     /// The job sheet for the program this context posts: its post, its step order and tool changes, its side.
-    public func jobSheetHTML(context: PostingContext) throws -> String {
+    public func jobSheetHTML(context: PostingContext) throws -> String { JobSheetHTML.render(try jobSheet(context: context)) }
+
+    /// The job sheet's model (material, Z zero, deepest cut, times, tool changes, pauses) for this context.
+    public func jobSheet(context: PostingContext) throws -> JobSheet {
         let profile = try profile(postID: context.postID)
         let output = outputProject(side: context.side)
         calculateStale(output.operations.filter(\.setup.isEnabled).map(\.id))
@@ -55,7 +58,7 @@ extension CoreSession {
         let doc = project.document
         sheet.jobName = doc.name + (doc.isMultiSheet ? " – \(doc.currentSheetName)" : "")
             + (doc.job.isTwoSided ? " (\((context.side ?? activeSide).displayName) side)" : "")
-        return JobSheetHTML.render(sheet)
+        return sheet
     }
 
     /// What Toolpaths > Check Toolpaths… reports for this context, with the project's post problems first.
