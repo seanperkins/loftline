@@ -131,6 +131,9 @@ final class MacLinkHost: LinkHost, @unchecked Sendable {
             for attempt in 0..<10 {
                 if attempt > 0 { await Self.nextPass() }
                 if let out = try await MainActor.run(body: { try editTurn(doc, call) }) { return out }
+                // AppKit closes the undo group it opened for work done outside an event (a load, a library sync) only when the
+                // next event ends: with the user away from the window that may be never. An event of our own ends it.
+                if attempt == 0 { await MainActor.run { Self.postWakeEvent() } }
             }
             throw ToolError("LoftLine is busy; try again.")
         case .calculate:
@@ -200,6 +203,13 @@ final class MacLinkHost: LinkHost, @unchecked Sendable {
             else { doc.assistantChanges += 1 }
         }
         return run.output
+    }
+
+    /// An application-defined event: AppKit ends its open undo group when the event's dispatch ends.
+    @MainActor static func postWakeEvent() {
+        guard let app = NSApp, let event = NSEvent.otherEvent(with: .applicationDefined, location: .zero, modifierFlags: [], timestamp: 0,
+                                                              windowNumber: 0, context: nil, subtype: 0, data1: 0, data2: 0) else { return }
+        app.postEvent(event, atStart: false)
     }
 
     /// A later run-loop pass, so an undo group the system opened for this one has closed.
