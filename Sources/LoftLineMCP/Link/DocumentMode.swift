@@ -31,7 +31,12 @@ public final class DocumentMode {
     }
 
     public func documents() throws -> [LinkDocument] {
-        do { return try LinkClient.list(socket: socketURL) } catch {
+        do { return try LinkClient.list(socket: socketURL) }
+        // LoftLine answered and said why (four connections already open, or the link is an older or newer version): say that.
+        catch let e as LinkClientError where e.code != "closed" { throw ToolError(e.message) }
+        // Something listens there that isn't this user's LoftLine.
+        catch LinkError.wrongPeer { throw ToolError(LinkError.wrongPeer.localizedDescription + " (\(socketURL.path))") }
+        catch {
             throw ToolError("LoftLine isn't listening at \(socketURL.path): it isn't running, or Help ▸ Connect an AI Assistant… ▸ "
                             + "\"Let assistants edit open documents\" is off.")
         }

@@ -40,6 +40,19 @@ export const setLiveLink = (on: boolean) => { liveLink = on; };
 export let showError: (title: string, message: string) => void = (t, m) => console.error(t, m);
 export const setErrorHandler = (f: typeof showError) => { showError = f; };
 
+/** A change whose reply carries the state among other things (import, command, paste): sent with the change revision as
+ *  `apply` sends it. A stale one refetches, says so and gives null; any other error is the caller's to show (#142). */
+export async function applyReply<T extends { state: State }>(method: string, params: unknown = {}): Promise<T | null> {
+  try {
+    return await call<T>(method, params, app.state?.changeRevision);
+  } catch (e) {
+    if (!(e instanceof StaleError)) throw e;
+    setState(await call<State>("state"));
+    showError("LoftLine", e.message);
+    return null;
+  }
+}
+
 /** A change to the project. It carries the change revision the window was drawn from, so one built on a view an assistant has
  *  since changed is refused rather than undoing the assistant's work; the window then refetches and says so. */
 /** `rev`: the revision the change was built from, when that is older than the window's (a form opened earlier). */

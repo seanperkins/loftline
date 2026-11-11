@@ -9,6 +9,8 @@ public struct AssistantStatus: Encodable, Equatable {
     public var asking: Bool
     public var allowed: Bool
     public var changes: Int
+    /// Check Toolpaths' warning for those changes, in the core's words; nil when there are none.
+    public var warning: String?
 
     public init(changeRevision: Int, assistantRevision: Int = 0, claimed: Bool = false, asking: Bool = false, allowed: Bool = false,
                 changes: Int = 0) {
@@ -18,6 +20,7 @@ public struct AssistantStatus: Encodable, Equatable {
         self.asking = asking
         self.allowed = allowed
         self.changes = changes
+        self.warning = ValidationReport.assistantChangesWarning(changes)
     }
 }
 

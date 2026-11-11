@@ -7,7 +7,7 @@ import { unitLabel } from "./model";
 import { createPreview } from "./preview3d";
 import * as sheets from "./sheets";
 import { createSidebar } from "./sidebar";
-import { app, apply, busy, doc, liveLink, refresh, setLiveLink, setState, subscribe } from "./state";
+import { app, apply, applyReply, busy, doc, liveLink, refresh, setLiveLink, setState, subscribe } from "./state";
 import type { AssistantStatus, State } from "./model";
 
 interface Info { platform: string; fonts: string[]; defaultFont: string; imageExtensions: string[]; importExtensions: string[] }
@@ -52,7 +52,8 @@ async function importFile() {
   const path = await sheets.pickOpen("Import", info.importExtensions);
   if (!path) return;
   try {
-    const imported = await call<{ state: State; warnings: string[] }>("import", { path });
+    const imported = await applyReply<{ state: State; warnings: string[] }>("import", { path });
+    if (!imported) return;
     setState(imported.state);
     if (imported.warnings.length) sheets.openAlert("Import", imported.warnings.join("\n"));
     document.querySelector(".canvas-host")?.dispatchEvent(new Event("loftline-fit"));
@@ -67,7 +68,8 @@ async function exportVectors() {
 
 async function command(name: string, extra: Record<string, unknown> = {}) {
   try {
-    const done = await call<{ state: State; selection?: string[]; note?: string }>("command", { name, ids: [...app.selection], ...extra });
+    const done = await applyReply<{ state: State; selection?: string[]; note?: string }>("command", { name, ids: [...app.selection], ...extra });
+    if (!done) return;
     if (done.selection) app.selection = new Set(done.selection);
     setState(done.state);
     if (done.note) sheets.openAlert("LoftLine", done.note);
@@ -114,7 +116,8 @@ const copy = () => { clipboard = doc().shapes.filter((s) => app.selection.has(s.
 async function paste() {
   if (!clipboard.length) return;
   try {
-    const done = await call<{ state: State; selection: string[] }>("paste", { shapes: clipboard });
+    const done = await applyReply<{ state: State; selection: string[] }>("paste", { shapes: clipboard });
+    if (!done) return;
     app.selection = new Set(done.selection);
     setState(done.state);
   } catch (e) { sheets.openAlert("Paste", e instanceof Error ? e.message : String(e)); }
@@ -298,8 +301,14 @@ function renderStatus() {
 // The live link's bars (spec 2, "What the user sees"): the Allow question, the assistant at work, a standing Allow, the review marker.
 const assistantBars = h("div", { class: "assistant-bars" });
 let assistant: AssistantStatus | null = null;
+// What the bars last showed: the poll runs every second, and redrawing unchanged bars would replace the buttons under the
+// pointer (a click could land on a button that was just removed).
+let shownBars = "";
 function renderAssistant() {
   const a = assistant;
+  const key = a && app.state ? JSON.stringify([a.asking, a.claimed, a.allowed, a.changes, app.state.title]) : "";
+  if (key === shownBars) return;
+  shownBars = key;
   if (!a || !app.state) { replace(assistantBars); return; }
   const name = app.state.title;
   const bar = (text: string, ...buttons: HTMLElement[]) => h("div", { class: "assistant-bar", role: "status", "aria-label": text },
