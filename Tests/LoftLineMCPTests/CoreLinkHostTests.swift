@@ -8,6 +8,11 @@ import Testing
 /// The desktop engine's end of the live link (spec 2, "The desktop host"): one window, run in place, one Undo step per edit,
 /// a claim answered through standard input, stale front-end requests refused.
 @Suite(.serialized) struct CoreLinkHostTests {
+    /// A link call made off the cooperative pool.
+    func call(_ client: LinkClient, _ tool: String, _ arguments: [String: Any]) async throws -> ToolOutput {
+        try await offPool { try client.call(tool, arguments) }
+    }
+
     struct Rig {
         let h = MCPHarness()
         let host: CoreLinkHost
@@ -36,7 +41,9 @@ import Testing
         }
 
         /// A claimed client, the user having clicked Allow through the front end.
-        func claimed() throws -> LinkClient {
+        func claimed() async throws -> LinkClient { try await offPool { try claimedNow() } }
+
+        func claimedNow() throws -> LinkClient {
             let client = try LinkClient(socket: server.socketURL)
             let done = DispatchSemaphore(value: 0)
             var failure: Error?
@@ -58,20 +65,20 @@ import Testing
         }
     }
 
-    @Test func claimAnsweredThroughStdinSucceeds() throws {
+    @Test func claimAnsweredThroughStdinSucceeds() async throws {
         let rig = try Rig()
         defer { rig.stop() }
-        let client = try rig.claimed()
+        let client = try await rig.claimed()
         client.close()
     }
 
-    @Test func editIsOneUndoStep() throws {
+    @Test func editIsOneUndoStep() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         try rig.h.call("new_project", ["units": "inch", "width": 24, "height": 18, "thickness": 0.75])
-        let client = try rig.claimed()
+        let client = try await rig.claimed()
         defer { client.close() }
-        _ = try client.call("add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 2, "height": 2],
+        _ = try await call(client, "add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 2, "height": 2],
                                                       ["type": "circle", "x": 6, "y": 6, "radius": 1]]])
         #expect(rig.h.session.project.document.shapes.count == 2)
         #expect(rig.h.session.undoAction == "Assistant: add_shapes")
@@ -79,38 +86,38 @@ import Testing
         #expect(rig.h.session.project.document.shapes.isEmpty)
     }
 
-    @Test func throwingEditLeavesSessionAndStacks() throws {
+    @Test func throwingEditLeavesSessionAndStacks() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         try rig.h.call("new_project", ["units": "inch", "width": 24, "height": 18, "thickness": 0.75])
         try rig.h.call("add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 2, "height": 2]]])
         let before = (rig.h.session.project, rig.h.session.undoAction, rig.h.session.changeRevision)
-        let client = try rig.claimed()
+        let client = try await rig.claimed()
         defer { client.close() }
-        #expect(throws: (any Error).self) { _ = try client.call("add_shapes", ["shapes": ["not an object"]]) }
+        await #expect(throws: (any Error).self) { _ = try await call(client, "add_shapes", ["shapes": ["not an object"]]) }
         #expect(rig.h.session.project == before.0)
         #expect(rig.h.session.undoAction == before.1)
         #expect(rig.h.session.changeRevision == before.2)
     }
 
-    @Test func inPlaceCalculateDoesNotDeadlock() throws {
+    @Test func inPlaceCalculateDoesNotDeadlock() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         try rig.h.call("open_project", ["path": try rig.h.sample().path])
-        let client = try rig.claimed()
+        let client = try await rig.claimed()
         defer { client.close() }
-        let out = try client.call("calculate", [:])
+        let out = try await call(client, "calculate", [:])
         #expect(out.text.hasPrefix("Calculated"))
     }
 
-    @Test func staleUpdateOperationIsRefusedAfterAToolpathOnlyEdit() throws {
+    @Test func staleUpdateOperationIsRefusedAfterAToolpathOnlyEdit() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         try rig.h.call("open_project", ["path": try rig.h.sample().path])
         let seen = rig.h.session.changeRevision
         let op = try #require(rig.h.session.project.operations.first)
-        let client = try rig.claimed()
-        _ = try client.call("update_toolpath", ["id": op.id.uuidString, "enabled": !op.setup.isEnabled])
+        let client = try await rig.claimed()
+        _ = try await call(client, "update_toolpath", ["id": op.id.uuidString, "enabled": !op.setup.isEnabled])
         client.close()
         let refused = try rig.send("undo", rev: seen)
         #expect((refused["code"] as? String) == "stale", "\(refused)")
@@ -124,66 +131,66 @@ import Testing
     @Test func openWhileClaimedReleasesAndRevokes() async throws {
         let rig = try Rig()
         defer { rig.stop() }
-        let client = try rig.claimed()
+        let client = try await rig.claimed()
         defer { client.close() }
         _ = try rig.send("open", ["path": try rig.h.sample().path])
-        #expect(throws: LinkClientError.self) { _ = try client.call("describe_project", [:]) }
+        await #expect(throws: LinkClientError.self) { _ = try await call(client, "describe_project", [:]) }
         #expect(await rig.host.claims.allowed.isEmpty)
     }
 
-    @Test func dialogOpenRefusesEdits() throws {
+    @Test func dialogOpenRefusesEdits() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         try rig.h.call("new_project", ["units": "inch", "width": 24, "height": 18, "thickness": 0.75])
-        let client = try rig.claimed()
+        let client = try await rig.claimed()
         defer { client.close() }
         _ = try rig.send("assistantDialog", ["open": true])
-        #expect(throws: LinkClientError.self) {
-            _ = try client.call("add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 2, "height": 2]]])
+        await #expect(throws: LinkClientError.self) {
+            _ = try await call(client, "add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 2, "height": 2]]])
         }
         #expect(rig.h.session.project.document.shapes.isEmpty)
-        _ = try client.call("describe_project", [:])   // reads still work
+        _ = try await call(client, "describe_project", [:])   // reads still work
         _ = try rig.send("assistantDialog", ["open": false])
-        _ = try client.call("add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 2, "height": 2]]])
+        _ = try await call(client, "add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 2, "height": 2]]])
         #expect(rig.h.session.project.document.shapes.count == 1)
     }
 
-    @Test func saveAsWritesThroughAssistantWriter() throws {
+    @Test func saveAsWritesThroughAssistantWriter() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         try rig.h.call("new_project", ["units": "inch", "width": 24, "height": 18, "thickness": 0.75])
-        let client = try rig.claimed()
+        let client = try await rig.claimed()
         defer { client.close() }
         let to = rig.h.allowed.appendingPathComponent("Saved.loftline")
-        _ = try client.call("save_project", ["path": to.path])
+        _ = try await call(client, "save_project", ["path": to.path])
         #expect(FileManager.default.fileExists(atPath: to.path))
-        #expect(throws: LinkClientError.self) {
-            _ = try client.call("save_project", ["path": rig.h.outside.appendingPathComponent("No.loftline").path])
+        await #expect(throws: LinkClientError.self) {
+            _ = try await call(client, "save_project", ["path": rig.h.outside.appendingPathComponent("No.loftline").path])
         }
     }
 
-    @Test func describeNamesTheDocumentAndPath() throws {
+    @Test func describeNamesTheDocumentAndPath() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         let file = try rig.h.sample()
         try rig.h.call("open_project", ["path": file.path])
-        let client = try rig.claimed()
+        let client = try await rig.claimed()
         defer { client.close() }
-        let text = try client.call("describe_project", [:]).text
+        let text = try await call(client, "describe_project", [:]).text
         #expect(text.contains("\"document\"") && text.contains(file.lastPathComponent))
     }
 
-    @Test func coreMarkerSurvivesAssistantAndUserSave() throws {
+    @Test func coreMarkerSurvivesAssistantAndUserSave() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         let file = try rig.h.sample()
         try rig.h.call("open_project", ["path": file.path])
-        let client = try rig.claimed()
+        let client = try await rig.claimed()
         defer { client.close() }
         func changes() throws -> Int? { (try rig.send("assistantStatus")["result"] as? [String: Any])?["changes"] as? Int }
-        _ = try client.call("add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 1, "height": 1]]])
+        _ = try await call(client, "add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 1, "height": 1]]])
         #expect(try changes() == 1)
-        _ = try client.call("save_project", [:])
+        _ = try await call(client, "save_project", [:])
         #expect(try changes() == 1)
         _ = try rig.send("save", ["path": file.path], rev: rig.h.session.changeRevision)
         #expect(try changes() == 1)
@@ -197,15 +204,15 @@ import Testing
         #expect(try changes() == 0)
     }
 
-    @Test func untitledCountReachesTheRecordOnItsFirstSave() throws {
+    @Test func untitledCountReachesTheRecordOnItsFirstSave() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         try rig.h.call("new_project", ["units": "inch", "width": 24, "height": 18, "thickness": 0.75])
-        let client = try rig.claimed()
+        let client = try await rig.claimed()
         defer { client.close() }
-        _ = try client.call("add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 1, "height": 1]]])
+        _ = try await call(client, "add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 1, "height": 1]]])
         let to = rig.h.allowed.appendingPathComponent("New.loftline")
-        _ = try client.call("save_project", ["path": to.path])
+        _ = try await call(client, "save_project", ["path": to.path])
         #expect(ReviewMarkerStore(file: rig.settings.deletingLastPathComponent().appendingPathComponent("review.json")).count(for: to) == 1)
     }
 }

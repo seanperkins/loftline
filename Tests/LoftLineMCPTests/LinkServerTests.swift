@@ -52,7 +52,7 @@ final class FakeHost: LinkHost, @unchecked Sendable {
             try c.send(["v": 1, "op": "claim", "document": "w1"])
             for _ in 0..<2000 where await !host.claims.asking.contains("w1") { try await Task.sleep(for: .milliseconds(5)) }
             await host.claims.answer("w1", allow: true)
-            let reply = try c.receive()
+            let reply = try await c.receive()
             #expect(reply?["error"] == nil, "\(String(describing: reply))")
             return c
         }
@@ -64,26 +64,27 @@ final class FakeHost: LinkHost, @unchecked Sendable {
         init(fd: LinkHandle) { self.fd = fd; reader = LinkReader(fd, max: 64 << 20) }
         func send(_ object: [String: Any]) throws { try LinkSocket.writeLine(fd, try JSONSerialization.data(withJSONObject: object)) }
         func sendRaw(_ text: String) throws { try LinkSocket.writeLine(fd, Data(text.utf8)) }
-        func receive() throws -> [String: Any]? {
+        func receiveNow() throws -> [String: Any]? {
             guard case .line(let data)? = try reader.next() else { return nil }
             return try JSONSerialization.jsonObject(with: data) as? [String: Any]
         }
+        func receive() async throws -> [String: Any]? { try await offPool { try receiveNow() } }
         func errorCode(_ reply: [String: Any]?) -> String? { (reply?["error"] as? [String: Any])?["code"] as? String }
         func errorMessage(_ reply: [String: Any]?) -> String? { (reply?["error"] as? [String: Any])?["message"] as? String }
         func close() { LinkSocket.close(fd) }
     }
 
-    @Test func listAnswersThenCloses() throws {
+    @Test func listAnswersThenCloses() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         let c = try rig.connect()
         defer { c.close() }
         try c.send(["v": 1, "op": "list"])
-        let reply = try c.receive()
+        let reply = try await c.receive()
         let docs = try #require(reply?["documents"] as? [[String: Any]])
         #expect(docs.count == 1 && docs[0]["name"] as? String == "Sign" && docs[0]["path"] == nil)
         #expect(docs[0]["claimed"] as? Bool == false)
-        #expect(try c.receive() == nil)
+        #expect(try await c.receive() == nil)
     }
 
     @Test func claimThenCallReachesTheHostWithItsKind() async throws {
@@ -92,21 +93,21 @@ final class FakeHost: LinkHost, @unchecked Sendable {
         let c = try await rig.claimed()
         defer { c.close() }
         try c.send(["v": 1, "op": "call", "tool": "add_shapes", "arguments": ["shapes": [] as [Any]]])
-        let reply = try c.receive()
+        let reply = try await c.receive()
         #expect(reply?["text"] as? String == "ran add_shapes")
         let call = try #require(rig.host.calls.first)
         #expect(call.kind == .edit && call.document == "w1")
         try c.send(["v": 1, "op": "call", "tool": "preview", "arguments": [String: Any]()])
-        #expect(try c.receive()?["image"] as? String == Data([1, 2, 3]).base64EncodedString())
+        #expect(try await c.receive()?["image"] as? String == Data([1, 2, 3]).base64EncodedString())
     }
 
-    @Test func aCallWithoutAClaimIsRefused() throws {
+    @Test func aCallWithoutAClaimIsRefused() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         let c = try rig.connect()
         defer { c.close() }
         try c.send(["v": 1, "op": "call", "tool": "check", "arguments": [String: Any]()])
-        #expect(c.errorCode(try c.receive()) == "not_claimed")
+        #expect(c.errorCode(try await c.receive()) == "not_claimed")
         #expect(rig.host.calls.isEmpty)
     }
 
@@ -117,24 +118,24 @@ final class FakeHost: LinkHost, @unchecked Sendable {
         defer { c.close() }
         for tool in ["new_project", "open_project", "undo", "rm_rf"] {
             try c.send(["v": 1, "op": "call", "tool": tool, "arguments": [String: Any]()])
-            #expect(c.errorCode(try c.receive()) == "refused", "\(tool)")
+            #expect(c.errorCode(try await c.receive()) == "refused", "\(tool)")
         }
         #expect(rig.host.calls.isEmpty)
     }
 
-    @Test func versionMismatchNamesTheOlderSide() throws {
+    @Test func versionMismatchNamesTheOlderSide() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         let c = try rig.connect()
         defer { c.close() }
         try c.send(["v": 2, "op": "list"])
-        #expect(c.errorMessage(try c.receive()) == "This LoftLine is older than its assistant server; update LoftLine.")
+        #expect(c.errorMessage(try await c.receive()) == "This LoftLine is older than its assistant server; update LoftLine.")
         try c.send(["v": 0, "op": "list"])
-        #expect(c.errorMessage(try c.receive())
+        #expect(c.errorMessage(try await c.receive())
                 == "The assistant server is older than this LoftLine; point the assistant at the server inside this LoftLine.")
     }
 
-    @Test func fifthConnectionIsRefused() throws {
+    @Test func fifthConnectionIsRefused() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         let four = try (0..<4).map { _ in try rig.connect() }
@@ -142,36 +143,36 @@ final class FakeHost: LinkHost, @unchecked Sendable {
         Thread.sleep(forTimeInterval: 0.1)
         let fifth = try rig.connect()
         defer { fifth.close() }
-        #expect(fifth.errorCode(try fifth.receive()) == "busy")
-        #expect(try fifth.receive() == nil)
+        #expect(fifth.errorCode(try await fifth.receive()) == "busy")
+        #expect(try await fifth.receive() == nil)
     }
 
-    @Test func idleUnclaimedConnectionCloses() throws {
+    @Test func idleUnclaimedConnectionCloses() async throws {
         let rig = try Rig(idle: 0.2)
         defer { rig.stop() }
         let c = try rig.connect()
         defer { c.close() }
-        #expect(try c.receive() == nil)
+        #expect(try await c.receive() == nil)
     }
 
-    @Test func oversizeRequestGetsAnErrorAndKeepsTheConnection() throws {
+    @Test func oversizeRequestGetsAnErrorAndKeepsTheConnection() async throws {
         let rig = try Rig(maxRequest: 1000)
         defer { rig.stop() }
         let c = try rig.connect()
         defer { c.close() }
         try c.sendRaw(String(repeating: "a", count: 2000))
-        #expect(c.errorCode(try c.receive()) == "too_large")
+        #expect(c.errorCode(try await c.receive()) == "too_large")
         try c.send(["v": 1, "op": "list"])
-        #expect(try c.receive()?["documents"] != nil)
+        #expect(try await c.receive()?["documents"] != nil)
     }
 
-    @Test func nonObjectLineCloses() throws {
+    @Test func nonObjectLineCloses() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         let c = try rig.connect()
         defer { c.close() }
         try c.sendRaw("[1,2]")
-        #expect(try c.receive() == nil)
+        #expect(try await c.receive() == nil)
     }
 
     @Test func newlineInsideArgumentsIsOneRequest() async throws {
@@ -181,7 +182,7 @@ final class FakeHost: LinkHost, @unchecked Sendable {
         defer { c.close() }
         let sneaky = "a\n{\"v\":1,\"op\":\"call\",\"tool\":\"post_gcode\",\"arguments\":{}}"
         try c.send(["v": 1, "op": "call", "tool": "check", "arguments": ["note": sneaky]])
-        _ = try c.receive()
+        _ = try await c.receive()
         #expect(rig.host.calls.map(\.tool) == ["check"])
         #expect(rig.host.calls.first?.arguments["note"] as? String == sneaky)
     }
@@ -192,9 +193,9 @@ final class FakeHost: LinkHost, @unchecked Sendable {
         let c = try await rig.claimed()
         defer { c.close() }
         rig.server.release(document: "w1", reason: "the window closed")
-        let reply = try c.receive()
+        let reply = try await c.receive()
         #expect(c.errorCode(reply) == "released" && c.errorMessage(reply) == "the window closed")
-        #expect(try c.receive() == nil)
+        #expect(try await c.receive() == nil)
     }
 }
 #endif
