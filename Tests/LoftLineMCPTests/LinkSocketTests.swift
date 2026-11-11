@@ -37,8 +37,9 @@ import Testing
     }
 
     @Test func pathOver103BytesIsRefused() throws {
-        // 40 two-byte characters: 80 bytes of name, so the path is well over 103 bytes while under 103 characters.
-        let name = String(repeating: "é", count: 40)
+        // 50 "é": at least 100 bytes of name however the platform normalises it (2 bytes composed, 3 decomposed), so the path is
+        // over 103 bytes while under 103 characters.
+        let name = String(repeating: "é", count: 50)
         let url = URL(fileURLWithPath: "/tmp/\(name)/assistant.sock")
         #expect(url.path.count < 103 && url.path.utf8.count > 103)
         #expect(throws: LinkError.self) { _ = try LinkSocket.listen(at: url) }
