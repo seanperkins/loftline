@@ -50,7 +50,7 @@ final class FakeHost: LinkHost, @unchecked Sendable {
         func claimed() async throws -> Conn {
             let c = try connect()
             try c.send(["v": 1, "op": "claim", "document": "w1"])
-            for _ in 0..<200 where await !host.claims.asking.contains("w1") { try await Task.sleep(for: .milliseconds(5)) }
+            for _ in 0..<2000 where await !host.claims.asking.contains("w1") { try await Task.sleep(for: .milliseconds(5)) }
             await host.claims.answer("w1", allow: true)
             let reply = try c.receive()
             #expect(reply?["error"] == nil, "\(String(describing: reply))")

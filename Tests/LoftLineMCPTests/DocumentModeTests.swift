@@ -33,7 +33,7 @@ import Testing
         /// `use_open_document`, with the user clicking Allow.
         func use(_ document: String, id: String = "w1") async throws -> ToolOutput {
             let pending = Task { try call("use_open_document", ["document": document]) }
-            for _ in 0..<200 where await !host.claims.asking.contains(id) { try await Task.sleep(for: .milliseconds(5)) }
+            for _ in 0..<2000 where await !host.claims.asking.contains(id) { try await Task.sleep(for: .milliseconds(5)) }
             await host.claims.answer(id, allow: true)
             return try await pending.value
         }

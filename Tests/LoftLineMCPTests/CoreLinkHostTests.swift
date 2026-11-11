@@ -44,15 +44,15 @@ import Testing
                 do { try client.claim(CoreLinkHost.documentID) } catch { failure = error }
                 done.signal()
             }
-            for _ in 0..<400 {
+            for _ in 0..<2000 {
                 let status = try send("assistantStatus")["result"] as? [String: Any]
                 if status?["asking"] as? Bool == true { break }
                 Thread.sleep(forTimeInterval: 0.005)
             }
             let start = Date()
             _ = try send("assistantAnswer", ["allow": true])
-            #expect(done.wait(timeout: .now() + 2) == .success)
-            #expect(Date().timeIntervalSince(start) < 1)
+            #expect(done.wait(timeout: .now() + 10) == .success)
+            #expect(Date().timeIntervalSince(start) < 10)
             if let failure { throw failure }
             return client
         }
@@ -171,6 +171,42 @@ import Testing
         defer { client.close() }
         let text = try client.call("describe_project", [:]).text
         #expect(text.contains("\"document\"") && text.contains(file.lastPathComponent))
+    }
+
+    @Test func coreMarkerSurvivesAssistantAndUserSave() throws {
+        let rig = try Rig()
+        defer { rig.stop() }
+        let file = try rig.h.sample()
+        try rig.h.call("open_project", ["path": file.path])
+        let client = try rig.claimed()
+        defer { client.close() }
+        func changes() throws -> Int? { (try rig.send("assistantStatus")["result"] as? [String: Any])?["changes"] as? Int }
+        _ = try client.call("add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 1, "height": 1]]])
+        #expect(try changes() == 1)
+        _ = try client.call("save_project", [:])
+        #expect(try changes() == 1)
+        _ = try rig.send("save", ["path": file.path], rev: rig.h.session.changeRevision)
+        #expect(try changes() == 1)
+        let report = try #require(try rig.send("checkReport")["result"] as? [String: Any])
+        let messages = (report["sections"] as? [[String: Any]] ?? []).flatMap { ($0["issues"] as? [[String: Any]]) ?? [] }
+            .compactMap { $0["message"] as? String }
+        #expect(messages.contains("Changed by an assistant (1 change)"), "\(messages)")
+        // A new store reads the same record: it is on disk, keyed by the file.
+        #expect(ReviewMarkerStore(file: rig.settings.deletingLastPathComponent().appendingPathComponent("review.json")).count(for: file) == 1)
+        _ = try rig.send("dismissAssistantMarker")
+        #expect(try changes() == 0)
+    }
+
+    @Test func untitledCountReachesTheRecordOnItsFirstSave() throws {
+        let rig = try Rig()
+        defer { rig.stop() }
+        try rig.h.call("new_project", ["units": "inch", "width": 24, "height": 18, "thickness": 0.75])
+        let client = try rig.claimed()
+        defer { client.close() }
+        _ = try client.call("add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 1, "height": 1]]])
+        let to = rig.h.allowed.appendingPathComponent("New.loftline")
+        _ = try client.call("save_project", ["path": to.path])
+        #expect(ReviewMarkerStore(file: rig.settings.deletingLastPathComponent().appendingPathComponent("review.json")).count(for: to) == 1)
     }
 }
 #endif

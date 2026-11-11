@@ -9,7 +9,7 @@ import Testing
     /// Starts a claim and waits until the book is asking about it.
     static func asking(_ book: ClaimBook, _ doc: String, _ connection: Int) async -> Task<ClaimResult, Never> {
         let task = Task { await book.claim(doc, connection: connection) }
-        for _ in 0..<200 where await !book.asking.contains(doc) { try? await Task.sleep(for: .milliseconds(5)) }
+        for _ in 0..<2000 where await !book.asking.contains(doc) { try? await Task.sleep(for: .milliseconds(5)) }
         return task
     }
 
