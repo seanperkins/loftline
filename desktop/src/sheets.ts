@@ -64,18 +64,24 @@ async function askPath(title: string): Promise<string | null> {
   });
 }
 
+/** A native panel or alert counts as a dialog for the live link's guard, as a sheet does (spec 2, "The guard"). */
+async function whileNativeDialog<T>(body: () => Promise<T>): Promise<T> {
+  await call("assistantDialog", { open: true }).catch(() => undefined);
+  try { return await body(); } finally { void call("assistantDialog", { open: false }).catch(() => undefined); }
+}
+
 export async function pickOpen(title: string, extensions: string[]): Promise<string | null> {
   if (!inShell()) return askPath(title);
-  const picked = await nativeOpen({ title, multiple: false, filters: [{ name: title, extensions }] });
+  const picked = await whileNativeDialog(() => nativeOpen({ title, multiple: false, filters: [{ name: title, extensions }] }));
   return typeof picked === "string" ? picked : null;
 }
 
 export async function pickSave(title: string, name: string, extension: string): Promise<string | null> {
   if (!inShell()) return askPath(title);
-  return nativeSave({ title, defaultPath: name, filters: [{ name: extension.toUpperCase(), extensions: [extension] }] });
+  return whileNativeDialog(() => nativeSave({ title, defaultPath: name, filters: [{ name: extension.toUpperCase(), extensions: [extension] }] }));
 }
 
-export const nativeAlert = async (text: string) => { if (inShell()) await nativeMessage(text); };
+export const nativeAlert = async (text: string) => { if (inShell()) await whileNativeDialog(() => nativeMessage(text)); };
 
 function issueList(issues: Issue[]) {
   if (issues.length === 0) return h("p", { class: "good-text small" }, "No issues.");
@@ -354,6 +360,9 @@ export async function openValidation() {
 export async function openJobSetup() {
   const [machines, posts, form] = await Promise.all([call<Machine[]>("machines"), call<PostRow[]>("posts"), call<JobForm>("jobForm")]);
   const d = doc();
+  // The change revision the form is built from: Apply is refused if an assistant changed the project since, rather than
+  // putting back what the form showed.
+  const formRevision = app.state!.changeRevision;
   let job: Job = { ...d.job };
   let units: string = d.units, gridSpacing = d.gridSpacing, name = d.name;
   let machineID = form.machineID ?? "";
@@ -390,7 +399,7 @@ export async function openJobSetup() {
   present("Job Setup", body, [
     h("button", { class: "button", onclick: close }, "Cancel"),
     h("button", { class: "button primary", onclick: async () => {
-      const ok = await apply("setJob", { units, job, gridSpacing, name, machineID: machineID || undefined, postID });
+      const ok = await apply("setJob", { units, job, gridSpacing, name, machineID: machineID || undefined, postID }, formRevision);
       if (ok) { close(); document.querySelector(".canvas-host")?.dispatchEvent(new Event("loftline-fit")); }
     } }, "Apply"),
   ], true);

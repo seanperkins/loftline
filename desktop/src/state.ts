@@ -42,9 +42,10 @@ export const setErrorHandler = (f: typeof showError) => { showError = f; };
 
 /** A change to the project. It carries the change revision the window was drawn from, so one built on a view an assistant has
  *  since changed is refused rather than undoing the assistant's work; the window then refetches and says so. */
-export async function apply(method: string, params: unknown = {}): Promise<boolean> {
+/** `rev`: the revision the change was built from, when that is older than the window's (a form opened earlier). */
+export async function apply(method: string, params: unknown = {}, rev?: number): Promise<boolean> {
   try {
-    const next = await call<State>(method, params, method === "state" ? undefined : app.state?.changeRevision);
+    const next = await call<State>(method, params, method === "state" ? undefined : rev ?? app.state?.changeRevision);
     setState(next);
     return true;
   } catch (e) {

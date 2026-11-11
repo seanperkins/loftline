@@ -13,7 +13,7 @@ scripts/run.sh                       # debug bundle + launch
 swift run loftline-cli export samples/sign.loftline --out .tmp/out   # post a project headless (see README "Command line")
 scripts/check-samples.sh             # post every sample with every built-in post, diff against samples/expected/ (--update after an intended change)
 scripts/check-bundle.sh              # release-mode bundles: version, channel, signing, update helper, smoke tests (a few minutes)
-scripts/mcp-smoke.sh [binary]        # a short session against loftline-mcp, the MCP server for AI assistants (check-bundle runs it on the bundled one)
+scripts/mcp-smoke.sh [binary]        # a short session against loftline-mcp, the MCP server for AI assistants (check-bundle runs it on the bundled one); --live also drives the open Mac app
 scripts/check-release-workflow.sh    # structural check of .github/workflows/release.yml (also run by the test suite)
 scripts/update-feed.sh v0.2.1        # build build/latest.json, the signed update feed for a release (`genkey` makes the signing key)
 scripts/verify-feed.sh <feed> <zip> <public key>   # check a feed the way a client will (the release workflow runs it before it publishes)
@@ -54,8 +54,8 @@ a byte of any sample's G-code needs `scripts/check-samples.sh --update` and a lo
 | `Sources/UpdateCore` | Update checking without AppKit: version comparison, the signed feed, signature verification, remembered state. |
 | `Sources/LoftLineKit` | What the app, the command line and the sidecar share with no window system: the exporter, validation report, editing commands, project files. |
 | `Sources/LoftLineApp` | The Mac app, SwiftUI/AppKit: document, canvas, inspector, dialogs, 3D preview, update window (`Updates/`). |
-| `Sources/loftline-cli`, `Sources/loftline-core` | The command line, and the JSON sidecar the desktop app talks to. |
-| `Sources/LoftLineMCP`, `Sources/loftline-mcp` | The MCP server for AI assistants: protocol, ~20 tools over the same engine, allowed folders, a PNG of the design. Ships inside the app and beside the desktop app. |
+| `Sources/loftline-cli`, `Sources/loftline-core` | The command line, and the JSON sidecar the desktop app talks to (it also hosts the live link while its switch is on). |
+| `Sources/LoftLineMCP`, `Sources/loftline-mcp` | The MCP server for AI assistants: protocol, 22 tools over the same engine, allowed folders, a PNG of the design, and the live link into an open window (`Link/`: socket, claims and Allow, the tool runner). Ships inside the app and beside the desktop app. |
 | `Sources/CStb`, `Vendor/stb` | Images and fonts off the Mac. The Mac uses ImageIO and CoreText. |
 | `desktop/` | Windows and Linux app: Tauri and TypeScript over `loftline-core`. Holds no CAM and never builds program text. `scripts/build.sh` doesn't touch it. |
 

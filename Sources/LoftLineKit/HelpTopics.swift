@@ -427,7 +427,7 @@ public enum HelpTopic: String, CaseIterable, Identifiable {
             return """
             An AI assistant such as Claude can work in LoftLine for you through its MCP server: open and save projects, draw and edit vectors, add and calculate toolpaths, check them, and save G-code with its job sheet. Help ▸ Connect an AI Assistant… shows the server's location and the settings to paste into the assistant, with a Copy button. LoftLine never changes the assistant's own settings.
 
-            **What it can reach.** The assistant reads and writes files only in the allowed folders listed in that window (Documents/LoftLine to begin with). Add a folder there to let it work in another. It has no network access through LoftLine and never controls the machine.
+            **What it can reach.** The assistant reads and writes files only in the allowed folders listed in that window (Documents/LoftLine to begin with), except a window open in LoftLine that you allow it to work on (below). Add a folder there to let it work in another. It has no network access through LoftLine and never controls the machine.
 
             **What it can't do.** LoftLine checks every program the assistant posts exactly as it checks your own, and never writes a program with an error: a cut through a clamp, past the machine's travel or deeper than the tool can reach is refused, with the reason. There is no way for an assistant to skip a check.
 

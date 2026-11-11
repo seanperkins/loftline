@@ -4,6 +4,41 @@ import Foundation
 /// lines on its own thread, holds no host lock while reading, checks the version, caps requests and connections, closes idle
 /// unclaimed connections, and refuses Never and unknown tools before the host sees them.
 public final class LinkServer: @unchecked Sendable {
+    /// One connection's socket. Replies and a `released` notice come from different threads, so every write, the shutdown and
+    /// the close go through one lock; once closed, nothing touches the socket again (its number may already be another's).
+    final class Connection: @unchecked Sendable {
+        let fd: LinkHandle
+        private let lock = NSLock()
+        private var closed = false
+
+        init(_ fd: LinkHandle) { self.fd = fd }
+
+        @discardableResult
+        func write(_ line: Data) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !closed else { return false }
+            return (try? LinkTransport.writeLine(fd, line)) != nil
+        }
+
+        /// Sends `line`, then ends the connection; its own thread then sees the end of the stream and closes it.
+        func end(with line: Data? = nil) {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !closed else { return }
+            if let line { _ = try? LinkTransport.writeLine(fd, line) }
+            LinkTransport.shutdown(fd)
+        }
+
+        func close() {
+            lock.lock()
+            defer { lock.unlock() }
+            guard !closed else { return }
+            closed = true
+            LinkTransport.close(fd)
+        }
+    }
+
     public static let version = 1
 
     public let folder: URL
@@ -15,7 +50,7 @@ public final class LinkServer: @unchecked Sendable {
 
     private let lock = NSLock()
     private var listener: LinkHandle?
-    private var connections: [Int: LinkHandle] = [:]
+    private var connections: [Int: Connection] = [:]
     /// Which window each connection holds, and its generation when claimed.
     private var claimed: [Int: String] = [:]
     private var claimedGeneration: [Int: Int] = [:]
@@ -44,7 +79,7 @@ public final class LinkServer: @unchecked Sendable {
         let open = Array(connections.values)
         lock.unlock()
         if let fd { LinkTransport.shutdown(fd); LinkTransport.close(fd) }
-        open.forEach(LinkTransport.shutdown)
+        open.forEach { $0.end() }
         try? FileManager.default.removeItem(at: socketURL)
     }
 
@@ -53,9 +88,7 @@ public final class LinkServer: @unchecked Sendable {
         lock.lock()
         let held = claimed.first { $0.value == document }.flatMap { connections[$0.key] }
         lock.unlock()
-        guard let fd = held else { return }
-        try? LinkTransport.writeLine(fd, Self.error("released", reason))
-        LinkTransport.shutdown(fd)
+        held?.end(with: Self.error("released", reason))
     }
 
     private func acceptLoop(_ listener: LinkHandle) {
@@ -64,18 +97,20 @@ public final class LinkServer: @unchecked Sendable {
             lock.lock()
             let full = connections.count >= maxConnections
             let id = nextConnection
-            if !full { connections[id] = fd; nextConnection += 1 }
+            let connection = Connection(fd)
+            if !full { connections[id] = connection; nextConnection += 1 }
             lock.unlock()
             if full {
                 try? LinkTransport.writeLine(fd, Self.error("busy", "LoftLine already has \(maxConnections) assistant connections."))
                 LinkTransport.close(fd)
                 continue
             }
-            Thread.detachNewThread { [weak self] in self?.serve(fd, id) }
+            Thread.detachNewThread { [weak self] in self?.serve(connection, id) }
         }
     }
 
-    private func serve(_ fd: LinkHandle, _ id: Int) {
+    private func serve(_ connection: Connection, _ id: Int) {
+        let fd = connection.fd
         defer {
             lock.lock()
             connections[id] = nil
@@ -83,7 +118,7 @@ public final class LinkServer: @unchecked Sendable {
             claimedGeneration[id] = nil
             lock.unlock()
             Self.wait { await self.host.claims.release(connection: id) }
-            LinkTransport.close(fd)
+            connection.close()
         }
         do { try LinkTransport.checkPeer(fd) } catch { return }
         let reader = LinkReader(fd, max: maxRequest)
@@ -93,12 +128,12 @@ public final class LinkServer: @unchecked Sendable {
             do { next = try reader.next() } catch { return }   // idle, or the socket failed
             guard let next else { return }
             guard case .line(let data) = next else {
-                guard (try? LinkTransport.writeLine(fd, Self.error("too_large", "That request is larger than \(maxRequest) bytes."))) != nil else { return }
+                guard connection.write(Self.error("too_large", "That request is larger than \(maxRequest) bytes.")) else { return }
                 continue
             }
             guard let request = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return }
             let (reply, close) = answer(request, connection: id, fd: fd)
-            guard (try? LinkTransport.writeLine(fd, reply)) != nil, !close else { return }
+            guard connection.write(reply), !close else { return }
         }
     }
 

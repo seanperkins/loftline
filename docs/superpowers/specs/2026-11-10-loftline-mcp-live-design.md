@@ -64,12 +64,12 @@ public protocol LinkHost: AnyObject {
 }
 ```
 
-`AssistantRunner.run(tool:arguments:snapshot:access:writer:)` works in four steps:
+`AssistantRunner.run(tool:arguments:snapshot:access:)` works in four steps:
 
 1. Build a `CoreSession` from the snapshot.
 2. Wrap it in a `CoreService`.
-3. Build `AssistantTools.all(service:access:writer:)` over it. Every tool closes over its service's session, so the tools are
-   built per call. `writer` is the file writer the tools use; file mode passes `AssistantWriter`.
+3. Build `AssistantTools.all(service:access:)` over it. Every tool closes over its service's session, so the tools are
+   built per call. They write through `AssistantWriter`, as in file mode.
 4. Run the named tool exactly as file mode does.
 
 `CoreSnapshot` holds:

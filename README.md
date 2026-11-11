@@ -206,7 +206,8 @@ With "Let assistants edit open documents" turned on in that window, an assistant
 it asks, you click Allow in the window, and each change lands as one Undo step ("Assistant: …"). It can then read and edit that
 window wherever its file is, not only in the allowed folders; G-code still goes only into them. A bar and a Check Toolpaths warning
 mark the window as changed by an assistant until you click Dismiss.
-`scripts/mcp-smoke.sh` runs a short session against a built server. Design: `docs/superpowers/specs/2026-11-10-loftline-mcp-design.md`.
+`scripts/mcp-smoke.sh` runs a short session against a built server. Design: `docs/superpowers/specs/2026-11-10-loftline-mcp-design.md`, and for the live link into an open window
+`docs/superpowers/specs/2026-11-10-loftline-mcp-live-design.md`.
 
 ## How it's built
 
