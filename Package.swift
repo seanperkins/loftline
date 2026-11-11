@@ -57,7 +57,7 @@ var targets: [Target] = [
     .target(name: "UpdateCore", swiftSettings: swift5),
     .executableTarget(name: "loftline-cli", dependencies: ["LoftLineKit"], swiftSettings: swift5),
     // The desktop app's engine (desktop/): JSON over standard input and output.
-    .executableTarget(name: "loftline-core", dependencies: ["LoftLineKit"], swiftSettings: swift5),
+    .executableTarget(name: "loftline-core", dependencies: ["LoftLineKit", "LoftLineMCP"], swiftSettings: swift5),
     // The MCP server for AI assistants: protocol, tools, allowed folders, the 2D picture (docs/superpowers/specs/2026-11-10-loftline-mcp-design.md).
     .target(name: "LoftLineMCP", dependencies: ["LoftLineKit", "CADCore", "CAMCore", "PostCore"], swiftSettings: swift5),
     .executableTarget(name: "loftline-mcp", dependencies: ["LoftLineMCP", "LoftLineKit"], swiftSettings: swift5),
