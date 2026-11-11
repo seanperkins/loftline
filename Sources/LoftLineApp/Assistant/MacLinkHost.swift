@@ -141,6 +141,9 @@ final class MacLinkHost: LinkHost, @unchecked Sendable {
     }
 
     func run(_ call: LinkCall) async throws -> ToolOutput {
+        // The guard reads the claim state mirrored on the main thread; bring it up to date first, so the first call after Allow
+        // (or a claim of a window already allowed) isn't refused while the mirror's own refresh is still on its way.
+        await refreshNow()
         guard let doc = await MainActor.run(body: { registered[call.document]?.doc }) else {
             throw ToolError("That window closed.")
         }
