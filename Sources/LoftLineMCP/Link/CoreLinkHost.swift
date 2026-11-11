@@ -155,7 +155,7 @@ public final class CoreLinkHost: LinkHost, CoreAssistantLink, @unchecked Sendabl
 
 extension ToolOutput {
     /// `describe_project` on an open window names it and its file.
-    func addingDocument(name: String, path: String?) -> ToolOutput {
+    public func addingDocument(name: String, path: String?) -> ToolOutput {
         let parts = text.split(separator: "\n", maxSplits: 1).map(String.init)
         guard parts.count == 2, var json = (try? JSONSerialization.jsonObject(with: Data(parts[1].utf8))) as? [String: Any] else { return self }
         json["document"] = name

@@ -4,6 +4,10 @@ import LoftLineKit
 
 final class LoftLineAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The live link (spec 2): listening only while "Let assistants edit open documents" is on.
+        if AssistantSettings.load().liveLink {
+            do { try MacLinkHost.shared.setSwitch(true) } catch { NSLog("LoftLine: the live link didn't start: \(error.localizedDescription)") }
+        }
         #if DEBUG
         // Scripted UI run (see UIHarness): no Welcome window, no recovery prompt or timer, no Dock icon.
         if UIHarness.isActive {

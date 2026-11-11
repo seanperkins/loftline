@@ -3,10 +3,10 @@ import Foundation
 import LoftLineKit
 
 /// A tool's refusal, in words for the person reading it.
-struct ToolError: LocalizedError {
-    var message: String
-    var errorDescription: String? { message }
-    init(_ message: String) { self.message = message }
+public struct ToolError: LocalizedError {
+    public var message: String
+    public var errorDescription: String? { message }
+    public init(_ message: String) { self.message = message }
 }
 
 /// A tool's arguments, read leniently (a number may come as an integer or a decimal) and checked strictly.

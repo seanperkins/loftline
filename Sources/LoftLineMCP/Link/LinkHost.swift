@@ -19,6 +19,13 @@ public struct LinkCall {
     public var tool: String
     public var arguments: [String: Any]
     public var document: String
+
+    public init(kind: LinkToolKind, tool: String, arguments: [String: Any], document: String) {
+        self.kind = kind
+        self.tool = tool
+        self.arguments = arguments
+        self.document = document
+    }
 }
 
 /// An app the link serves: the Mac app, or the desktop engine (spec 2, "Architecture"). The host draws the bars and forwards the

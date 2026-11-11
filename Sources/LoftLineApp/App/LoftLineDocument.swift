@@ -197,8 +197,19 @@ final class LoftLineDocument: ReferenceFileDocument {
     @Published var measurement: Measurement?
 
     weak var undoManager: UndoManager?
-    /// Where the document is saved (from the window's document configuration), for the Finder icon.
-    var fileURL: URL?
+    /// Where the document is saved (from the window's document configuration), for the Finder icon. The live link's review
+    /// marker follows it (spec 2).
+    var fileURL: URL? {
+        didSet { link?.fileURLChanged(self, from: oldValue) }
+    }
+    /// This window's id on the live link (spec 2): made when the document is, never saved.
+    let linkID = UUID().uuidString
+    /// The live link this window is registered with.
+    weak var link: MacLinkHost?
+    /// Assistant changes the user hasn't dismissed (spec 2, "The review marker").
+    @Published var assistantChanges = 0
+    /// Which assistant bars the window shows.
+    @Published var assistantBars = AssistantBars()
     /// Bumped by every undoable change (including undo/redo).
     private var editSerial = 0
     /// Bumped whenever `project` or an entry of `results` changes, by any path (see `postedInputs`).
@@ -417,9 +428,15 @@ final class LoftLineDocument: ReferenceFileDocument {
 
     /// Applies `change` to a copy of the project; registers undo only if something changed.
     func perform(_ actionName: String, _ change: (inout LoftLineProject) -> Void) {
+        perform(actionName, pending: nil, change)
+    }
+
+    /// `pending`: the typed expressions to link; nil takes the ones the user typed for this edit. The assistant passes [], so
+    /// what the user typed for their own next edit is left alone (spec 2).
+    func perform(_ actionName: String, pending: [ExpressionRecorder.Entry]?, _ change: (inout LoftLineProject) -> Void) {
         var p = project
         change(&p)
-        VariableLinks.reconcile(&p, old: project, pending: expressionRecorder.take())
+        VariableLinks.reconcile(&p, old: project, pending: pending ?? expressionRecorder.take())
         // Keep the post and machine copies what the (possibly changed) selection means: a picked post, a machine that
         // switches the post, a unit conversion and a template all end up with the right copy without knowing about it.
         p = ProjectPost.syncing(p, profiles: postCatalog.profiles, machines: machineCatalog.machines)
@@ -849,6 +866,13 @@ final class LoftLineDocument: ReferenceFileDocument {
         static let changedWhileSaving = "The job changed while you were choosing where to save, so the program was posted again. Save once more."
     }
 
+    /// What a tool needs from this window to run on a copy of it (spec 2): only fresh results go across.
+    func linkSnapshot() -> CoreSnapshot {
+        CoreSnapshot(project: project, savedProject: lastSavedProject, fileURL: fileURL, activeSide: activeSide, designRevision: designRevision,
+                     library: toolLibrary.library, profiles: postCatalog.profiles, machines: machineCatalog.machines,
+                     results: results.filter { !isStale($0.key) })
+    }
+
     var postedInputs: PostedInputs { PostedInputs(serial: outputSerial, design: designRevision, side: activeSide) }
 
     /// True when the operation has no result or was edited after its last calculation.
@@ -1095,6 +1119,7 @@ final class LoftLineDocument: ReferenceFileDocument {
         self.undoManager = undoManager
         self.fileURL = fileURL
         recovery.register(self)
+        MacLinkHost.shared.register(self)
         #if DEBUG
         UIHarness.shared.noteDocument(self)
         #endif

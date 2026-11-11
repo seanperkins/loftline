@@ -39,7 +39,10 @@ struct ContentView: View {
             document.attachWindow(undoManager: undoManager, fileURL: documentConfiguration?.fileURL)
             document.showJobNotesOnOpenIfNeeded()
         }
-        .onDisappear { RecoveryCoordinator.shared.unregister(document) }
+        .onDisappear {
+            RecoveryCoordinator.shared.unregister(document)
+            MacLinkHost.shared.unregister(document)
+        }
         .onChange(of: undoManager) { _, um in document.undoManager = um }
         .onChange(of: timeStore.settings) { _, _ in document.refreshTimeEstimates() }
         .onChange(of: documentConfiguration?.fileURL) { _, url in
