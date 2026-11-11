@@ -20,17 +20,30 @@ public final class CoreLinkHost: LinkHost, CoreAssistantLink, @unchecked Sendabl
     private let mirrorLock = NSLock()
     private var mirror = (asking: false, allowed: false, claimed: false)
     private var dialogOpen = false
-    /// Assistant edits since the marker was last dismissed.
-    public private(set) var changes = 0
+    let markers: ReviewMarkerStore
+    /// Changes to an Untitled window, held until it has a file.
+    private var untitledChanges = 0
+    /// Assistant changes since the marker was last dismissed.
+    public var changes: Int { session.fileURL.map { markers.count(for: $0) } ?? untitledChanges }
 
     public init(service: CoreService, access: AssistantAccess, settingsFile: URL = AssistantSettings.fileURL) {
         self.service = service
         self.access = access
         self.settingsFile = settingsFile
+        markers = ReviewMarkerStore(file: settingsFile.deletingLastPathComponent().appendingPathComponent("review.json"))
         let weak = Weak()
         claims = ClaimBook { weak.host?.refreshMirror() }
         weak.host = self
         service.assistantLink = self
+        syncChanges()
+    }
+
+    /// Check Toolpaths reads the count from the session.
+    func syncChanges() { session.assistantChanges = changes }
+
+    private func addChange() {
+        if let url = session.fileURL { try? markers.add(1, for: url) } else { untitledChanges += 1 }
+        syncChanges()
     }
 
     /// One request from the front end, under the lock.
@@ -65,13 +78,15 @@ public final class CoreLinkHost: LinkHost, CoreAssistantLink, @unchecked Sendabl
             let run = try AssistantRunner.run(tool: call.tool, arguments: call.arguments, snapshot: session.snapshot(), access: access)
             let before = session.project
             session.perform(LinkToolKind.undoName(call.tool)) { $0 = run.project }
-            if session.project != before { changes += 1 }
+            if session.project != before { addChange() }
             return run.output
         case .read, .calculate, .writeFiles, .save:
             guard let tool = AssistantTools.all(service: service, access: access).first(where: { $0.name == call.tool }) else {
                 throw AssistantRunner.UnknownTool(tool: call.tool)
             }
+            let from = session.fileURL
             let out = try tool.call(call.arguments)
+            if call.kind == .save, let to = session.fileURL { saved(from: from, to: to) }
             return call.tool == "describe_project" ? out.addingDocument(name: title, path: session.fileURL?.path) : out
         case .never:
             throw ToolError("\(call.tool) can't run on an open document.")
@@ -107,10 +122,21 @@ public final class CoreLinkHost: LinkHost, CoreAssistantLink, @unchecked Sendabl
     public func documentChanged() {
         server?.release(document: Self.documentID, reason: "LoftLine opened another file in that window; claim it again.")
         Task { await claims.revoke(Self.documentID) }
-        changes = 0
+        untitledChanges = 0
+        syncChanges()
     }
 
-    public func dismissMarker() { changes = 0 }
+    public func dismissMarker() {
+        if let url = session.fileURL { try? markers.dismiss(url) }
+        untitledChanges = 0
+        syncChanges()
+    }
+
+    public func saved(from: URL?, to: URL) {
+        if let from, from.standardizedFileURL != to.standardizedFileURL { try? markers.move(from: from, to: to) }
+        if untitledChanges > 0 { try? markers.add(untitledChanges, for: to); untitledChanges = 0 }
+        syncChanges()
+    }
 
     public func switchChanged(_ on: Bool) {
         if on {

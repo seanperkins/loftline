@@ -20,10 +20,17 @@ public struct ValidationReport {
     public var warningCount: Int { allIssues.filter { $0.severity == .warning }.count }
     public var isClean: Bool { allIssues.isEmpty }
 
+    /// `assistantChanges`: changes an assistant made that the user hasn't dismissed yet (spec 2, "The review marker"); listed
+    /// first, as a warning, which never blocks.
     public static func make(project: LoftLineProject, results: [UUID: ToolpathResult], profile: PostProfile,
-                     groupByTool: Bool, sheetToolpaths: SheetToolpaths? = nil) -> ValidationReport {
+                     groupByTool: Bool, sheetToolpaths: SheetToolpaths? = nil, assistantChanges: Int = 0) -> ValidationReport {
         let jobName = project.document.name
         var sections: [Section] = []
+        if assistantChanges > 0 {
+            let text = "Changed by an assistant (\(assistantChanges) change\(assistantChanges == 1 ? "" : "s"))"
+            sections.append(Section(id: "assistant", title: "Assistant", operationID: nil,
+                                    issues: [GCodeIssue(severity: .warning, message: text)]))
+        }
         var seen = Set<String>()
         let layout = LayoutChecks.materialFits(project.document.job, units: project.document.units, profile: profile)
             + LayoutChecks.design(project.document, ignoredLayers: project.layoutIgnoredLayers)

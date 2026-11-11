@@ -15,6 +15,9 @@ public final class CoreSession {
     /// Bumped by every change a window's view is built from: an edit, undo, redo, new, open, save, or a result. The desktop's front
     /// end sends the one it last saw, so the core can refuse a change built on an older view (spec 2, "The desktop host").
     public private(set) var changeRevision = 0
+    /// Changes an assistant made that the user hasn't dismissed (spec 2, "The review marker"): Check Toolpaths warns of them.
+    /// The live link keeps it up to date.
+    public var assistantChanges = 0
     public var library: ToolLibrary
     public let toolStore: ToolLibraryStore
     public let postStore: PostProfileStore

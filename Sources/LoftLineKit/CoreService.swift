@@ -237,7 +237,10 @@ public final class CoreService {
             assistantLink?.dismissMarker()
             return try reply(id, state())
         case "save":
-            try s.save(to: URL(fileURLWithPath: try params(line, PathParam.self).path))
+            let from = s.fileURL
+            let to = URL(fileURLWithPath: try params(line, PathParam.self).path)
+            try s.save(to: to)
+            assistantLink?.saved(from: from, to: to)
             return try reply(id, state())
         case "undo":
             s.undo()
