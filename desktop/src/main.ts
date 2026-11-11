@@ -301,8 +301,14 @@ function renderStatus() {
 // The live link's bars (spec 2, "What the user sees"): the Allow question, the assistant at work, a standing Allow, the review marker.
 const assistantBars = h("div", { class: "assistant-bars" });
 let assistant: AssistantStatus | null = null;
+// What the bars last showed: the poll runs every second, and redrawing unchanged bars would replace the buttons under the
+// pointer (a click could land on a button that was just removed).
+let shownBars = "";
 function renderAssistant() {
   const a = assistant;
+  const key = a && app.state ? JSON.stringify([a.asking, a.claimed, a.allowed, a.changes, app.state.title]) : "";
+  if (key === shownBars) return;
+  shownBars = key;
   if (!a || !app.state) { replace(assistantBars); return; }
   const name = app.state.title;
   const bar = (text: string, ...buttons: HTMLElement[]) => h("div", { class: "assistant-bar", role: "status", "aria-label": text },
