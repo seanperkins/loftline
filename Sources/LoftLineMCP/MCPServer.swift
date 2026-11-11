@@ -127,7 +127,8 @@ public final class MCPServer {
     }
 
     static let instructions = "LoftLine designs and posts CNC router programs. Every program is checked as the LoftLine app checks it, "
-        + "and one with an error is never written. Files are read and written only in the folders the user allows. After posting, "
+        + "and one with an error is never written. Files are read and written only in the folders the user allows; a document open in "
+        + "LoftLine, once the user allows it with use_open_document, is read and edited wherever its file is. After posting, "
         + "show the user the summary and the job sheet; they check the program and do an air cut before cutting."
 
     func encode(_ object: [String: Any]) -> Data {

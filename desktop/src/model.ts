@@ -28,7 +28,10 @@ export interface State {
   project: Project; path?: string; title: string; isDirty: boolean; undoAction?: string; redoAction?: string; designRevision: number;
   post: { id: string; name: string; fileExtension: string }; machine?: string; side: string; coverage?: string; statuses: OperationStatus[]; issues: Issue[];
   job: { hasEstimate: boolean; totalSeconds: number; duration: string; toolLoads: number; toolChanges: number; sequence: string[] };
+  changeRevision: number; assistant: AssistantStatus;
 }
+/** The live link as the window shows it (spec 2, "The desktop host"). */
+export interface AssistantStatus { changeRevision: number; assistantRevision: number; claimed: boolean; asking: boolean; allowed: boolean; changes: number }
 export interface PostRow { id: string; name: string; fileExtension: string; units: string }
 export interface Machine { id: string; name: string; postIDs: string[]; notes?: string }
 export interface JobForm { machineID?: string; machineChoices: { id: string; title: string }[]; postID?: string }

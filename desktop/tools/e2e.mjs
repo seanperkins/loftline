@@ -4,6 +4,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { request } from "node:http";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -229,6 +230,42 @@ await section("assistant", async () => {
   check(text.includes("loftline-mcp") && text.includes("mcpServers") && text.includes("claude mcp add loftline"), "Connect an AI Assistant shows the server and its settings");
   check(await page.getByRole("button", { name: /^Copy/ }).count() === 3, "with three Copy buttons");
   await page.getByRole("button", { name: "Close" }).click();
+});
+
+// The live link (spec 2): with the switch on, an assistant claims the window over the core's socket, the user clicks Allow in the
+// bar, the assistant's edit reaches the window as one change, and the review marker shows.
+await section("live link", async () => {
+  await page.evaluate(() => window.loftline.apply("new"));
+  await menu("Help", /^Connect an AI Assistant/);
+  await page.getByRole("checkbox", { name: "Let assistants edit open documents" }).check();
+  await until(() => document.querySelector(".sheet input[type=checkbox]")?.checked);
+  await page.getByRole("button", { name: "Close" }).click();
+  const setup = await page.evaluate(() => window.loftline.call("assistantSetup"));
+  const before = (await state()).project.document.shapes.length;
+  const socket = connect(setup.socketPath);
+  socket.setEncoding("utf8");
+  const replies = [];
+  let buffered = "";
+  socket.on("data", (d) => { buffered += d; let i; while ((i = buffered.indexOf("\n")) >= 0) { replies.push(JSON.parse(buffered.slice(0, i))); buffered = buffered.slice(i + 1); } });
+  const next = async () => { for (let i = 0; i < 300 && replies.length === 0; i++) await new Promise((r) => setTimeout(r, 100)); return replies.shift(); };
+  await new Promise((r) => socket.once("connect", r));
+  socket.write(JSON.stringify({ v: 1, op: "claim", document: "desktop" }) + "\n");
+  await page.getByRole("button", { name: "Allow" }).click({ timeout: 15000 });
+  const claimed = await next();
+  check(claimed && !claimed.error, `the assistant's claim is allowed from the bar ${JSON.stringify(claimed)}`);
+  socket.write(JSON.stringify({ v: 1, op: "call", tool: "add_shapes",
+    arguments: { shapes: [{ type: "rectangle", x: 1, y: 1, width: 2, height: 2 }] } }) + "\n");
+  const added = await next();
+  check(added && added.text?.startsWith("Added"), `the assistant's edit is answered ${JSON.stringify(added)}`);
+  await page.waitForFunction((n) => window.loftline.app.state.project.document.shapes.length === n + 1, before, { timeout: 15000 });
+  check(true, "the window redraws with the assistant's shape");
+  check((await state()).undoAction === "Assistant: add_shapes", "as one Undo step");
+  await page.locator(".assistant-bar", { hasText: "review before posting" }).waitFor({ timeout: 15000 });
+  check(true, "the review marker shows");
+  await page.getByRole("button", { name: "Disconnect" }).click();
+  socket.destroy();
+  await page.getByRole("button", { name: "Dismiss" }).click();
+  await page.evaluate(() => window.loftline.call("setAssistantLink", { on: false }));
 });
 
 // Help comes from the core, and a bad open is shown, not swallowed.

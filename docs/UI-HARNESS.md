@@ -81,6 +81,9 @@ minimum is 1000 x 640). Steps run in order and the run stops at the first error,
 | `editTool` | `value`: `diameter`, `rename`, `number`, `describe` or `rpm` | edits the tool of the first toolpath in the Tool Database, as that window does while a sheet is open: `diameter` makes the toolpaths stale, `rename` only relabels them, `number` gives it another library tool's T number, `describe` gives it a description, `rpm` gives it a spindle speed no post runs |
 | `editToolpath` | `value`: `deeper` or `tabs`; `name`: the toolpath (default the first) | `deeper` cuts a profile or pocket 0.5 below the material bottom, `tabs` turns on tabs as tall as a profile's cut; the toolpath form shows its warnings |
 | `openWindow` | `value`: `assistant` | opens Help ▸ Connect an AI Assistant… without a menu click; capture it with `captureWindow` (`"value": "Connect an AI Assistant"`) |
+| `assistantBars` | `value`: `asking`, `claimed`, `allowed`, `marker` or `none` | sets the window's live-link bars as they'd show, for a screenshot (`harness/scenarios/assistant-live.json`) |
+| `assistantSave` | `name`: a file under the harness HOME | gives the window that file, edits it, saves it as the assistant does and logs `located`, `confirmed`, `dirty`, `recovery`, `sameAsCommandS` |
+| `allowAssistant` | `seconds` | waits that long for an assistant to ask for the window, then clicks Allow; `scripts/mcp-smoke.sh --live` runs it (`harness/scenarios/assistant-smoke.json`) |
 | `captureWindow` | `value`: a window's title (`Tool Database`), `name` | window PNG and accessibility tree of a window other than the document's; open it first with `press` on its toolbar button (`"name": "Tool Database", "value": "AXButton"`) |
 | `selectTool` | `name`: a tool's name | selects that tool in the open Tool Database window (its list rows cannot be clicked) |
 | `searchTools` | `value`: text | puts that text in the open Tool Database window's search field (empty clears it) |
@@ -138,6 +141,10 @@ either of which keeps a call in the sandbox:
 ```
 
 Its own HOME does not isolate your preferences (see the start of this page).
+
+The live link's socket sits beside `assistant.json`, so `LOFTLINE_ASSISTANT_SETTINGS` (set for both the app and `loftline-mcp`) moves it into a
+run's own folder; under the harness HOME the default path is longer than a socket allows. The `assistantBars` op sets a window's live-link bars
+for a screenshot (`harness/scenarios/assistant-live.json`); `assistantSave` saves a window through its own document as the assistant does.
 
 The GIF is encoded from the frames with one palette per clip and no alpha channel (an alpha channel makes
 every frame a full frame and the file fifty times larger). ffmpeg from Homebrew is required.

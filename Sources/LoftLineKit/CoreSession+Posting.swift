@@ -79,7 +79,7 @@ extension CoreSession {
         calculateForPosting(output, scope: .all, profile: profile)
         let sheet = GCodeExporter.sheetToolpathsIfProbing(project: project, results: results, scope: .all, profile: profile)
         var report = ValidationReport.make(project: output, results: results, profile: profile, groupByTool: context.groupByTool,
-                                           sheetToolpaths: sheet)
+                                           sheetToolpaths: sheet, assistantChanges: assistantChanges)
         let issues = postIssues(for: profile)
         if !issues.isEmpty {
             report.sections.insert(ValidationReport.Section(id: "post", title: "Post", operationID: nil, issues: issues), at: 0)

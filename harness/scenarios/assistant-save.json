@@ -1,0 +1,8 @@
+{
+  "name": "The assistant's save on the Mac (plan Task 2 spike): save a window through its own NSDocument",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "assistantSave", "name": "Spike.loftline"}
+  ]
+}

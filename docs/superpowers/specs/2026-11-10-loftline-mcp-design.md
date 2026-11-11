@@ -125,7 +125,7 @@ changes, and `post_gcode`'s and `check`'s descriptions carry the safety text bel
 - **Every post names what the operator must check.** The result starts with machine, post, units, material, Z zero, deepest cut,
   estimated time, tool changes and pauses, and the job sheet's path when one was written. The descriptions tell the assistant to
   show these to the user, and that the user checks the program, the job sheet and an air cut before cutting (`TESTING.md`).
-- **Files.** Reads and writes only inside allowed folders. A path is resolved (symlinks, `..`, case on case-insensitive volumes)
+- **Files.** Reads and writes only inside allowed folders (spec 2 widens this for a window open in the app that the user allows). A path is resolved (symlinks, `..`, case on case-insensitive volumes)
   before the check, and the write itself goes through the folder-anchored writer (engine change 4), so a folder swapped for a
   link after the check can't redirect it. An existing file is replaced only with `replace: true`. Save All's set is all or nothing.
 - **Allowed folders** are a list in `assistant.json` in LoftLine's support folder (where `ToolLibraryStore` keeps `tools.json`),

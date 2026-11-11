@@ -1,0 +1,10 @@
+{
+  "name": "The live link against the real app (scripts/mcp-smoke.sh --live): allow the assistant, then stay open while it works",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "allowAssistant", "seconds": 90},
+    {"op": "wait", "seconds": 20},
+    {"op": "capture", "name": "assistant-smoke"}
+  ]
+}

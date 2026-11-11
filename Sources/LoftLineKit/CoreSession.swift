@@ -12,6 +12,13 @@ public final class CoreSession {
     public private(set) var results: [UUID: ToolpathResult] = [:]
     /// The side of a two-sided job on show, which is the side that posts (`LoftLineDocument.activeSide`).
     public private(set) var activeSide: JobSide = .top
+    /// Bumped by every change to the project a window's edits are built from: an edit, undo, redo, new, open, save. Not by a
+    /// calculated result, which no front-end edit rests on (the 3D preview and a job sheet calculate as they go). The desktop's front
+    /// end sends the one it last saw, so the core can refuse a change built on an older project (spec 2, "The desktop host").
+    public private(set) var changeRevision = 0
+    /// Changes an assistant made that the user hasn't dismissed (spec 2, "The review marker"): Check Toolpaths warns of them.
+    /// The live link keeps it up to date.
+    public var assistantChanges = 0
     public var library: ToolLibrary
     public let toolStore: ToolLibraryStore
     public let postStore: PostProfileStore
@@ -40,6 +47,32 @@ public final class CoreSession {
         savedProject = project
     }
 
+    /// A session over a copy of a window, for one assistant tool (spec 2): nothing is read from disk.
+    public init(snapshot: CoreSnapshot, toolStore: ToolLibraryStore = ToolLibraryStore(), postStore: PostProfileStore = PostProfileStore(),
+                machineStore: MachineStore = MachineStore()) {
+        self.toolStore = toolStore
+        self.postStore = postStore
+        self.machineStore = machineStore
+        library = snapshot.library
+        profiles = snapshot.profiles
+        skippedPosts = []
+        machines = snapshot.machines
+        project = snapshot.project
+        savedProject = snapshot.savedProject
+        fileURL = snapshot.fileURL
+        activeSide = snapshot.activeSide
+        designRevision = snapshot.designRevision
+        results = snapshot.results
+        assistantChanges = snapshot.assistantChanges
+    }
+
+    /// This session as a snapshot, carrying only fresh results.
+    public func snapshot() -> CoreSnapshot {
+        CoreSnapshot(project: project, savedProject: savedProject, fileURL: fileURL, activeSide: activeSide, designRevision: designRevision,
+                     library: library, profiles: profiles, machines: machines, results: results.filter { !isStale($0.key) },
+                     assistantChanges: assistantChanges)
+    }
+
     public var isDirty: Bool { project != savedProject }
     public var undoAction: String? { undoStack.last?.action }
     public var redoAction: String? { redoStack.last?.action }
@@ -65,6 +98,7 @@ public final class CoreSession {
         project = p
         savedProject = p
         fileURL = url
+        changeRevision += 1
     }
 
     private func reset(fileURL: URL?) {
@@ -75,6 +109,7 @@ public final class CoreSession {
         results = [:]
         activeSide = .top
         designRevision += 1
+        changeRevision += 1
     }
 
     // MARK: Edits
@@ -117,6 +152,7 @@ public final class CoreSession {
         })
         results = results.filter { live.contains($0.key) }
         if !new.document.job.isTwoSided { activeSide = .top }
+        changeRevision += 1
     }
 
     // MARK: What posts

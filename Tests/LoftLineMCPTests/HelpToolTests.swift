@@ -25,10 +25,11 @@ import Testing
     /// Every tool the server offers has a valid schema and a name assistants accept.
     @Test func everyToolIsWellFormed() {
         let h = MCPHarness()
-        let names = h.tools.map(\.name)
+        let tools = AssistantTools.server(service: h.service, access: h.access, link: DocumentMode(folder: h.allowed))
+        let names = tools.map(\.name)
         #expect(Set(names).count == names.count)
-        #expect(names.count == 20, "\(names)")
-        for tool in h.tools {
+        #expect(names.count == 22, "\(names)")
+        for tool in tools {
             #expect(tool.inputSchema["type"] as? String == "object", "\(tool.name)")
             let properties = tool.inputSchema["properties"] as? [String: Any] ?? [:]
             for name in tool.inputSchema["required"] as? [String] ?? [] { #expect(properties[name] != nil, "\(tool.name).\(name)") }

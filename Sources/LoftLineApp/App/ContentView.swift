@@ -23,6 +23,7 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 400)
         } detail: {
             VStack(spacing: 0) {
+                AssistantBarsView(document: document)
                 center
                 Divider()
                 StatusBar(document: document)
@@ -39,7 +40,10 @@ struct ContentView: View {
             document.attachWindow(undoManager: undoManager, fileURL: documentConfiguration?.fileURL)
             document.showJobNotesOnOpenIfNeeded()
         }
-        .onDisappear { RecoveryCoordinator.shared.unregister(document) }
+        .onDisappear {
+            RecoveryCoordinator.shared.unregister(document)
+            MacLinkHost.shared.unregister(document)
+        }
         .onChange(of: undoManager) { _, um in document.undoManager = um }
         .onChange(of: timeStore.settings) { _, _ in document.refreshTimeEstimates() }
         .onChange(of: documentConfiguration?.fileURL) { _, url in

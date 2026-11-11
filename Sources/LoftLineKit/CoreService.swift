@@ -14,14 +14,19 @@ public final class CoreService {
 
     public init(session: CoreSession = CoreSession()) { self.session = session }
 
+    /// The live link, when the desktop engine hosts one (spec 2).
+    public weak var assistantLink: CoreAssistantLink?
+
     private struct Envelope: Decodable {
         var id: Int?
         var method: String
+        /// The `changeRevision` the front end's view was built from, on every request that changes something.
+        var rev: Int?
     }
 
     private struct Wrapped<P: Decodable>: Decodable { var params: P }
     private struct Reply<R: Encodable>: Encodable { var id: Int?; var result: R }
-    private struct Failure: Encodable { var id: Int?; var error: String }
+    private struct Failure: Encodable { var id: Int?; var error: String; var code: String? }
     struct Nothing: Codable {}
     public struct UnknownMethod: LocalizedError {
         var method: String
@@ -33,6 +38,11 @@ public final class CoreService {
         do {
             let envelope = try JSONDecoder().decode(Envelope.self, from: line)
             id = envelope.id
+            // A change built on a view older than the project (an assistant changed it since): refused, so the front end refetches.
+            if let rev = envelope.rev, rev < session.changeRevision {
+                return (try? JSONEncoder().encode(Failure(id: id, error: "The assistant changed this; make your change again.", code: "stale")))
+                    ?? encodeFailure(id: id, message: "stale")
+            }
             return try dispatch(envelope.method, line: line, id: envelope.id)
         } catch {
             return encodeFailure(id: id, message: Self.describe(error))
@@ -75,6 +85,8 @@ public final class CoreService {
         var statuses: [OperationStatus]
         var issues: [IssueRow]
         var job: JobTotals
+        var changeRevision: Int
+        var assistant: AssistantStatus
     }
 
     /// The sidebar's totals, the same numbers as the Mac's: the job summary times the program as the 3D preview does.
@@ -134,7 +146,11 @@ public final class CoreService {
                                        fileExtension: GCodeExporter.fileExtension(for: resolved.post)),
                      machine: resolved.machine?.name, side: s.activeSide, coverage: s.coverage, statuses: statuses(),
                      issues: (ProjectPost.issues(for: s.project, profiles: s.profiles, machines: s.machines) + extraIssues).map(Self.row),
-                     job: jobTotals())
+                     job: jobTotals(), changeRevision: s.changeRevision, assistant: assistantStatus())
+    }
+
+    func assistantStatus() -> AssistantStatus {
+        assistantLink?.status(changeRevision: session.changeRevision) ?? AssistantStatus(changeRevision: session.changeRevision)
     }
 
     private static func row(_ issue: GCodeIssue) -> IssueRow {
@@ -199,13 +215,35 @@ public final class CoreService {
         case "state": return try reply(id, state())
         case "new":
             s.newProject()
+            assistantLink?.documentChanged()
             return try reply(id, state())
         case "open":
             let path = try params(line, PathParam.self).path
             do { try s.open(URL(fileURLWithPath: path)) } catch { throw ProjectOpenError(error) }
+            assistantLink?.documentChanged()
             return try reply(id, state())
+        // The live link (spec 2, "The desktop host").
+        case "assistantStatus":
+            return try reply(id, assistantStatus())
+        case "assistantAnswer":
+            struct P: Decodable { var allow: Bool }
+            assistantLink?.answer(allow: try params(line, P.self).allow)
+            return try reply(id, assistantStatus())
+        case "assistantDialog":
+            struct P: Decodable { var open: Bool }
+            assistantLink?.setDialog(open: try params(line, P.self).open)
+            return try reply(id, Nothing())
+        case "dismissAssistantMarker":
+            assistantLink?.dismissMarker()
+            return try reply(id, state())
+        case "assistantRevoke":
+            assistantLink?.revoke()
+            return try reply(id, assistantStatus())
         case "save":
-            try s.save(to: URL(fileURLWithPath: try params(line, PathParam.self).path))
+            let from = s.fileURL
+            let to = URL(fileURLWithPath: try params(line, PathParam.self).path)
+            try s.save(to: to)
+            assistantLink?.saved(from: from, to: to)
             return try reply(id, state())
         case "undo":
             s.undo()
@@ -500,17 +538,31 @@ public final class CoreService {
             return try reply(id, Report(sections: r.sections.map { Row(title: $0.title, issues: $0.issues.map(Self.row)) },
                                         errorCount: r.errorCount, warningCount: r.warningCount))
         // Help > Connect an AI Assistant… in the desktop app: the MCP server beside this one, the settings to paste, the folders.
-        case "assistantSetup", "setAssistantFolders":
-            struct P: Decodable { var folders: [String] }
-            struct Setup: Encodable { var serverPath: String; var config: String; var claudeCodeLine: String; var allowedFolders: [String] }
+        case "assistantSetup", "setAssistantFolders", "setAssistantLink":
+            struct Folders: Decodable { var folders: [String] }
+            struct Link: Decodable { var on: Bool }
+            struct Setup: Encodable {
+                var serverPath: String; var config: String; var claudeCodeLine: String; var allowedFolders: [String]; var liveLink: Bool
+                var socketPath: String
+            }
+            // Each change loads the file and changes one field, so setting folders never turns the switch off.
             if method == "setAssistantFolders" {
-                let folders = try params(line, P.self).folders
-                try AssistantSettings(allowedFolders: folders).save(to: assistantSettingsURL)
+                var settings = AssistantSettings.load(from: assistantSettingsURL)
+                settings.allowedFolders = try params(line, Folders.self).folders
+                try settings.save(to: assistantSettingsURL)
+            } else if method == "setAssistantLink" {
+                var settings = AssistantSettings.load(from: assistantSettingsURL)
+                settings.liveLink = try params(line, Link.self).on
+                // Listening first: a switch that can't listen isn't saved as on.
+                try assistantLink?.switchChanged(settings.liveLink)
+                try settings.save(to: assistantSettingsURL)
             }
             let server = AssistantSetup.serverPath(besideExecutable: Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0]))
             return try reply(id, Setup(serverPath: server, config: AssistantSetup.config(serverPath: server),
                                        claudeCodeLine: AssistantSetup.claudeCodeLine(serverPath: server),
-                                       allowedFolders: AssistantSettings.load(from: assistantSettingsURL).allowedFolders))
+                                       allowedFolders: AssistantSettings.load(from: assistantSettingsURL).allowedFolders,
+                                       liveLink: AssistantSettings.load(from: assistantSettingsURL).liveLink,
+                                       socketPath: AssistantSettings.linkFolder(for: assistantSettingsURL).appendingPathComponent("assistant.sock").path))
         case "help":
             struct Topic: Encodable { var id: String; var title: String; var body: String; var related: [String] }
             return try reply(id, HelpTopic.allCases.map { Topic(id: $0.rawValue, title: $0.title, body: $0.body, related: $0.related.map(\.rawValue)) })

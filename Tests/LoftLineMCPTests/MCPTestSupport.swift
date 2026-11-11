@@ -54,3 +54,11 @@ struct MCPHarness {
         return to
     }
 }
+
+/// Runs blocking work (a socket read, a link call) on its own thread. The link's server bridges to async code through Swift's
+/// cooperative pool; a test that blocked a pool thread while waiting on that server could starve it under a full parallel run.
+func offPool<T>(_ body: @escaping () throws -> T) async throws -> T {
+    try await withCheckedThrowingContinuation { continuation in
+        Thread.detachNewThread { continuation.resume(with: Result { try body() }) }
+    }
+}

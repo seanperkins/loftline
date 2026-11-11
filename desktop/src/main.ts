@@ -7,8 +7,8 @@ import { unitLabel } from "./model";
 import { createPreview } from "./preview3d";
 import * as sheets from "./sheets";
 import { createSidebar } from "./sidebar";
-import { app, apply, busy, doc, refresh, setState, subscribe } from "./state";
-import type { State } from "./model";
+import { app, apply, busy, doc, liveLink, refresh, setLiveLink, setState, subscribe } from "./state";
+import type { AssistantStatus, State } from "./model";
 
 interface Info { platform: string; fonts: string[]; defaultFont: string; imageExtensions: string[]; importExtensions: string[] }
 let info: Info = { platform: "", fonts: [], defaultFont: "", imageExtensions: [], importExtensions: [] };
@@ -295,7 +295,39 @@ function renderStatus() {
     h("span", {}, app.selection.size ? `${app.selection.size} selected` : ""));
 }
 
-replace(center, h("div", { class: "center-views" }, canvas, preview), statusBar);
+// The live link's bars (spec 2, "What the user sees"): the Allow question, the assistant at work, a standing Allow, the review marker.
+const assistantBars = h("div", { class: "assistant-bars" });
+let assistant: AssistantStatus | null = null;
+function renderAssistant() {
+  const a = assistant;
+  if (!a || !app.state) { replace(assistantBars); return; }
+  const name = app.state.title;
+  const bar = (text: string, ...buttons: HTMLElement[]) => h("div", { class: "assistant-bar", role: "status", "aria-label": text },
+    h("span", {}, text), h("span", { class: "spacer" }), ...buttons);
+  const button = (label: string, onclick: () => void, primary = false) => h("button", { class: `button${primary ? " primary" : ""}`, onclick }, label);
+  const status = async (method: string, params: unknown = {}) => { assistant = await call<AssistantStatus>(method, params); renderAssistant(); };
+  const n = a.changes;
+  replace(assistantBars,
+    a.asking ? bar(`An assistant wants to work on ${name}`, button("Deny", () => void status("assistantAnswer", { allow: false })),
+      button("Allow", () => void status("assistantAnswer", { allow: true }), true)) : null,
+    a.claimed ? bar("An assistant is working on this document", button("Disconnect", () => void status("assistantRevoke")))
+      : a.allowed ? bar("Assistants allowed", button("Revoke", () => void status("assistantRevoke"))) : null,
+    n > 0 ? bar(`An assistant changed this document (${n} change${n === 1 ? "" : "s"}); review before posting`,
+      button("Dismiss", () => void apply("dismissAssistantMarker"))) : null);
+}
+subscribe(() => { if (app.state) assistant = app.state.assistant; renderAssistant(); });
+// While the switch is on, the window asks the core about the link once a second and refetches when an assistant changed something.
+setInterval(async () => {
+  if (!liveLink || !app.state) return;
+  try {
+    const s = await call<AssistantStatus>("assistantStatus");
+    const moved = s.changeRevision !== app.state.changeRevision || s.assistantRevision !== app.state.assistant.assistantRevision;
+    assistant = s;
+    if (moved) setState(await call<State>("state")); else renderAssistant();
+  } catch { /* the next poll tries again */ }
+}, 1000);
+
+replace(center, assistantBars, h("div", { class: "center-views" }, canvas, preview), statusBar);
 replace(root, createSidebar(), h("div", { class: "main-column" }, createMenuBar(), toolbar(), h("div", { class: "work" }, center, inspector)), sheets.createSheetHost(), busyMark);
 
 subscribe(() => {
@@ -325,6 +357,8 @@ async function start() {
   try {
     info = await call<Info>("info");
     setState(await call<State>("state"));
+    await call("assistantDialog", { open: false });   // a reloaded window has no dialog open
+    setLiveLink((await call<{ liveLink: boolean }>("assistantSetup")).liveLink);
     if (inShell()) {
       const shell = window.__TAURI_INTERNALS__!;
       const opened = (await shell.invoke("opened_file")) as string | null;

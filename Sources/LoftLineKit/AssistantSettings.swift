@@ -4,8 +4,28 @@ import Foundation
 /// edited from Help > Connect an AI Assistant… (Mac and desktop); with no file, `Documents/LoftLine` (MCP spec, "Safety").
 public struct AssistantSettings: Codable, Equatable {
     public var allowedFolders: [String]
+    /// "Let assistants edit open documents": the app listens for the live link only while this is on. A convenience, not the
+    /// security control (an assistant with a shell can write this file); the Allow click in the window is (spec 2, "The switch").
+    public var liveLink: Bool
 
-    public init(allowedFolders: [String]) { self.allowedFolders = allowedFolders }
+    public init(allowedFolders: [String], liveLink: Bool = false) {
+        self.allowedFolders = allowedFolders
+        self.liveLink = liveLink
+    }
+
+    private enum CodingKeys: String, CodingKey { case allowedFolders, liveLink }
+
+    /// A file written before the switch existed keeps its folders and reads as off.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        allowedFolders = try c.decode([String].self, forKey: .allowedFolders)
+        liveLink = try c.decodeIfPresent(Bool.self, forKey: .liveLink) ?? false
+    }
+
+    /// The live link's socket folder: `link/` beside the settings file, so `LOFTLINE_ASSISTANT_SETTINGS` moves it too.
+    public static func linkFolder(for settingsFile: URL = fileURL) -> URL {
+        settingsFile.deletingLastPathComponent().appendingPathComponent("link", isDirectory: true)
+    }
 
     /// Documents/LoftLine, created the first time an assistant writes there.
     public static var defaultFolder: URL {
