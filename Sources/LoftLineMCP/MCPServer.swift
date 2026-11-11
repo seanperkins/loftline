@@ -35,7 +35,11 @@ public final class MCPServer {
         guard let method = message["method"] as? String else {
             return id == nil ? nil : encode(["jsonrpc": "2.0", "id": id!, "error": ["code": -32600, "message": "Invalid request: no method."]])
         }
-        guard let id, id is String || id is NSNumber else { return nil }   // a notification: no reply
+        guard let id else { return nil }   // a notification: no reply
+        // JSON-RPC ids are strings or numbers; a null or any other id is an invalid request, answered with a null id.
+        guard id is String || id is NSNumber else {
+            return encode(["jsonrpc": "2.0", "id": NSNull(), "error": ["code": -32600, "message": "Invalid request: the id must be a string or a number."]])
+        }
         let params = message["params"] as? [String: Any] ?? [:]
         do {
             let result = try answer(method, params: params)

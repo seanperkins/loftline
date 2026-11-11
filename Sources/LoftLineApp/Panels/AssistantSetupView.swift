@@ -1,6 +1,5 @@
 import AppKit
 import LoftLineKit
-import LoftLineMCP
 import SwiftUI
 
 /// Help > Connect an AI Assistant…: where the bundled MCP server is, the settings to paste into an assistant, and the folders it

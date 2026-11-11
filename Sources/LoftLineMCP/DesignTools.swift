@@ -78,7 +78,9 @@ enum DesignTools {
                 "layer_id": Schema.string("The layer for every shape; the default layer when left out."),
             ], required: ["shapes"])) { raw in
                 let args = Args(raw)
-                let shapes = (args.array("shapes") ?? []).compactMap { $0 as? [String: Any] }
+                let raw = args.array("shapes") ?? []
+                let shapes = raw.compactMap { $0 as? [String: Any] }
+                if let bad = raw.firstIndex(where: { !($0 is [String: Any]) }) { throw ToolError("Shape \(bad + 1) is not an object.") }
                 guard !shapes.isEmpty else { throw ToolError("\"shapes\" is empty.") }
                 guard shapes.count <= maxShapes else { throw ToolError("\(shapes.count) shapes is more than \(maxShapes) in one call.") }
                 let layer = try args.uuid("layer_id")
@@ -229,7 +231,9 @@ enum DesignTools {
             out["options"] = type == "polygon" ? ["polygonSides": a.int("sides") ?? 6]
                 : ["starPoints": a.int("points") ?? 5, "starInnerRatio": a.double("inner_ratio") ?? 0.5]
         case "polyline":
-            let points = (a.array("points") ?? []).compactMap { $0 as? [String: Any] }
+            let rawPoints = a.array("points") ?? []
+            let points = rawPoints.compactMap { $0 as? [String: Any] }
+            guard points.count == rawPoints.count else { throw ToolError("Shape \(n): every point needs x and y.") }
             guard points.count <= maxPoints else { throw ToolError("Shape \(n): \(points.count) points is more than \(maxPoints).") }
             out = ["kind": "polyline", "closed": a.bool("closed"),
                    "points": try points.map { p -> [String: Any] in
