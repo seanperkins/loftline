@@ -15,6 +15,7 @@ struct AssistantSetupView: View {
 
     @State private var settings = AssistantSettings.load()
     @State private var copied: String?
+    @State private var linkError: String?
     private let serverPath = AssistantSetup.serverPath(besideExecutable: Bundle.main.executableURL ?? URL(fileURLWithPath: "/"))
 
     var body: some View {
@@ -31,6 +32,7 @@ struct AssistantSetupView: View {
                 block(title: "Claude Code (paste into a terminal)", text: AssistantSetup.claudeCodeLine(serverPath: serverPath),
                       copyLabel: "Copy Command")
                 folders
+                liveLink
                 Button("About connecting an assistant…") { HelpNavigator.show(.assistant) }
                     .buttonStyle(.link)
             }
@@ -61,7 +63,8 @@ struct AssistantSetupView: View {
     private var folders: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Folders the assistant may use").font(.headline)
-            Text("It reads and writes files only here.").foregroundStyle(.secondary)
+            Text("It reads and writes files only here, except a window open in LoftLine that you allow it to work on.")
+                .foregroundStyle(.secondary)
             ForEach(settings.allowedFolders, id: \.self) { folder in
                 HStack {
                     Image(systemName: "folder").accessibilityHidden(true)
@@ -75,6 +78,26 @@ struct AssistantSetupView: View {
                 Text("No folders: the assistant can't open or save anything.").foregroundStyle(.secondary)
             }
             Button("Add Folder…") { addFolder() }
+        }
+    }
+
+    /// The live link's switch (spec 2, "The switch").
+    private var liveLink: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle("Let assistants edit open documents", isOn: Binding(get: { settings.liveLink }, set: { on in
+                do {
+                    try MacLinkHost.shared.setSwitch(on)
+                    linkError = nil
+                    change { $0.liveLink = on }
+                } catch {
+                    linkError = error.localizedDescription
+                }
+            }))
+            Text("An assistant then asks to work on a window, and you click Allow in it. It can read and edit that window wherever "
+                 + "its file is; each change is one Undo step. Undo stays yours.")
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let linkError { Text(linkError).foregroundStyle(.red) }
         }
     }
 

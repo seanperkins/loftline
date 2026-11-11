@@ -117,7 +117,8 @@ struct ValidationSheet: View {
         let sheet = GCodeExporter.sheetToolpathsIfProbing(project: document.project, results: document.results, scope: .all,
                                                           profile: document.postProfile)
         report = ValidationReport.make(project: document.outputProject, results: document.results,
-                                       profile: document.postProfile, groupByTool: groupByTool, sheetToolpaths: sheet)
+                                       profile: document.postProfile, groupByTool: groupByTool, sheetToolpaths: sheet,
+                                       assistantChanges: document.assistantChanges)
     }
 }
 

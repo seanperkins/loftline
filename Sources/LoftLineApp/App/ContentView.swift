@@ -23,6 +23,7 @@ struct ContentView: View {
                 .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 400)
         } detail: {
             VStack(spacing: 0) {
+                AssistantBarsView(document: document)
                 center
                 Divider()
                 StatusBar(document: document)

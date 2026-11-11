@@ -1,0 +1,16 @@
+{
+  "name": "The live link's bars (spec 2): an assistant asking, at work, allowed, and the review marker; the switch in Help",
+  "window": [1280, 820],
+  "steps": [
+    {"op": "sample", "name": "sign"},
+    {"op": "assistantBars", "value": "asking"},
+    {"op": "capture", "name": "assistant-asking"},
+    {"op": "assistantBars", "value": "claimed"},
+    {"op": "assistantBars", "value": "marker"},
+    {"op": "capture", "name": "assistant-working"},
+    {"op": "assistantBars", "value": "allowed"},
+    {"op": "capture", "name": "assistant-allowed"},
+    {"op": "openWindow", "value": "assistant"},
+    {"op": "captureWindow", "name": "assistant-switch", "value": "Connect an AI Assistant"}
+  ]
+}

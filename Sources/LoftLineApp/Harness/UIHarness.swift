@@ -391,6 +391,15 @@ final class UIHarness {
             await settle(0.8)
         case "assistantSave":
             try await assistantSave(doc, path: step.name ?? "")
+        case "assistantBars":
+            switch step.value {
+            case "asking": doc.assistantBars = AssistantBars(asking: true)
+            case "claimed": doc.assistantBars = AssistantBars(claimed: true, allowed: true)
+            case "allowed": doc.assistantBars = AssistantBars(allowed: true)
+            case "marker": doc.assistantChanges = 3
+            default: doc.assistantBars = AssistantBars(); doc.assistantChanges = 0
+            }
+            await settle(0.3)
         case "openWindow":
             guard step.value == "assistant" else { throw HarnessError(message: "openWindow: unknown window \(step.value ?? "")") }
             AssistantSetupView.show()
