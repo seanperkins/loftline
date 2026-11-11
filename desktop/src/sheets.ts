@@ -341,8 +341,9 @@ export async function openValidation() {
   try {
     const posted = await busy("Calculating…", () => call<Posted>("export", {}));
     await apply("state");
-    const changes = app.state!.assistant?.changes ?? 0;
-    if (changes > 0) posted.issues.unshift({ severity: "warning", message: `Changed by an assistant (${changes} change${changes === 1 ? "" : "s"})` });
+    // The review marker's warning, in the core's words (#142).
+    const warning = app.state!.assistant?.warning;
+    if (warning) posted.issues.unshift({ severity: "warning", message: warning });
     const rows = project().operations.map((o: Operation) => {
       const { setup } = opBody(o);
       const s = app.state!.statuses.find((x) => x.id === setup.id);

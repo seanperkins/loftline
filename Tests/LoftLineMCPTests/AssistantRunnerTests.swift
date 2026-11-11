@@ -90,4 +90,11 @@ import Testing
         #expect(h.session.changeRevision > change)
         #expect(h.session.designRevision == design)
     }
+    /// The kind table and the tools can't drift apart (#142): every kind names a real tool, and every tool has a kind.
+    @Test func everyKindNamesARealTool() {
+        let names = Set(MCPHarness().tools.map(\.name))
+        for name in LinkToolKind.table.keys { #expect(names.contains(name), "\(name)") }
+        #expect(Set(LinkToolKind.table.keys) == names)
+    }
+
 }

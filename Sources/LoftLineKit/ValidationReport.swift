@@ -22,12 +22,16 @@ public struct ValidationReport {
 
     /// `assistantChanges`: changes an assistant made that the user hasn't dismissed yet (spec 2, "The review marker"); listed
     /// first, as a warning, which never blocks.
+    /// The review marker's warning (spec 2, "The review marker"), worded here only: the desktop shows this text too.
+    public static func assistantChangesWarning(_ changes: Int) -> String? {
+        changes > 0 ? "Changed by an assistant (\(changes) change\(changes == 1 ? "" : "s"))" : nil
+    }
+
     public static func make(project: LoftLineProject, results: [UUID: ToolpathResult], profile: PostProfile,
                      groupByTool: Bool, sheetToolpaths: SheetToolpaths? = nil, assistantChanges: Int = 0) -> ValidationReport {
         let jobName = project.document.name
         var sections: [Section] = []
-        if assistantChanges > 0 {
-            let text = "Changed by an assistant (\(assistantChanges) change\(assistantChanges == 1 ? "" : "s"))"
+        if let text = assistantChangesWarning(assistantChanges) {
             sections.append(Section(id: "assistant", title: "Assistant", operationID: nil,
                                     issues: [GCodeIssue(severity: .warning, message: text)]))
         }

@@ -171,5 +171,17 @@ import Testing
         await #expect(throws: (any Error).self) { _ = try await rig.call("add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 1, "height": 1]]]) }
         #expect(rig.h.session.project.document.shapes.isEmpty)
     }
+    /// A full link says so (#142), rather than that LoftLine isn't listening.
+    @Test func aFullLinkSaysSo() async throws {
+        let rig = try Rig()
+        defer { rig.stop() }
+        let held = try (0..<4).map { _ in try LinkSocket.connect(to: rig.server.socketURL) }
+        defer { held.forEach(LinkSocket.close) }
+        try await Task.sleep(for: .milliseconds(100))
+        let text = try await rig.call("list_open_documents").text
+        #expect(text.contains("4 assistant connections"), "\(text)")
+        #expect(!text.contains("isn't listening"), "\(text)")
+    }
+
 }
 #endif

@@ -70,4 +70,12 @@ import Testing
                                            groupByTool: false, assistantChanges: 1)
         #expect(report.allIssues.contains { $0.message == "Changed by an assistant (1 change)" })
     }
+    /// The desktop shows the core's wording (#142), not its own copy.
+    @Test func theStatusCarriesTheReportsWording() {
+        #expect(ValidationReport.assistantChangesWarning(0) == nil)
+        #expect(ValidationReport.assistantChangesWarning(1) == "Changed by an assistant (1 change)")
+        #expect(AssistantStatus(changeRevision: 0, changes: 3).warning == "Changed by an assistant (3 changes)")
+        #expect(AssistantStatus(changeRevision: 0).warning == nil)
+    }
+
 }
