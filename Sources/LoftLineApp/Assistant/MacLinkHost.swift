@@ -207,7 +207,8 @@ final class MacLinkHost: LinkHost, @unchecked Sendable {
 
     /// An application-defined event: AppKit ends its open undo group when the event's dispatch ends.
     @MainActor static func postWakeEvent() {
-        guard let app = NSApp, let event = NSEvent.otherEvent(with: .applicationDefined, location: .zero, modifierFlags: [], timestamp: 0,
+        // Only a running app dispatches events (a test process doesn't, and other tests there share NSApp).
+        guard let app = NSApp, app.isRunning, let event = NSEvent.otherEvent(with: .applicationDefined, location: .zero, modifierFlags: [], timestamp: 0,
                                                               windowNumber: 0, context: nil, subtype: 0, data1: 0, data2: 0) else { return }
         app.postEvent(event, atStart: false)
     }
