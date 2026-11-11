@@ -10,6 +10,8 @@ public final class DocumentMode {
     /// The largest request sent over the link; a bigger call is refused here so the claim survives.
     public var maxRequest = 64 << 20
     private(set) var client: LinkClient?
+    /// The window the connection holds.
+    private var heldID: String?
     /// The window's name while in document mode.
     public private(set) var name: String?
     /// Why the link ended, told on every call until the assistant leaves document mode.
@@ -23,6 +25,7 @@ public final class DocumentMode {
     public func leave() {
         client?.close()
         client = nil
+        heldID = nil
         name = nil
         ended = nil
     }
@@ -50,14 +53,18 @@ public final class DocumentMode {
         }
         // The first window's connection closes before the next claim; if that claim fails, the server stays in document mode
         // and refuses, rather than going back to its own file unasked.
+        // Already holding that window: keep the claim (closing and reclaiming races the old connection's close).
+        if client != nil, heldID == match.id { return match.name }
         let wasActive = isActive
         client?.close()
         client = nil
+        heldID = nil
         do {
             let c: LinkClient
             do { c = try LinkClient(socket: socketURL) } catch { throw ToolError("LoftLine isn't listening at \(socketURL.path).") }
             do { try c.claim(match.id) } catch { c.close(); throw error }
             client = c
+            heldID = match.id
             name = match.name
             ended = nil
             return match.name
@@ -76,6 +83,7 @@ public final class DocumentMode {
         } catch let e as LinkClientError where e.code == "closed" || e.code == "released" {
             client.close()
             self.client = nil
+            heldID = nil
             ended = e.message
             throw ToolError(e.message)
         }

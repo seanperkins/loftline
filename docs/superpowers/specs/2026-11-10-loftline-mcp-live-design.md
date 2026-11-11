@@ -186,7 +186,8 @@ Newline-delimited JSON. The listener reads and frames each line on its own threa
 When the connection simply ends (the app quit, or the desktop engine crashed), the server says "LoftLine closed the link (it
 quit, or its engine restarted); claim the document again."
 
-A second `use_open_document` from one server closes its first connection before claiming.
+A second `use_open_document` from one server keeps the claim when it names the window already held, and otherwise closes its first
+connection before claiming.
 
 **Allow** (all in `ClaimBook`):
 

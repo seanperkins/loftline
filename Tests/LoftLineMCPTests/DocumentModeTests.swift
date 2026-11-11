@@ -102,15 +102,18 @@ import Testing
         #expect(rig.host.calls.isEmpty)
     }
 
-    @Test func secondUseClosesTheFirstConnection() async throws {
+    /// Claiming the window the server already holds keeps that claim: closing and reclaiming would race the old connection's
+    /// close and could be told "Another assistant is working on…" (seen on Linux CI).
+    @Test func usingTheHeldWindowAgainKeepsItsClaim() async throws {
         let rig = try Rig()
         defer { rig.stop() }
         _ = try await rig.use("Sign")
-        #expect(await rig.host.claims.holder(of: "w1") != nil)
         let first = await rig.host.claims.holder(of: "w1")
-        _ = try await rig.call("use_open_document", ["document": "w1"])   // already allowed: no question
-        let second = await rig.host.claims.holder(of: "w1")
-        #expect(second != nil && second != first)
+        #expect(first != nil)
+        _ = try await rig.call("use_open_document", ["document": "w1"])
+        #expect(await rig.host.claims.holder(of: "w1") == first)
+        _ = try await rig.call("check")
+        #expect(rig.host.calls.map(\.tool) == ["check"])
     }
 
     @Test func closedLinkKeepsDocumentModeAndSaysWhy() async throws {
