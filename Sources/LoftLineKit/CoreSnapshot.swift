@@ -16,9 +16,12 @@ public struct CoreSnapshot {
     public var profiles: [PostProfile]
     public var machines: [MachineDefinition]
     public var results: [UUID: ToolpathResult]
+    /// The review marker's count, so a check on the copy warns as the window's Check Toolpaths does.
+    public var assistantChanges: Int
 
     public init(project: LoftLineProject, savedProject: LoftLineProject, fileURL: URL?, activeSide: JobSide, designRevision: Int,
-                library: ToolLibrary, profiles: [PostProfile], machines: [MachineDefinition], results: [UUID: ToolpathResult]) {
+                library: ToolLibrary, profiles: [PostProfile], machines: [MachineDefinition], results: [UUID: ToolpathResult],
+                assistantChanges: Int = 0) {
         self.project = project
         self.savedProject = savedProject
         self.fileURL = fileURL
@@ -28,5 +31,6 @@ public struct CoreSnapshot {
         self.profiles = profiles
         self.machines = machines
         self.results = results
+        self.assistantChanges = assistantChanges
     }
 }

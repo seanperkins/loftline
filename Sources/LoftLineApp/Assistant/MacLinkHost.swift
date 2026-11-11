@@ -67,13 +67,31 @@ final class MacLinkHost: LinkHost, @unchecked Sendable {
     func dismissMarker(_ doc: LoftLineDocument) {
         if let url = doc.fileURL { try? markers.dismiss(url) }
         doc.assistantChanges = 0
+        doc.untitledAssistantChanges = 0
     }
 
-    /// The window's file changed (its first save, or Save As): the marker follows it.
+    /// The window's file changed (its first save, or Save As): the marker follows it. Only changes made while the window had no
+    /// file are added, so a URL that goes nil and back doesn't count them twice.
     func fileURLChanged(_ doc: LoftLineDocument, from old: URL?) {
         guard let new = doc.fileURL, old?.standardizedFileURL != new.standardizedFileURL else { return }
-        if let old { try? markers.move(from: old, to: new) } else if doc.assistantChanges > 0 { try? markers.add(doc.assistantChanges, for: new) }
+        if let old { try? markers.move(from: old, to: new) }
+        if doc.untitledAssistantChanges > 0 { try? markers.add(doc.untitledAssistantChanges, for: new) }
+        doc.untitledAssistantChanges = 0
         doc.assistantChanges = markers.count(for: new)
+    }
+
+    /// `calculate`'s ids, parsed as file mode parses them (`Args.uuids`).
+    static func ids(_ value: Any?) throws -> [UUID] {
+        guard let value else { return [] }
+        guard let list = value as? [Any] else { throw ToolError("\"ids\" must be a list of toolpath ids.") }
+        return try list.map { item in
+            guard let s = item as? String, let id = UUID(uuidString: s) else { throw ToolError("\"ids\" holds something that is not an id.") }
+            return id
+        }
+    }
+
+    @MainActor static func enabledOperations(_ doc: LoftLineDocument) -> [UUID] {
+        doc.project.operations.filter(\.setup.isEnabled).map(\.id)
     }
 
     /// The switch in Help ▸ Connect an AI Assistant…: starts or stops the listener. Off takes back every Allow.
@@ -137,20 +155,27 @@ final class MacLinkHost: LinkHost, @unchecked Sendable {
             }
             throw ToolError("LoftLine is busy; try again.")
         case .calculate:
-            try await MainActor.run { try guardWindow(doc) }
-            let ids = (call.arguments["ids"] as? [String])?.compactMap(UUID.init(uuidString:)) ?? []
-            _ = await doc.calculateUntilFresh(targets: ids.isEmpty ? doc.project.operations.filter(\.setup.isEnabled).map(\.id) : ids)
+            let ids = try Self.ids(call.arguments["ids"])   // as file mode: an id that isn't one is refused, not dropped
+            let targets = try await MainActor.run { () throws -> [UUID] in
+                try guardWindow(doc)
+                return ids.isEmpty ? Self.enabledOperations(doc) : ids
+            }
+            _ = await doc.calculateUntilFresh(targets: targets)
             return await MainActor.run { AssistantRunner.calculationReply(snapshot: doc.linkSnapshot(), ids: ids) }
         case .writeFiles:
-            try await MainActor.run { try guardWindow(doc) }
-            _ = await doc.calculateUntilFresh(targets: doc.project.operations.filter(\.setup.isEnabled).map(\.id))
+            let targets = try await MainActor.run { () throws -> [UUID] in
+                try guardWindow(doc)
+                return Self.enabledOperations(doc)
+            }
+            _ = await doc.calculateUntilFresh(targets: targets)
             return try await MainActor.run {
                 try guardWindow(doc)
                 return try AssistantRunner.run(tool: call.tool, arguments: call.arguments, snapshot: doc.linkSnapshot(), access: access).output
             }
         case .read:
             if call.tool == "check" || call.tool == "preview" {
-                _ = await doc.calculateUntilFresh(targets: doc.project.operations.filter(\.setup.isEnabled).map(\.id))
+                let targets = await MainActor.run { Self.enabledOperations(doc) }
+                _ = await doc.calculateUntilFresh(targets: targets)
             }
             let (snapshot, title) = await MainActor.run { (doc.linkSnapshot(), name(of: doc)) }
             let access = self.access
@@ -200,7 +225,7 @@ final class MacLinkHost: LinkHost, @unchecked Sendable {
         if !doc.project.document.job.isTwoSided, doc.activeSide != .top { doc.activeSide = .top }
         if doc.project != before {
             if let url = doc.fileURL { try? markers.add(1, for: url); doc.assistantChanges = markers.count(for: url) }
-            else { doc.assistantChanges += 1 }
+            else { doc.untitledAssistantChanges += 1; doc.assistantChanges += 1 }
         }
         return run.output
     }

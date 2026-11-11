@@ -208,6 +208,8 @@ final class LoftLineDocument: ReferenceFileDocument {
     weak var link: MacLinkHost?
     /// Assistant changes the user hasn't dismissed (spec 2, "The review marker").
     @Published var assistantChanges = 0
+    /// The part of `assistantChanges` made while the window had no file, written to the marker record at its first save.
+    var untitledAssistantChanges = 0
     /// Which assistant bars the window shows.
     @Published var assistantBars = AssistantBars()
     /// Bumped by every undoable change (including undo/redo).
@@ -870,7 +872,7 @@ final class LoftLineDocument: ReferenceFileDocument {
     func linkSnapshot() -> CoreSnapshot {
         CoreSnapshot(project: project, savedProject: lastSavedProject, fileURL: fileURL, activeSide: activeSide, designRevision: designRevision,
                      library: toolLibrary.library, profiles: postCatalog.profiles, machines: machineCatalog.machines,
-                     results: results.filter { !isStale($0.key) })
+                     results: results.filter { !isStale($0.key) }, assistantChanges: assistantChanges)
     }
 
     var postedInputs: PostedInputs { PostedInputs(serial: outputSerial, design: designRevision, side: activeSide) }

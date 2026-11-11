@@ -63,12 +63,14 @@ public final class CoreSession {
         activeSide = snapshot.activeSide
         designRevision = snapshot.designRevision
         results = snapshot.results
+        assistantChanges = snapshot.assistantChanges
     }
 
     /// This session as a snapshot, carrying only fresh results.
     public func snapshot() -> CoreSnapshot {
         CoreSnapshot(project: project, savedProject: savedProject, fileURL: fileURL, activeSide: activeSide, designRevision: designRevision,
-                     library: library, profiles: profiles, machines: machines, results: results.filter { !isStale($0.key) })
+                     library: library, profiles: profiles, machines: machines, results: results.filter { !isStale($0.key) },
+                     assistantChanges: assistantChanges)
     }
 
     public var isDirty: Bool { project != savedProject }

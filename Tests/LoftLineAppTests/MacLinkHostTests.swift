@@ -229,4 +229,61 @@ import Testing
         let text = try await rig.run("describe_project").text
         #expect(text.contains("\"document\""))
     }
+
+    // Final review fixes (debate 98aaaac4).
+
+    /// The first call after Allow, before anything else has refreshed the host.
+    @Test func aCallRightAfterAllowIsServed() async throws {
+        let rig = try Rig()
+        let id = rig.doc.linkID
+        let claim = Task { await rig.host.claims.claim(id, connection: 1) }
+        for _ in 0..<2000 where await !rig.host.claims.asking.contains(id) { try? await Task.sleep(for: .milliseconds(5)) }
+        rig.host.answer(rig.doc, allow: true)
+        _ = await claim.value
+        _ = try await rig.run("add_shapes", Self.rectangle)
+        #expect(rig.undo.undoActionName == "Assistant: add_shapes")
+    }
+
+    @Test func saveThroughALinkOutOfTheAllowedFoldersIsRefused() async throws {
+        let outside = AppTestSupport.tempDir().appendingPathComponent("Real.loftline")
+        try AppTestSupport.project().encoded().write(to: outside)
+        var rig = try Rig()
+        let link = rig.allowed.appendingPathComponent("Link.loftline")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outside)
+        rig = try Rig(fileURL: link)
+        await rig.allow()
+        do {
+            _ = try await rig.run("save_project")
+            Issue.record("expected a refusal")
+        } catch {
+            let text = (error as? LocalizedError)?.errorDescription ?? "\(error)"
+            #expect(text.contains("outside"), "\(text)")
+        }
+    }
+
+    @Test func calculateRefusesAnIDThatIsNotOne() async throws {
+        let rig = try Rig(project: try LoftLineProject.opening(from: Data(contentsOf: try #require(SampleProjects.url(for: SampleProjects.sign)))))
+        await rig.allow()
+        await #expect(throws: (any Error).self) { _ = try await rig.run("calculate", ["ids": ["abc"]]) }
+    }
+
+    @Test func checkOverTheLinkCarriesTheMarker() async throws {
+        let rig = try Rig()
+        await rig.allow()
+        _ = try await rig.run("add_shapes", Self.rectangle)
+        let text = try await rig.run("check").text
+        #expect(text.contains("Changed by an assistant (1 change)"), "\(text)")
+    }
+
+    @Test func aFileURLThatGoesNilAndBackDoesNotDoubleTheMarker() async throws {
+        let file = AppTestSupport.tempDir().appendingPathComponent("Sign.loftline")
+        try AppTestSupport.project().encoded().write(to: file)
+        let rig = try Rig(fileURL: file)
+        await rig.allow()
+        _ = try await rig.run("add_shapes", Self.rectangle)
+        rig.doc.fileURL = nil
+        rig.doc.fileURL = file
+        #expect(rig.host.markers.count(for: file) == 1)
+    }
 }
+
