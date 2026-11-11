@@ -553,8 +553,9 @@ public final class CoreService {
             } else if method == "setAssistantLink" {
                 var settings = AssistantSettings.load(from: assistantSettingsURL)
                 settings.liveLink = try params(line, Link.self).on
+                // Listening first: a switch that can't listen isn't saved as on.
+                try assistantLink?.switchChanged(settings.liveLink)
                 try settings.save(to: assistantSettingsURL)
-                assistantLink?.switchChanged(settings.liveLink)
             }
             let server = AssistantSetup.serverPath(besideExecutable: Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0]))
             return try reply(id, Setup(serverPath: server, config: AssistantSetup.config(serverPath: server),

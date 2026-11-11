@@ -19,12 +19,16 @@ public struct LinkCall {
     public var tool: String
     public var arguments: [String: Any]
     public var document: String
+    /// What the window held when it was claimed (`LinkHost.generation(of:)`): a host refuses the call if the window has since
+    /// opened another file, so a call queued behind an Open can't edit the new one.
+    public var generation: Int
 
-    public init(kind: LinkToolKind, tool: String, arguments: [String: Any], document: String) {
+    public init(kind: LinkToolKind, tool: String, arguments: [String: Any], document: String, generation: Int = 0) {
         self.kind = kind
         self.tool = tool
         self.arguments = arguments
         self.document = document
+        self.generation = generation
     }
 }
 
@@ -34,4 +38,10 @@ public protocol LinkHost: AnyObject {
     func documents() -> [LinkDocument]
     func run(_ call: LinkCall) async throws -> ToolOutput
     var claims: ClaimBook { get }
+    /// Moves whenever the window starts holding another file (the desktop's New and Open); 0 where a window keeps its file.
+    func generation(of document: String) -> Int
+}
+
+public extension LinkHost {
+    func generation(of document: String) -> Int { 0 }
 }

@@ -3,13 +3,17 @@ import Foundation
 /// What the desktop window shows about the live link, polled once a second while the switch is on (spec 2, "The desktop host").
 public struct AssistantStatus: Encodable, Equatable {
     public var changeRevision: Int
+    /// Moves after every assistant call, a calculation included: the window refetches when it does.
+    public var assistantRevision: Int
     public var claimed: Bool
     public var asking: Bool
     public var allowed: Bool
     public var changes: Int
 
-    public init(changeRevision: Int, claimed: Bool = false, asking: Bool = false, allowed: Bool = false, changes: Int = 0) {
+    public init(changeRevision: Int, assistantRevision: Int = 0, claimed: Bool = false, asking: Bool = false, allowed: Bool = false,
+                changes: Int = 0) {
         self.changeRevision = changeRevision
+        self.assistantRevision = assistantRevision
         self.claimed = claimed
         self.asking = asking
         self.allowed = allowed
@@ -29,5 +33,6 @@ public protocol CoreAssistantLink: AnyObject {
     func revoke()
     /// The window's project was saved to `to` (by the user or the assistant): the review marker follows it there.
     func saved(from: URL?, to: URL)
-    func switchChanged(_ on: Bool)
+    /// Starts or stops the listener; throws when it can't listen, so the switch stays off.
+    func switchChanged(_ on: Bool) throws
 }

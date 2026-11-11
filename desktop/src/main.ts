@@ -321,8 +321,9 @@ setInterval(async () => {
   if (!liveLink || !app.state) return;
   try {
     const s = await call<AssistantStatus>("assistantStatus");
+    const moved = s.changeRevision !== app.state.changeRevision || s.assistantRevision !== app.state.assistant.assistantRevision;
     assistant = s;
-    if (s.changeRevision !== app.state.changeRevision) setState(await call<State>("state")); else renderAssistant();
+    if (moved) setState(await call<State>("state")); else renderAssistant();
   } catch { /* the next poll tries again */ }
 }, 1000);
 

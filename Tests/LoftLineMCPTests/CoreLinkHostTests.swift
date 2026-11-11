@@ -215,5 +215,62 @@ import Testing
         _ = try await call(client, "save_project", ["path": to.path])
         #expect(ReviewMarkerStore(file: rig.settings.deletingLastPathComponent().appendingPathComponent("review.json")).count(for: to) == 1)
     }
+
+    // Final review fixes (debate 98aaaac4).
+
+    @Test func aCalculationDoesNotMakeTheNextEditStale() async throws {
+        let rig = try Rig()
+        defer { rig.stop() }
+        try rig.h.call("open_project", ["path": try rig.h.sample().path])
+        let seen = rig.h.session.changeRevision
+        _ = try rig.send("calculate", [:])
+        #expect(rig.h.session.changeRevision == seen)
+        let op = try #require(rig.h.session.project.operations.first)
+        let reply = try rig.send("deleteOperation", ["id": op.id.uuidString], rev: seen)
+        #expect(reply["code"] == nil, "\(reply)")
+    }
+
+    @Test func anAssistantCalculationMovesTheStatusTheWindowPolls() async throws {
+        let rig = try Rig()
+        defer { rig.stop() }
+        try rig.h.call("open_project", ["path": try rig.h.sample().path])
+        let client = try await rig.claimed()
+        defer { client.close() }
+        func revision() throws -> Int? { (try rig.send("assistantStatus")["result"] as? [String: Any])?["assistantRevision"] as? Int }
+        let before = try revision()
+        _ = try await call(client, "calculate", [:])
+        #expect(try revision() != before)
+    }
+
+    @Test func aCallQueuedBehindAnOpenIsRefused() async throws {
+        let rig = try Rig()
+        defer { rig.stop() }
+        try rig.h.call("new_project", ["units": "inch", "width": 24, "height": 18, "thickness": 0.75])
+        let client = try await rig.claimed()
+        defer { client.close() }
+        let generation = rig.host.generation(of: CoreLinkHost.documentID)
+        _ = try rig.send("open", ["path": try rig.h.sample().path])
+        let shapes = rig.h.session.project.document.shapes.count
+        let late = LinkCall(kind: .edit, tool: "add_shapes", arguments: ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 1, "height": 1]]],
+                            document: CoreLinkHost.documentID, generation: generation)
+        await #expect(throws: (any Error).self) { _ = try await rig.host.run(late) }
+        #expect(rig.h.session.project.document.shapes.count == shapes)
+    }
+
+    @Test func aSwitchThatCannotListenStaysOff() throws {
+        let h = MCPHarness()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cs-\(UUID().uuidString.prefix(8))")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let settings = dir.appendingPathComponent("assistant.json")
+        try AssistantSettings(allowedFolders: [h.allowed.path]).save(to: settings)
+        try FileManager.default.createDirectory(at: AssistantSettings.linkFolder(for: settings), withIntermediateDirectories: true,
+                                                attributes: [.posixPermissions: 0o755])
+        h.service.assistantSettingsURL = settings
+        let host = CoreLinkHost(service: h.service, access: h.access, settingsFile: settings)
+        let line = try JSONSerialization.data(withJSONObject: ["id": 1, "method": "setAssistantLink", "params": ["on": true]])
+        let reply = try #require(try JSONSerialization.jsonObject(with: host.handle(line)) as? [String: Any])
+        #expect(reply["error"] != nil, "\(reply)")
+        #expect(AssistantSettings.load(from: settings).liveLink == false)
+    }
 }
 #endif

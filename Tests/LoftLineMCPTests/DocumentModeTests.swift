@@ -155,5 +155,18 @@ import Testing
         _ = try await rig.call("check")   // the claim survives
         #expect(rig.host.calls.map(\.tool) == ["check"])
     }
+
+    /// A failed switch to another window leaves the server in document mode, refusing, never quietly back on its own file.
+    @Test func aDeniedSecondClaimDoesNotFallBackToFileMode() async throws {
+        let rig = try Rig(docs: [LinkDocument(id: "w1", name: "Sign", unsaved: false), LinkDocument(id: "w2", name: "Other", unsaved: false)])
+        defer { rig.stop() }
+        _ = try await rig.use("Sign")
+        let pending = Task { try await rig.call("use_open_document", ["document": "Other"]) }
+        for _ in 0..<2000 where await !rig.host.claims.asking.contains("w2") { try await Task.sleep(for: .milliseconds(5)) }
+        await rig.host.claims.answer("w2", allow: false)
+        await #expect(throws: (any Error).self) { _ = try await pending.value }
+        await #expect(throws: (any Error).self) { _ = try await rig.call("add_shapes", ["shapes": [["type": "rectangle", "x": 1, "y": 1, "width": 1, "height": 1]]]) }
+        #expect(rig.h.session.project.document.shapes.isEmpty)
+    }
 }
 #endif

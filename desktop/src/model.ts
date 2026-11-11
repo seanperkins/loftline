@@ -31,7 +31,7 @@ export interface State {
   changeRevision: number; assistant: AssistantStatus;
 }
 /** The live link as the window shows it (spec 2, "The desktop host"). */
-export interface AssistantStatus { changeRevision: number; claimed: boolean; asking: boolean; allowed: boolean; changes: number }
+export interface AssistantStatus { changeRevision: number; assistantRevision: number; claimed: boolean; asking: boolean; allowed: boolean; changes: number }
 export interface PostRow { id: string; name: string; fileExtension: string; units: string }
 export interface Machine { id: string; name: string; postIDs: string[]; notes?: string }
 export interface JobForm { machineID?: string; machineChoices: { id: string; title: string }[]; postID?: string }

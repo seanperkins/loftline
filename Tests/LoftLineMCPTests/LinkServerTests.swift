@@ -197,5 +197,21 @@ final class FakeHost: LinkHost, @unchecked Sendable {
         #expect(c.errorCode(reply) == "released" && c.errorMessage(reply) == "the window closed")
         #expect(try await c.receive() == nil)
     }
+
+    /// The switch turned off and on: the new listener serves, and the old one's accept loop is gone.
+    @Test func stopThenStartServes() async throws {
+        let rig = try Rig()
+        defer { rig.stop() }
+        rig.server.stop()
+        let again = LinkServer(folder: rig.folder, host: rig.host)
+        try again.start()
+        defer { again.stop() }
+        for _ in 0..<3 {
+            let c = Conn(fd: try LinkSocket.connect(to: again.socketURL))
+            defer { c.close() }
+            try c.send(["v": 1, "op": "list"])
+            #expect(try await c.receive()?["documents"] != nil)
+        }
+    }
 }
 #endif

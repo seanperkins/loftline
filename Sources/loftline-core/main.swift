@@ -8,11 +8,15 @@ import LoftLineMCP
 // around each request.
 let service = CoreService()
 let host = CoreLinkHost(service: service, access: AssistantAccess(settingsFile: AssistantSettings.fileURL))
-if AssistantSettings.load().liveLink { host.switchChanged(true) }
+if AssistantSettings.load().liveLink {
+    do { try host.switchChanged(true) } catch {
+        FileHandle.standardError.write(Data("loftline-core: the live link didn't start: \(error.localizedDescription)\n".utf8))
+    }
+}
 while let line = readLine(strippingNewline: true) {
     if line.isEmpty { continue }
     let reply = host.handle(Data(line.utf8))
     FileHandle.standardOutput.write(reply)
     FileHandle.standardOutput.write(Data("\n".utf8))
 }
-host.switchChanged(false)
+try? host.switchChanged(false)

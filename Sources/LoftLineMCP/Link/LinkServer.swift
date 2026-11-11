@@ -16,8 +16,9 @@ public final class LinkServer: @unchecked Sendable {
     private let lock = NSLock()
     private var listener: LinkHandle?
     private var connections: [Int: LinkHandle] = [:]
-    /// Which window each connection holds.
+    /// Which window each connection holds, and its generation when claimed.
     private var claimed: [Int: String] = [:]
+    private var claimedGeneration: [Int: Int] = [:]
     private var nextConnection = 1
 
     public init(folder: URL, host: LinkHost, idleTimeout: TimeInterval = 30, maxRequest: Int = 64 << 20, maxConnections: Int = 4) {
@@ -79,6 +80,7 @@ public final class LinkServer: @unchecked Sendable {
             lock.lock()
             connections[id] = nil
             claimed[id] = nil
+            claimedGeneration[id] = nil
             lock.unlock()
             Self.wait { await self.host.claims.release(connection: id) }
             LinkTransport.close(fd)
@@ -126,15 +128,16 @@ public final class LinkServer: @unchecked Sendable {
             if let already, already != doc { return (Self.error("claimed", "This connection already holds another document."), false) }
             // Waiting for the user's answer: no lock held, and the idle timeout must not cut it short.
             LinkTransport.setReceiveTimeout(fd, nil)
+            let generation = host.generation(of: doc)   // before the wait: an Open while the user decides makes it stale
             let result = Self.wait { await self.host.claims.claim(doc, connection: id) }
             guard result == .allowed else {
                 LinkTransport.setReceiveTimeout(fd, idleTimeout)
                 return (Self.error("claim", result.message(found.name)), false)
             }
-            lock.lock(); claimed[id] = doc; lock.unlock()
+            lock.lock(); claimed[id] = doc; claimedGeneration[id] = generation; lock.unlock()
             return (Self.json([:]), false)
         case "call":
-            lock.lock(); let doc = claimed[id]; lock.unlock()
+            lock.lock(); let doc = claimed[id]; let generation = claimedGeneration[id] ?? 0; lock.unlock()
             guard let doc else { return (Self.error("not_claimed", "Claim a document first."), false) }
             guard Self.wait({ await self.host.claims.holder(of: doc) }) == id else {
                 return (Self.error("released", "The claim on this document ended."), true)
@@ -144,7 +147,8 @@ public final class LinkServer: @unchecked Sendable {
                 return (Self.error("refused", tool == "undo" ? "Undo is yours: Edit ▸ Undo in LoftLine takes back the assistant's steps."
                                    : "\(tool) can't run on an open document."), false)
             }
-            let call = LinkCall(kind: kind, tool: tool, arguments: request["arguments"] as? [String: Any] ?? [:], document: doc)
+            let call = LinkCall(kind: kind, tool: tool, arguments: request["arguments"] as? [String: Any] ?? [:], document: doc,
+                                generation: generation)
             let outcome: Result<ToolOutput, Error> = Self.wait {
                 do { return .success(try await self.host.run(call)) } catch { return .failure(error) }
             }

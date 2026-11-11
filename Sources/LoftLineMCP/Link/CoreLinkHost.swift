@@ -20,6 +20,10 @@ public final class CoreLinkHost: LinkHost, CoreAssistantLink, @unchecked Sendabl
     private let mirrorLock = NSLock()
     private var mirror = (asking: false, allowed: false, claimed: false)
     private var dialogOpen = false
+    /// Moves on New and Open (under `lock`): a call claimed before one is refused.
+    private var currentGeneration = 0
+    /// Moves after every assistant call: the window's poll refetches when it does.
+    private var assistantRevision = 0
     let markers: ReviewMarkerStore
     /// Changes to an Untitled window, held until it has a file.
     private var untitledChanges = 0
@@ -66,9 +70,19 @@ public final class CoreLinkHost: LinkHost, CoreAssistantLink, @unchecked Sendabl
         return [LinkDocument(id: Self.documentID, name: title, unsaved: session.isDirty)]
     }
 
+    public func generation(of document: String) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return currentGeneration
+    }
+
     public func run(_ call: LinkCall) async throws -> ToolOutput {
         lock.lock()
         defer { lock.unlock() }
+        guard call.generation == currentGeneration else {
+            throw ToolError("LoftLine opened another file in that window; claim it again.")
+        }
+        defer { assistantRevision += 1 }
         guard AssistantSettings.load(from: settingsFile).liveLink else {
             throw ToolError("\"Let assistants edit open documents\" is off in LoftLine.")
         }
@@ -109,7 +123,7 @@ public final class CoreLinkHost: LinkHost, CoreAssistantLink, @unchecked Sendabl
     public func status(changeRevision: Int) -> AssistantStatus {
         mirrorLock.lock()
         defer { mirrorLock.unlock() }
-        return AssistantStatus(changeRevision: changeRevision, claimed: mirror.claimed, asking: mirror.asking, allowed: mirror.allowed,
+        return AssistantStatus(changeRevision: changeRevision, assistantRevision: assistantRevision, claimed: mirror.claimed, asking: mirror.asking, allowed: mirror.allowed,
                                changes: changes)
     }
 
@@ -120,6 +134,7 @@ public final class CoreLinkHost: LinkHost, CoreAssistantLink, @unchecked Sendabl
     public func setDialog(open: Bool) { dialogOpen = open }
 
     public func documentChanged() {
+        currentGeneration += 1
         server?.release(document: Self.documentID, reason: "LoftLine opened another file in that window; claim it again.")
         Task { await claims.revoke(Self.documentID) }
         untitledChanges = 0
@@ -143,13 +158,12 @@ public final class CoreLinkHost: LinkHost, CoreAssistantLink, @unchecked Sendabl
         syncChanges()
     }
 
-    public func switchChanged(_ on: Bool) {
+    public func switchChanged(_ on: Bool) throws {
         if on {
             guard server == nil else { return }
             let s = LinkServer(folder: AssistantSettings.linkFolder(for: settingsFile), host: self)
-            do { try s.start(); server = s } catch {
-                FileHandle.standardError.write(Data("loftline-core: the live link didn't start: \(error.localizedDescription)\n".utf8))
-            }
+            try s.start()
+            server = s
         } else {
             server?.stop()
             server = nil

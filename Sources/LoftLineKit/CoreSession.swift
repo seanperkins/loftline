@@ -12,8 +12,9 @@ public final class CoreSession {
     public private(set) var results: [UUID: ToolpathResult] = [:]
     /// The side of a two-sided job on show, which is the side that posts (`LoftLineDocument.activeSide`).
     public private(set) var activeSide: JobSide = .top
-    /// Bumped by every change a window's view is built from: an edit, undo, redo, new, open, save, or a result. The desktop's front
-    /// end sends the one it last saw, so the core can refuse a change built on an older view (spec 2, "The desktop host").
+    /// Bumped by every change to the project a window's edits are built from: an edit, undo, redo, new, open, save. Not by a
+    /// calculated result, which no front-end edit rests on (the 3D preview and a job sheet calculate as they go). The desktop's front
+    /// end sends the one it last saw, so the core can refuse a change built on an older project (spec 2, "The desktop host").
     public private(set) var changeRevision = 0
     /// Changes an assistant made that the user hasn't dismissed (spec 2, "The review marker"): Check Toolpaths warns of them.
     /// The live link keeps it up to date.
@@ -210,7 +211,6 @@ public final class CoreSession {
             guard let op = project.operations.first(where: { $0.id == id }) else { continue }
             let r = ToolpathCalculator.calculate(op, project: project, library: library, designRevision: designRevision, rapidRate: rapid)
             results[id] = r.renamingTools(from: project.mergedTools(with: library)) ?? r
-            changeRevision += 1
         }
     }
 

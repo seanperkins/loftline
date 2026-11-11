@@ -48,13 +48,24 @@ public final class DocumentMode {
         } else {
             throw ToolError("No open document is named \(reference). Open: \(docs.map { "\($0.name) (\($0.id))" }.joined(separator: ", ")).")
         }
-        leave()
-        let c: LinkClient
-        do { c = try LinkClient(socket: socketURL) } catch { throw ToolError("LoftLine isn't listening at \(socketURL.path).") }
-        do { try c.claim(match.id) } catch { c.close(); throw error }
-        client = c
-        name = match.name
-        return match.name
+        // The first window's connection closes before the next claim; if that claim fails, the server stays in document mode
+        // and refuses, rather than going back to its own file unasked.
+        let wasActive = isActive
+        client?.close()
+        client = nil
+        do {
+            let c: LinkClient
+            do { c = try LinkClient(socket: socketURL) } catch { throw ToolError("LoftLine isn't listening at \(socketURL.path).") }
+            do { try c.claim(match.id) } catch { c.close(); throw error }
+            client = c
+            name = match.name
+            ended = nil
+            return match.name
+        } catch {
+            if wasActive { ended = "The switch to \(match.name) failed (\((error as? LocalizedError)?.errorDescription ?? "\(error)")); "
+                + "use_open_document again, or open_project or new_project to work on a file." }
+            throw error
+        }
     }
 
     /// Runs `tool` on the window.
