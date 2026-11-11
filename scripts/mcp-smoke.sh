@@ -2,8 +2,12 @@
 # Drives a built loftline-mcp through a short session and checks every reply: both protocol generations, then a new project,
 # a rectangle, a profile on it and a post into a temporary allowed folder (program and job sheet).
 # Usage: scripts/mcp-smoke.sh [path to loftline-mcp]   (builds the debug one when no path is given)
+# --live (Mac only) also runs the live link: the app under the UI harness (scenario assistant-smoke) allows the assistant, which
+# then adds a shape to the open window and posts it (spec 2).
 set -euo pipefail
 cd "${0:A:h}/.."
+live=0
+if [[ "${1:-}" == "--live" ]]; then live=1; shift; fi
 bin="${1:-}"
 if [[ -z "$bin" ]]; then
   source scripts/swiftpm-env.sh
@@ -15,10 +19,18 @@ work="$(mktemp -d "${TMPDIR:-/tmp}/mcp-smoke.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/allowed"
 allowed="${work:A}/allowed"
-print -r -- "{\"allowedFolders\":[\"$allowed\"]}" > "$work/assistant.json"
-LOFTLINE_ASSISTANT_SETTINGS="$work/assistant.json" python3 - "$bin" "$allowed" <<'PY'
-import json, os, subprocess, sys
-binary, allowed = sys.argv[1], sys.argv[2]
+ui=""
+if (( live )); then
+  [[ "$(uname)" == Darwin ]] || { print -u2 "mcp-smoke: --live needs the Mac app"; exit 1 }
+  print -r -- "{\"allowedFolders\":[\"$allowed\"],\"liveLink\":true}" > "$work/assistant.json"
+  LOFTLINE_ASSISTANT_SETTINGS="$work/assistant.json" scripts/ui.sh assistant-smoke > "$work/ui.log" 2>&1 &
+  ui=$!
+else
+  print -r -- "{\"allowedFolders\":[\"$allowed\"]}" > "$work/assistant.json"
+fi
+LOFTLINE_ASSISTANT_SETTINGS="$work/assistant.json" python3 - "$bin" "$allowed" "$live" <<'PY'
+import json, os, subprocess, sys, time
+binary, allowed, live = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 p = subprocess.Popen([binary], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
 meta = {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}}
 def send(message, reply=True):
@@ -41,9 +53,28 @@ tool(3, "new_project", {"units": "inch", "width": 12, "height": 8, "thickness": 
 shape = tool(4, "add_shapes", {"shapes": [{"type": "rectangle", "x": 2, "y": 2, "width": 4, "height": 3}]})["ids"][0]
 tool(5, "add_toolpath", {"kind": "profile", "shape_ids": [shape]})
 tool(6, "post_gcode", {"folder": allowed, "mode": "one_file"})
+if live:
+    # The open window: wait for the app, claim the sign (the harness clicks Allow), edit it, describe and post it.
+    docs, deadline = [], time.time() + 120
+    while not docs and time.time() < deadline:
+        found = tool(10, "list_open_documents", {})
+        docs = found.get("documents", []) if isinstance(found, dict) else []
+        if not docs: time.sleep(1)
+    assert docs, "mcp-smoke: no open document listed"
+    tool(11, "use_open_document", {"document": docs[0]["id"]})
+    tool(12, "add_shapes", {"shapes": [{"type": "rectangle", "x": 1, "y": 1, "width": 1, "height": 1}]})
+    described = tool(13, "describe_project", {})
+    assert isinstance(described, dict) and "document" in described, described
+    os.makedirs(os.path.join(allowed, "live"))
+    tool(14, "post_gcode", {"folder": os.path.join(allowed, "live"), "mode": "one_file", "job_sheet": False})
+    assert os.listdir(os.path.join(allowed, "live")), "mcp-smoke: the open window posted nothing"
 p.stdin.close(); p.wait(timeout=30)
 files = sorted(os.listdir(allowed))
 assert any(f.endswith(".tap") for f in files), files
 assert any(f.endswith(" job sheet.html") for f in files), files
-print("mcp-smoke: ok:", ", ".join(files))
+print("mcp-smoke: ok:", ", ".join(files) + (" and the open window" if live else ""))
 PY
+if [[ -n "$ui" ]]; then
+  wait "$ui" || { cat "$work/ui.log" >&2; exit 1 }
+  grep -q "allowAssistant: allowed" "$work/ui.log" || { cat "$work/ui.log" >&2; exit 1 }
+fi

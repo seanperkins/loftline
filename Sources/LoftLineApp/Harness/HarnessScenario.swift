@@ -60,6 +60,7 @@ struct HarnessScenario: Decodable {
         "select": "names: shapes to select by name",
         "selectToolpath": "name: a toolpath to select (also shows the Toolpaths tab)",
         "calculate": "calculate all toolpaths and wait",
+        "allowAssistant": "seconds: waits up to that long for an assistant to ask for the window, then clicks Allow (scripts/mcp-smoke.sh --live)",
         "assistantBars": "value: asking | claimed | allowed | marker | none; sets a window's live-link bars as they'd show, for a screenshot",
         "assistantSave": "name: a file under the harness HOME; gives the window that file, edits it, saves it as the assistant does and logs located, confirmed, dirty, recovery and sameAsCommandS",
         "openWindow": "value: assistant (Help > Connect an AI Assistant…), opened without a menu click; capture it with captureWindow",
@@ -136,6 +137,8 @@ struct HarnessScenario: Decodable {
             guard let v = step.value, ["diameter", "rename", "number", "describe", "rpm"].contains(v) else { throw fail("value must be diameter, rename, number, describe or rpm") }
         case "editToolpath":
             guard let v = step.value, ["deeper", "tabs"].contains(v) else { throw fail("value must be deeper or tabs") }
+        case "allowAssistant":
+            guard let s = step.seconds, s > 0 else { throw fail("seconds is required") }
         case "assistantBars":
             guard let v = step.value, ["asking", "claimed", "allowed", "marker", "none"].contains(v) else {
                 throw fail("value must be asking, claimed, allowed, marker or none")

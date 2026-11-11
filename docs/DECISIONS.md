@@ -1368,3 +1368,28 @@
   and summary for that toolpath and its side; the Claude Code command single-quotes the path; a preview of out-of-range coordinates is
   an error, not a crash.
 
+## The live link into the open app (2026-11-10, spec 2)
+
+- **One link, in Swift, for both apps.** `LoftLineMCP` holds the socket, the protocol, the claim book and the tool-kind table; the Mac app hosts
+  it in process and `loftline-core` on a listener thread. Tauri never sees link traffic. HTTP was ruled out (a port to guard, a second
+  configuration), and so was file sync (it loses unsaved work and per-step undo).
+- **Allow is the control; the switch is a convenience.** `liveLink` lives in `assistant.json`, which an assistant with a shell can write, as it
+  can `allowedFolders`. The Allow click in the window is what lets an assistant in; it belongs to the window and is taken back by Disconnect,
+  Revoke, the switch, closing the window or opening another file. Neither stops an assistant that can drive the screen (`xdotool`, macOS
+  Accessibility); the help says so.
+- **Any allowed window, wherever its file lives.** Sean chose that over limiting claims to allowed folders: the Allow is per window. On the Mac
+  the system autosaves those edits into the window's file. G-code and job sheets still go only into allowed folders.
+- **One main-thread turn on the Mac.** An edit, a post and a save each run guard, snapshot, tool and apply in one turn, so no user edit lands
+  between them; a post first waits for the window's own `calculateUntilFresh`. Nothing comes back from a copy but an edit's project, so a
+  stale toolpath can't come back looking fresh. The desktop engine is serial and refuses a front-end request built on an older
+  `changeRevision`, because the front end sends whole operations.
+- **Undo is the user's.** The assistant's `undo` doesn't run on an open window. Each change is one step, made in its own undo group with
+  event grouping off, so it never merges with a user action in the same pass.
+- **Mac Save As stays the user's.** Writing a file behind the Mac document skips its save tracking (pending saves, `confirmSave`, recovery);
+  the assistant's Save goes through the document's own `NSDocument` save instead, and the race left between the folder check and that write is
+  accepted (same user only).
+- **The review marker is on disk, cleared only by Dismiss.** The Mac can't tell the user's ⌘S from an autosave, so saving doesn't clear it;
+  `review.json` keys it by the file's real path, so a file moved or renamed outside LoftLine loses its marker.
+- **Windows.** An AF_UNIX socket in a folder whose protected access list names only the user and SYSTEM; the peer check runs where Windows
+  answers `SIO_AF_UNIX_GETPEERPID` and is skipped where it doesn't (Server 2022), leaving the folder as the guard (Sean, after the CI spike).
+

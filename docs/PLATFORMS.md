@@ -57,7 +57,11 @@ and text tools; layers; position and size; undo and redo; the Design menu's alig
 chamfer, rotate, mirror and array commands; copy and paste; toolpath list, new toolpath, reorder, enable, calculate; forms for Profile, Pocket,
 Drilling and V-Carve; the 3D material-removal preview with playback; Export G-code; Save All; Check Toolpaths; Job Setup; Tool Database; Job Sheet;
 Help; Connect an AI Assistant… (the MCP server `loftline-mcp` ships beside `loftline-core`; its tests run in the Linux and Windows CI jobs,
-but the server process itself is only smoke-tested on the Mac, by `scripts/check-bundle.sh`); light and dark.
+but the server process itself is only smoke-tested on the Mac, by `scripts/check-bundle.sh`); the live link into the open window
+(`loftline-core` hosts it: a Unix socket at `link/assistant.sock` beside `assistant.json`, under `$XDG_DATA_HOME` when that is set, so
+an app and an assistant started with different values look in different places; on Windows an AF_UNIX socket in `%LOCALAPPDATA%\LoftLine\link`,
+guarded by the folder's access list, since Windows Server 2022 can't name the process at the other end; the desktop e2e drives it on
+Linux); light and dark.
 
 **Different on purpose**
 

@@ -391,6 +391,13 @@ final class UIHarness {
             await settle(0.8)
         case "assistantSave":
             try await assistantSave(doc, path: step.name ?? "")
+        case "allowAssistant":
+            let deadline = Date().addingTimeInterval(step.seconds ?? 60)
+            while Date() < deadline, !doc.assistantBars.asking { await settle(0.1) }
+            guard doc.assistantBars.asking else { throw HarnessError(message: "allowAssistant: no assistant asked for the window") }
+            MacLinkHost.shared.answer(doc, allow: true)
+            say("allowAssistant: allowed")
+            await settle(0.3)
         case "assistantBars":
             switch step.value {
             case "asking": doc.assistantBars = AssistantBars(asking: true)

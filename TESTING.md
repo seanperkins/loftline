@@ -185,6 +185,11 @@ minute or two. Use `samples/sign.loftline` (or a new document) unless a step say
     reply lists machine, post, material, Z zero, deepest cut and time, and that a job sheet sits beside the program.
     Make the same rectangle and profile in the app and export: the two programs are the same apart from the date line.
     Ask it to save into a folder that isn't listed: it is refused, and says how to allow it.
+13. **AI assistant on an open window.** Turn on "Let assistants edit open documents" in Help ▸ Connect an AI Assistant…, open
+    the sign, and ask the assistant to use the open document and add a rectangle. The window asks; click Allow and watch the
+    rectangle appear, then Edit ▸ Undo shows "Assistant: add_shapes" and takes it back. Ask again: the marker bar says the
+    document was changed by an assistant, and Check Toolpaths lists it. Quit and reopen the file: the marker is still there
+    until Dismiss. Press Disconnect, then ask the assistant to edit again: the window asks again.
 
 Every toolpath in steps 1–8 should calculate without an error, and Check Toolpaths… (⇧⌘K) should
 report no errors for the sample. The status of every VCarve Pro feature is in `docs/PARITY.md`.

@@ -139,6 +139,10 @@ either of which keeps a call in the sandbox:
 
 Its own HOME does not isolate your preferences (see the start of this page).
 
+The live link's socket sits beside `assistant.json`, so `LOFTLINE_ASSISTANT_SETTINGS` (set for both the app and `loftline-mcp`) moves it into a
+run's own folder; under the harness HOME the default path is longer than a socket allows. The `assistantBars` op sets a window's live-link bars
+for a screenshot (`harness/scenarios/assistant-live.json`); `assistantSave` saves a window through its own document as the assistant does.
+
 The GIF is encoded from the frames with one palette per clip and no alpha channel (an alpha channel makes
 every frame a full frame and the file fifty times larger). ffmpeg from Homebrew is required.
 

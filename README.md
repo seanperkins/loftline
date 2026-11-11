@@ -201,6 +201,11 @@ or, for Claude Code, `claude mcp add loftline -- "/Applications/LoftLine.app/Con
 It reads and writes only in the folders listed in that window (Documents/LoftLine to begin with), and every program is
 checked exactly as the app checks it: one with an error is never written, and nothing skips a check. It never talks to the
 machine. Each post comes back with what to check and a job sheet; do an air cut before the first real cut.
+
+With "Let assistants edit open documents" turned on in that window, an assistant can also work on a document open in LoftLine:
+it asks, you click Allow in the window, and each change lands as one Undo step ("Assistant: …"). It can then read and edit that
+window wherever its file is, not only in the allowed folders; G-code still goes only into them. A bar and a Check Toolpaths warning
+mark the window as changed by an assistant until you click Dismiss.
 `scripts/mcp-smoke.sh` runs a short session against a built server. Design: `docs/superpowers/specs/2026-11-10-loftline-mcp-design.md`.
 
 ## How it's built
