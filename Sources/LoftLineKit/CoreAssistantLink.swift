@@ -25,6 +25,8 @@ public protocol CoreAssistantLink: AnyObject {
     /// New or Open replaced the window's project: the claim ends and the Allow is taken back.
     func documentChanged()
     func dismissMarker()
+    /// Disconnect or Revoke in the window's bar: the claim ends and the Allow is taken back.
+    func revoke()
     /// The window's project was saved to `to` (by the user or the assistant): the review marker follows it there.
     func saved(from: URL?, to: URL)
     func switchChanged(_ on: Bool)

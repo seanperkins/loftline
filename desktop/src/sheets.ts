@@ -4,7 +4,7 @@ import { h, replace } from "./dom";
 import type { Child } from "./dom";
 import type { Issue, Job, JobForm, Machine, Operation, Posted, PostRow, Tool } from "./model";
 import { kindTitles, opBody, unitLabel } from "./model";
-import { app, apply, busy, doc, project, refresh, setErrorHandler } from "./state";
+import { app, apply, busy, doc, project, refresh, setErrorHandler, setLiveLink } from "./state";
 import { numberRow, selectRow } from "./inspector";
 
 let host: HTMLElement;
@@ -14,9 +14,24 @@ export function createSheetHost(): HTMLElement {
   return host;
 }
 
-function close() { replace(host); host.classList.remove("open"); }
+// A dialog shows only once the core knows it's open, so an assistant can't change the project under it (spec 2, "The guard").
+// `shown` counts present and close calls, so a dialog closed before the core answered never appears.
+let shown = 0;
+function close() {
+  shown++;
+  replace(host);
+  host.classList.remove("open");
+  void call("assistantDialog", { open: false }).catch(() => undefined);
+}
 
 function present(title: string, body: Child, footer: Child, wide = false) {
+  const turn = ++shown;
+  void call("assistantDialog", { open: true }).catch(() => undefined).then(() => {
+    if (turn === shown) show(title, body, footer, wide);
+  });
+}
+
+function show(title: string, body: Child, footer: Child, wide: boolean) {
   host.classList.add("open");
   const sheet = h("div", { class: `sheet ${wide ? "wide" : ""}`, role: "dialog", "aria-modal": "true", "aria-label": title },
     h("h2", {}, title), h("div", { class: "sheet-body" }, body), h("div", { class: "sheet-foot" }, footer));
@@ -192,7 +207,7 @@ export async function openHelp(topicID?: string) {
 
 // MARK: Connect an AI Assistant
 
-interface AssistantSetup { serverPath: string; config: string; claudeCodeLine: string; allowedFolders: string[] }
+interface AssistantSetup { serverPath: string; config: string; claudeCodeLine: string; allowedFolders: string[]; liveLink: boolean; socketPath: string }
 
 /** Help > Connect an AI Assistant…: the bundled MCP server, the settings to paste into an assistant, and the folders it may use.
  *  Nothing here writes an assistant's own settings. */
@@ -220,12 +235,24 @@ export async function openAssistant() {
     block("Claude Desktop and most assistants (their mcpServers setting)", setup.config, "Copy Settings"),
     block("Claude Code (paste into a terminal)", setup.claudeCodeLine, "Copy Command"),
     h("h3", {}, "Folders the assistant may use"),
-    h("p", { class: "small" }, "It reads and writes files only here."),
+    h("p", { class: "small" }, "It reads and writes files only here, except a window open in LoftLine that you allow it to work on."),
     setup.allowedFolders.length
       ? setup.allowedFolders.map((f) => h("div", { class: "folder-row" }, h("span", {}, f),
           h("button", { class: "button", "aria-label": `Remove ${f}`, onclick: () => void setFolders(setup.allowedFolders.filter((x) => x !== f)) }, "Remove")))
       : h("p", { class: "small" }, "No folders: the assistant can't open or save anything."),
-    h("button", { class: "button", onclick: () => void addFolder() }, "Add Folder…")),
+    h("button", { class: "button", onclick: () => void addFolder() }, "Add Folder…"),
+    h("h3", {}, "Open documents"),
+    h("label", { class: "row toggle" },
+      h("input", { type: "checkbox", checked: setup.liveLink, "aria-label": "Let assistants edit open documents",
+        onchange: async (e: Event) => {
+          const on = (e.target as HTMLInputElement).checked;
+          await call<AssistantSetup>("setAssistantLink", { on });
+          setLiveLink(on);
+          await openAssistant();
+        } }),
+      " Let assistants edit open documents"),
+    h("p", { class: "small" }, "An assistant then asks to work on this window, and you click Allow. It can read and edit it wherever its file is; "
+      + "each change is one Undo step. Undo stays yours.")),
   [
     h("button", { class: "button", onclick: () => void openHelp("assistant") }, "About Connecting an Assistant"),
     h("button", { class: "button primary", onclick: close }, "Close"),
@@ -305,6 +332,8 @@ export async function openValidation() {
   try {
     const posted = await busy("Calculating…", () => call<Posted>("export", {}));
     await apply("state");
+    const changes = app.state!.assistant?.changes ?? 0;
+    if (changes > 0) posted.issues.unshift({ severity: "warning", message: `Changed by an assistant (${changes} change${changes === 1 ? "" : "s"})` });
     const rows = project().operations.map((o: Operation) => {
       const { setup } = opBody(o);
       const s = app.state!.statuses.find((x) => x.id === setup.id);

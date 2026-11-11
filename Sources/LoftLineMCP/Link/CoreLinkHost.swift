@@ -126,6 +126,11 @@ public final class CoreLinkHost: LinkHost, CoreAssistantLink, @unchecked Sendabl
         syncChanges()
     }
 
+    public func revoke() {
+        server?.release(document: Self.documentID, reason: "The user disconnected the assistant from \(title).")
+        Task { await claims.revoke(Self.documentID) }
+    }
+
     public func dismissMarker() {
         if let url = session.fileURL { try? markers.dismiss(url) }
         untitledChanges = 0

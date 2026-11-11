@@ -236,6 +236,9 @@ public final class CoreService {
         case "dismissAssistantMarker":
             assistantLink?.dismissMarker()
             return try reply(id, state())
+        case "assistantRevoke":
+            assistantLink?.revoke()
+            return try reply(id, assistantStatus())
         case "save":
             let from = s.fileURL
             let to = URL(fileURLWithPath: try params(line, PathParam.self).path)
@@ -540,6 +543,7 @@ public final class CoreService {
             struct Link: Decodable { var on: Bool }
             struct Setup: Encodable {
                 var serverPath: String; var config: String; var claudeCodeLine: String; var allowedFolders: [String]; var liveLink: Bool
+                var socketPath: String
             }
             // Each change loads the file and changes one field, so setting folders never turns the switch off.
             if method == "setAssistantFolders" {
@@ -556,7 +560,8 @@ public final class CoreService {
             return try reply(id, Setup(serverPath: server, config: AssistantSetup.config(serverPath: server),
                                        claudeCodeLine: AssistantSetup.claudeCodeLine(serverPath: server),
                                        allowedFolders: AssistantSettings.load(from: assistantSettingsURL).allowedFolders,
-                                       liveLink: AssistantSettings.load(from: assistantSettingsURL).liveLink))
+                                       liveLink: AssistantSettings.load(from: assistantSettingsURL).liveLink,
+                                       socketPath: AssistantSettings.linkFolder(for: assistantSettingsURL).appendingPathComponent("assistant.sock").path))
         case "help":
             struct Topic: Encodable { var id: String; var title: String; var body: String; var related: [String] }
             return try reply(id, HelpTopic.allCases.map { Topic(id: $0.rawValue, title: $0.title, body: $0.body, related: $0.related.map(\.rawValue)) })
